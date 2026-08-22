@@ -1,5 +1,6 @@
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Enums;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 namespace Fossegrim.Web.Endpoints;
 
@@ -25,6 +26,9 @@ public static class Streaming
             return Results.File(mediaItem.FileLocation, "audio/mpeg", enableRangeProcessing: true);
         })
         .WithName("StreamMediaFile")
-        .WithOpenApi();
+        .WithOpenApi()
+        .RequireAuthorization(policy => policy
+            .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
+            .RequireAuthenticatedUser());
     }
 }

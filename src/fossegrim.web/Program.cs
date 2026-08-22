@@ -1,5 +1,8 @@
+using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.Tokens;
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services;
@@ -47,6 +50,39 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.AccessDeniedPath = "/Account/AccessDenied";
     options.SlidingExpiration = true;
 });
+
+// Configure JWT bearer authentication (used to authorize the /stream endpoint;
+// the site itself still authenticates users via the Identity cookie above)
+var jwtSection = builder.Configuration.GetSection("Jwt");
+builder.Services.AddAuthentication()
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtSection["Issuer"],
+            ValidateAudience = true,
+            ValidAudience = jwtSection["Audience"],
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!)),
+            ValidateLifetime = true
+        };
+
+        // <audio>/<video> elements can't set an Authorization header, so the
+        // Player page passes the token via query string for this endpoint.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (context.Request.Path.StartsWithSegments("/stream") &&
+                    context.Request.Query.TryGetValue("access_token", out var token))
+                {
+                    context.Token = token;
+                }
+                return Task.CompletedTask;
+            }
+        };
+    });
 
 // Register application services
 builder.Services.AddScoped<MediaLibraryService>();

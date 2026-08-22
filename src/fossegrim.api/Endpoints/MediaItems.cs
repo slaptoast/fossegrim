@@ -1,3 +1,4 @@
+using Fossegrim.Api.Dtos;
 using Fossegrim.Lib.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,13 +9,26 @@ public static class MediaItems
     public static void MapMediaItemEndpoints(this WebApplication app)
     {
         var mediaItemGroup = app.MapGroup("/api/mediaitems")
-            .WithTags("MediaItems");
+            .WithTags("MediaItems")
+            .RequireAuthorization();
 
         mediaItemGroup.MapGet("/", async (FossegrimDbContext db) =>
         {
             var mediaItems = await db.MediaItems
-                .Include(m => m.Artists)
-                .Include(m => m.Albums)
+                .Select(m => new MediaItemDto(
+                    m.Id,
+                    m.Title,
+                    m.ArtistName,
+                    m.Album,
+                    m.DateAdded,
+                    m.LastModified,
+                    m.Year,
+                    m.Track,
+                    m.Genre,
+                    m.Duration,
+                    m.Bitrate,
+                    m.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name)),
+                    m.Albums.Select(al => new AlbumSummaryDto(al.Id, al.Name, al.Year))))
                 .ToListAsync();
             return Results.Ok(mediaItems);
         })
@@ -24,9 +38,22 @@ public static class MediaItems
         mediaItemGroup.MapGet("/{id:guid}", async (Guid id, FossegrimDbContext db) =>
         {
             var mediaItem = await db.MediaItems
-                .Include(m => m.Artists)
-                .Include(m => m.Albums)
-                .FirstOrDefaultAsync(m => m.Id == id);
+                .Where(m => m.Id == id)
+                .Select(m => new MediaItemDto(
+                    m.Id,
+                    m.Title,
+                    m.ArtistName,
+                    m.Album,
+                    m.DateAdded,
+                    m.LastModified,
+                    m.Year,
+                    m.Track,
+                    m.Genre,
+                    m.Duration,
+                    m.Bitrate,
+                    m.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name)),
+                    m.Albums.Select(al => new AlbumSummaryDto(al.Id, al.Name, al.Year))))
+                .FirstOrDefaultAsync();
 
             return mediaItem is not null ? Results.Ok(mediaItem) : Results.NotFound();
         })

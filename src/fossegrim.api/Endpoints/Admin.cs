@@ -7,7 +7,8 @@ public static class Admin
     public static void MapAdminEndpoints(this WebApplication app)
     {
         var adminGroup = app.MapGroup("/api/admin")
-            .WithTags("Admin");
+            .WithTags("Admin")
+            .RequireAuthorization(policy => policy.RequireRole("Admin"));
 
         adminGroup.MapPost("/scan", async (ScanRequest request, MediaLibraryService service) =>
         {

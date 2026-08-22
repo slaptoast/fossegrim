@@ -1,0 +1,46 @@
+@page "{id:guid}"
+@model Fossegrim.Web.Pages.PlayerModel
+@{
+    ViewData["Title"] = Model.Title ?? "Player";
+}
+
+<div class="container medium">
+    <div class="header small">
+        <h1>🎧 Now Playing</h1>
+    </div>
+
+    <div class="content">
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <div class="error">
+                <strong>Error</strong>
+                <p>@Model.ErrorMessage</p>
+            </div>
+        }
+        else
+        {
+            <div class="now-playing-icon">🎵</div>
+
+            <div class="info-section">
+                <div class="info-item">
+                    <span class="info-label">Title</span>
+                    <span class="info-value">@(Model.Title ?? "Unknown")</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Artist</span>
+                    <span class="info-value">@(Model.Artist ?? "Unknown Artist")</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Album</span>
+                    <span class="info-value">@(Model.Album ?? "Unknown Album")</span>
+                </div>
+            </div>
+
+            <div class="audio-player">
+                <audio controls autoplay preload="metadata" src="@Model.StreamUrl">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+        }
+    </div>
+</div>

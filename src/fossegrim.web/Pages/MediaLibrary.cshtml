@@ -1,0 +1,151 @@
+@page
+@model Fossegrim.Web.Pages.MediaLibraryModel
+@{
+    ViewData["Title"] = "Media Library";
+}
+
+<div class="container wide">
+    <div class="header">
+        <h1>🎵 Media Library</h1>
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">@Model.MediaItems.Count()</div>
+                <div class="stat-label">Total Tracks</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">@Model.MediaItems.Select(m => m.Album).Distinct().Count()</div>
+                <div class="stat-label">Albums</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">@Model.MediaItems.Select(m => m.ArtistName).Distinct().Count()</div>
+                <div class="stat-label">Artists</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-bottom: 30px;">
+        @await Component.InvokeAsync("ArtistList")
+    </div>
+
+    <div class="controls">
+        <div class="search-box">
+            <input type="text"
+                   id="searchInput"
+                   placeholder="🔍 Search by title, artist, or album..."
+                   onkeyup="filterTable()" />
+        </div>
+        <div class="filter-group">
+            <label for="sortBy">Sort by:</label>
+            <select id="sortBy" onchange="sortTable()">
+                <option value="title">Title</option>
+                <option value="artist">Artist</option>
+                <option value="album">Album</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="content">
+        @if (Model.IsLoading)
+        {
+            <div class="loading">
+                <h2>Scanning media library</h2>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <div class="error">
+                <h3>Error</h3>
+                <p>@Model.ErrorMessage</p>
+            </div>
+        }
+        else if (!Model.MediaItems.Any())
+        {
+            <div class="no-results">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                <h2>No media files found</h2>
+                <p>The media library scan completed but found no files.</p>
+            </div>
+        }
+        else
+        {
+            <table id="mediaTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortTableByColumn(0)">Title</th>
+                        <th onclick="sortTableByColumn(1)">Artist</th>
+                        <th onclick="sortTableByColumn(2)">Album</th>
+                        <th onclick="sortTableByColumn(3)">File Location</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    @foreach (var item in Model.MediaItems.OrderBy(m => m.Title))
+                    {
+                        <tr>
+                            <td class="title-cell">
+                                <a class="track-link" href="/Player/@item.Id">@(item.Title ?? "Unknown")</a>
+                            </td>
+                            <td class="artist-cell">@(item.ArtistName ?? "Unknown Artist")</td>
+                            <td class="album-cell">@(item.Album ?? "Unknown Album")</td>
+                            <td><span class="file-path" title="@item.FileLocation">@item.FileLocation</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<script>
+    function filterTable() {
+        const input = document.getElementById('searchInput');
+        const filter = input.value.toLowerCase();
+        const table = document.getElementById('mediaTable');
+        const tbody = table.getElementsByTagName('tbody')[0];
+        const rows = tbody.getElementsByTagName('tr');
+
+        for (let i = 0; i < rows.length; i++) {
+            const cells = rows[i].getElementsByTagName('td');
+            let found = false;
+
+            for (let j = 0; j < cells.length - 1; j++) { // Skip file path column
+                const cell = cells[j];
+                if (cell) {
+                    const textValue = cell.textContent || cell.innerText;
+                    if (textValue.toLowerCase().indexOf(filter) > -1) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+
+            rows[i].style.display = found ? '' : 'none';
+        }
+    }
+
+    function sortTableByColumn(columnIndex) {
+        const table = document.getElementById('mediaTable');
+        const tbody = table.getElementsByTagName('tbody')[0];
+        const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+        rows.sort((a, b) => {
+            const aVal = a.getElementsByTagName('td')[columnIndex].textContent;
+            const bVal = b.getElementsByTagName('td')[columnIndex].textContent;
+            return aVal.localeCompare(bVal);
+        });
+
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
+    function sortTable() {
+        const sortBy = document.getElementById('sortBy').value;
+        const columnIndex = {
+            'title': 0,
+            'artist': 1,
+            'album': 2
+        }[sortBy];
+
+        sortTableByColumn(columnIndex);
+    }
+</script>

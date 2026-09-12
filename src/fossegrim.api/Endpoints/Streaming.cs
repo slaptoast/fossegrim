@@ -1,8 +1,7 @@
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Enums;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 
-namespace Fossegrim.Web.Endpoints;
+namespace Fossegrim.Api.Endpoints;
 
 public static class Streaming
 {
@@ -27,8 +26,6 @@ public static class Streaming
         })
         .WithName("StreamMediaFile")
         .WithOpenApi()
-        .RequireAuthorization(policy => policy
-            .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
-            .RequireAuthenticatedUser());
+        .RequireAuthorization();
     }
 }

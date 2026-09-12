@@ -76,7 +76,6 @@
                         <th onclick="sortTableByColumn(0)">Title</th>
                         <th onclick="sortTableByColumn(1)">Artist</th>
                         <th onclick="sortTableByColumn(2)">Album</th>
-                        <th onclick="sortTableByColumn(3)">File Location</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
@@ -88,7 +87,6 @@
                             </td>
                             <td class="artist-cell">@(item.ArtistName ?? "Unknown Artist")</td>
                             <td class="album-cell">@(item.Album ?? "Unknown Album")</td>
-                            <td><span class="file-path" title="@item.FileLocation">@item.FileLocation</span></td>
                         </tr>
                     }
                 </tbody>
@@ -109,7 +107,7 @@
             const cells = rows[i].getElementsByTagName('td');
             let found = false;
 
-            for (let j = 0; j < cells.length - 1; j++) { // Skip file path column
+            for (let j = 0; j < cells.length; j++) {
                 const cell = cells[j];
                 if (cell) {
                     const textValue = cell.textContent || cell.innerText;

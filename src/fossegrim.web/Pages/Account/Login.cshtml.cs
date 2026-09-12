@@ -1,20 +1,18 @@
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Identity;
+using Fossegrim.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Fossegrim.Lib.Models;
 using System.ComponentModel.DataAnnotations;
 
 namespace Fossegrim.Web.Pages.Account;
 
 public class LoginModel : PageModel
 {
-    private readonly SignInManager<ApplicationUser> _signInManager;
+    private readonly FossegrimApiClient _apiClient;
     private readonly ILogger<LoginModel> _logger;
 
-    public LoginModel(SignInManager<ApplicationUser> signInManager, ILogger<LoginModel> logger)
+    public LoginModel(FossegrimApiClient apiClient, ILogger<LoginModel> logger)
     {
-        _signInManager = signInManager;
+        _apiClient = apiClient;
         _logger = logger;
     }
 
@@ -39,19 +37,18 @@ public class LoginModel : PageModel
         public bool RememberMe { get; set; }
     }
 
-    public async Task OnGetAsync(string? returnUrl = null)
+    public void OnGet(string? returnUrl = null)
     {
         if (!string.IsNullOrEmpty(ErrorMessage))
         {
             ModelState.AddModelError(string.Empty, ErrorMessage);
         }
 
-        returnUrl ??= Url.Content("~/");
+        // TODO: remove this once we're past local dev - pre-fills the seeded default admin account.
+        Input.Email = "admin@fossegrim.local";
+        Input.Password = "Admin123!";
 
-        // Clear the existing external cookie to ensure a clean login process
-        await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
-
-        ReturnUrl = returnUrl;
+        ReturnUrl = returnUrl ?? Url.Content("~/");
     }
 
     public async Task<IActionResult> OnPostAsync(string? returnUrl = null)
@@ -60,23 +57,18 @@ public class LoginModel : PageModel
 
         if (ModelState.IsValid)
         {
-            var result = await _signInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: true);
+            var result = await _apiClient.LoginAsync(Input.Email, Input.Password);
 
-            if (result.Succeeded)
+            if (result.Success)
             {
                 _logger.LogInformation("User logged in.");
+                await AuthCookieSignIn.SignInAsync(HttpContext, result.Response!, Input.RememberMe);
                 return LocalRedirect(returnUrl);
             }
-            if (result.IsLockedOut)
+
+            foreach (var error in result.Errors)
             {
-                _logger.LogWarning("User account locked out.");
-                ErrorMessage = "Account locked out. Please try again later.";
-                return Page();
-            }
-            else
-            {
-                ModelState.AddModelError(string.Empty, "Invalid login attempt.");
-                return Page();
+                ModelState.AddModelError(string.Empty, error);
             }
         }
 

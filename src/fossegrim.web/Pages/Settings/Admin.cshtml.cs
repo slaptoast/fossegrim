@@ -1,18 +1,19 @@
+using Fossegrim.Lib.Services;
+using Fossegrim.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Fossegrim.Lib.Services;
 
 namespace Fossegrim.Web.Pages.Settings;
 
 [Authorize(Roles = "Admin")]
 public class AdminModel : PageModel
 {
-    private readonly MediaLibraryService _mediaLibraryService;
+    private readonly FossegrimApiClient _apiClient;
 
-    public AdminModel(MediaLibraryService mediaLibraryService)
+    public AdminModel(FossegrimApiClient apiClient)
     {
-        _mediaLibraryService = mediaLibraryService;
+        _apiClient = apiClient;
     }
 
     [BindProperty]
@@ -39,9 +40,7 @@ public class AdminModel : PageModel
 
         try
         {
-            LastScanResult = await _mediaLibraryService.ScanAndSaveMediaItemsAsync(
-                FolderPath,
-                MaxDegreeOfParallelism);
+            LastScanResult = await _apiClient.ScanAsync(HttpContext, FolderPath, MaxDegreeOfParallelism);
 
             IsScanning = false;
             return Page();

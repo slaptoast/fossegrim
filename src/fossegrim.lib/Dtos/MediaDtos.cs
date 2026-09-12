@@ -1,4 +1,4 @@
-namespace Fossegrim.Api.Dtos;
+namespace Fossegrim.Lib.Dtos;
 
 public record ArtistDto(
     Guid Id,

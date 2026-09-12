@@ -1,24 +1,22 @@
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Fossegrim.Lib.Models;
 
 namespace Fossegrim.Web.Pages.Account;
 
 public class LogoutModel : PageModel
 {
-    private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly ILogger<LogoutModel> _logger;
 
-    public LogoutModel(SignInManager<ApplicationUser> signInManager, ILogger<LogoutModel> logger)
+    public LogoutModel(ILogger<LogoutModel> logger)
     {
-        _signInManager = signInManager;
         _logger = logger;
     }
 
     public async Task<IActionResult> OnPostAsync(string? returnUrl = null)
     {
-        await _signInManager.SignOutAsync();
+        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         _logger.LogInformation("User logged out.");
 
         if (returnUrl != null)

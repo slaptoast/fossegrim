@@ -1,5 +1,9 @@
 @model Fossegrim.Web.ViewComponents.ArtistListViewModel
 
+@{
+    var totalTracks = Model.Artists.Sum(a => a.MediaItems.Count());
+}
+
 <div class="artist-list-component">
     <div class="artist-list-header">
         <h2>Artists</h2>
@@ -12,20 +16,28 @@
     </div>
 
     <div class="artist-list-stats" id="artistStats">
-        <span class="stat" id="artistCount">Loading...</span>
-        <span class="stat" id="trackCount"></span>
+        <span class="stat" id="artistCount">@Model.Artists.Count artist@(Model.Artists.Count != 1 ? "s" : "")</span>
+        <span class="stat" id="trackCount">@totalTracks total tracks</span>
     </div>
 
     <div class="artist-list-container">
-        <div id="artistListLoading" class="loading">
-            <p>Loading artists...</p>
-        </div>
-        <ul class="artist-list" id="artistList" style="display: none;">
+        <ul class="artist-list" id="artistList" style="display: @(Model.Artists.Count > 0 ? "block" : "none");">
+            @foreach (var artist in Model.Artists)
+            {
+                var trackCount = artist.MediaItems.Count();
+                var firstLetter = artist.Name.Substring(0, 1).ToUpperInvariant();
+                <li class="artist-item" data-artist-name="@artist.Name.ToLowerInvariant()" data-artist-id="@artist.Id">
+                    <div class="artist-info">
+                        <div class="artist-avatar">@firstLetter</div>
+                        <div class="artist-details">
+                            <div class="artist-name">@artist.Name</div>
+                            <div class="artist-track-count">@trackCount track@(trackCount != 1 ? "s" : "")</div>
+                        </div>
+                    </div>
+                </li>
+            }
         </ul>
-        <div id="artistListError" class="error" style="display: none;">
-            <p>Failed to load artists. Please try again.</p>
-        </div>
-        <div id="artistListEmpty" class="no-results" style="display: none;">
+        <div id="artistListEmpty" class="no-results" style="display: @(Model.Artists.Count == 0 ? "block" : "none");">
             <p>No artists found.</p>
         </div>
     </div>
@@ -165,71 +177,6 @@
 </style>
 
 <script>
-    let artistsData = [];
-
-    async function loadArtists() {
-        const loadingEl = document.getElementById('artistListLoading');
-        const listEl = document.getElementById('artistList');
-        const errorEl = document.getElementById('artistListError');
-        const emptyEl = document.getElementById('artistListEmpty');
-        const statsEl = document.getElementById('artistStats');
-
-        try {
-            const response = await fetch('/api/artists');
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch artists');
-            }
-
-            const artists = await response.json();
-            artistsData = artists;
-
-            loadingEl.style.display = 'none';
-
-            if (artists.length === 0) {
-                emptyEl.style.display = 'block';
-                return;
-            }
-
-            // Sort artists by name
-            artists.sort((a, b) => a.name.localeCompare(b.name));
-
-            // Calculate total tracks
-            const totalTracks = artists.reduce((sum, artist) => sum + (artist.mediaItems?.length || 0), 0);
-
-            // Update stats
-            document.getElementById('artistCount').textContent = `${artists.length} artist${artists.length !== 1 ? 's' : ''}`;
-            document.getElementById('trackCount').textContent = `${totalTracks} total tracks`;
-
-            // Render artists
-            listEl.innerHTML = artists.map(artist => {
-                const trackCount = artist.mediaItems?.length || 0;
-                const firstLetter = artist.name.substring(0, 1).toUpperCase();
-
-                return `
-                    <li class="artist-item" data-artist-name="${artist.name.toLowerCase()}" data-artist-id="${artist.id}">
-                        <div class="artist-info">
-                            <div class="artist-avatar">
-                                ${firstLetter}
-                            </div>
-                            <div class="artist-details">
-                                <div class="artist-name">${artist.name}</div>
-                                <div class="artist-track-count">${trackCount} track${trackCount !== 1 ? 's' : ''}</div>
-                            </div>
-                        </div>
-                    </li>
-                `;
-            }).join('');
-
-            listEl.style.display = 'block';
-
-        } catch (error) {
-            console.error('Error loading artists:', error);
-            loadingEl.style.display = 'none';
-            errorEl.style.display = 'block';
-        }
-    }
-
     function filterArtists() {
         const input = document.getElementById('artistSearch');
         const filter = input.value.toLowerCase();
@@ -245,7 +192,4 @@
             }
         }
     }
-
-    // Load artists when the page loads
-    document.addEventListener('DOMContentLoaded', loadArtists);
 </script>

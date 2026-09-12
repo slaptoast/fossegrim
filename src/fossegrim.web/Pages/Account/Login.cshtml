@@ -30,7 +30,7 @@
 
             <div class="form-group">
                 <label asp-for="Input.Password">Password</label>
-                <input asp-for="Input.Password" type="password" autocomplete="current-password" required />
+                <input asp-for="Input.Password" type="password" autocomplete="current-password" value="@Model.Input.Password" required />
                 <span asp-validation-for="Input.Password" class="text-danger"></span>
             </div>
 

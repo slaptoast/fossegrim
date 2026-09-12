@@ -1,9 +1,7 @@
+using Fossegrim.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using Fossegrim.Lib.Data;
-using Fossegrim.Lib.Models;
 using System.ComponentModel.DataAnnotations;
 
 namespace Fossegrim.Web.Pages.Settings;
@@ -11,12 +9,12 @@ namespace Fossegrim.Web.Pages.Settings;
 [Authorize(Roles = "Admin")]
 public class SettingsModel : PageModel
 {
-    private readonly FossegrimDbContext _context;
+    private readonly FossegrimApiClient _apiClient;
     private readonly ILogger<SettingsModel> _logger;
 
-    public SettingsModel(FossegrimDbContext context, ILogger<SettingsModel> logger)
+    public SettingsModel(FossegrimApiClient apiClient, ILogger<SettingsModel> logger)
     {
-        _context = context;
+        _apiClient = apiClient;
         _logger = logger;
     }
 
@@ -55,9 +53,7 @@ public class SettingsModel : PageModel
     {
         try
         {
-            var folders = await _context.MediaFolders
-                .OrderBy(f => f.Name)
-                .ToListAsync();
+            var folders = await _apiClient.GetMediaFoldersAsync(HttpContext);
 
             Input = new InputModel
             {
@@ -71,7 +67,7 @@ public class SettingsModel : PageModel
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load media folders from database");
+            _logger.LogError(ex, "Failed to load media folders from Api");
             StatusMessage = "Failed to load existing media folders.";
             IsSuccess = false;
         }
@@ -87,82 +83,51 @@ public class SettingsModel : PageModel
             return Page();
         }
 
-        try
+        var result = await _apiClient.AddMediaFolderAsync(HttpContext, NewFolder.Name, NewFolder.Location);
+
+        if (!result.Success)
         {
-            // Check if folder already exists
-            var existingFolder = await _context.MediaFolders
-                .FirstOrDefaultAsync(f => f.Location == NewFolder.Location);
-
-            if (existingFolder != null)
-            {
-                await LoadConfigurationAsync();
-                StatusMessage = "A folder with this location already exists.";
-                IsSuccess = false;
-                return Page();
-            }
-
-            var folder = new MediaFolder
-            {
-                Location = NewFolder.Location,
-                Name = NewFolder.Name,
-                DateAdded = DateTime.UtcNow
-            };
-
-            _context.MediaFolders.Add(folder);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Added new media folder: {Name} at {Location}", folder.Name, folder.Location);
-            StatusMessage = $"Successfully added folder '{folder.Name}'.";
-            IsSuccess = true;
-
-            return RedirectToPage();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to add media folder");
-            StatusMessage = $"Failed to add folder: {ex.Message}";
-            IsSuccess = false;
             await LoadConfigurationAsync();
+            StatusMessage = result.ErrorMessage;
+            IsSuccess = false;
             return Page();
         }
+
+        _logger.LogInformation("Added new media folder: {Name} at {Location}", NewFolder.Name, NewFolder.Location);
+        StatusMessage = $"Successfully added folder '{result.Folder!.Name}'.";
+        IsSuccess = true;
+
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostRemoveFolderAsync(Guid id)
     {
         try
         {
-            var folder = await _context.MediaFolders.FindAsync(id);
+            await _apiClient.DeleteMediaFolderAsync(HttpContext, id);
 
-            if (folder != null)
-            {
-                _context.MediaFolders.Remove(folder);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Removed media folder: {Name} at {Location}", folder.Name, folder.Location);
-                StatusMessage = $"Successfully removed folder '{folder.Name}'.";
-                IsSuccess = true;
-            }
-
-            return RedirectToPage();
+            _logger.LogInformation("Removed media folder {Id}", id);
+            StatusMessage = "Successfully removed folder.";
+            IsSuccess = true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to remove media folder");
             StatusMessage = $"Failed to remove folder: {ex.Message}";
             IsSuccess = false;
-            return RedirectToPage();
         }
+
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostScanFolderAsync(Guid id)
     {
         try
         {
-            var folder = await _context.MediaFolders.FindAsync(id);
+            var folder = await _apiClient.GetMediaFolderAsync(HttpContext, id);
 
-            if (folder != null)
+            if (folder is not null)
             {
-                // Redirect to Admin page with the folder path to scan
                 return RedirectToPage("/Settings/Admin", new { folderPath = folder.Location });
             }
 

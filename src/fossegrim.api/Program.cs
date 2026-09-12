@@ -53,6 +53,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!)),
             ValidateLifetime = true
         };
+
+        // <audio>/<video> elements can't set an Authorization header, so callers
+        // pass the token via query string for the /stream endpoint.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (context.Request.Path.StartsWithSegments("/stream") &&
+                    context.Request.Query.TryGetValue("access_token", out var token))
+                {
+                    context.Token = token;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
@@ -61,6 +76,13 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<MediaLibraryService>();
 
 var app = builder.Build();
+
+// Apply migrations, then seed roles and admin user
+using (var scope = app.Services.CreateScope())
+{
+    await scope.ServiceProvider.GetRequiredService<FossegrimDbContext>().Database.MigrateAsync();
+    await RoleSeeder.SeedRolesAndAdminAsync(scope.ServiceProvider);
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -82,5 +104,6 @@ app.MapAlbumEndpoints();
 app.MapArtistEndpoints();
 app.MapMediaItemEndpoints();
 app.MapAdminEndpoints();
+app.MapStreamingEndpoints();
 
 app.Run();

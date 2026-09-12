@@ -1,20 +1,21 @@
+using Fossegrim.Lib.Dtos;
+using Fossegrim.Web.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using Fossegrim.Lib.Data;
-using Fossegrim.Lib.Models;
 
 namespace Fossegrim.Web.Pages;
 
+[Authorize]
 public class MediaLibraryModel : PageModel
 {
-    private readonly FossegrimDbContext _db;
+    private readonly FossegrimApiClient _apiClient;
 
-    public MediaLibraryModel(FossegrimDbContext db)
+    public MediaLibraryModel(FossegrimApiClient apiClient)
     {
-        _db = db;
+        _apiClient = apiClient;
     }
 
-    public IEnumerable<MediaItem> MediaItems { get; set; } = Enumerable.Empty<MediaItem>();
+    public IEnumerable<MediaItemDto> MediaItems { get; set; } = [];
     public bool IsLoading { get; set; }
     public string? ErrorMessage { get; set; }
 
@@ -22,7 +23,7 @@ public class MediaLibraryModel : PageModel
     {
         try
         {
-            MediaItems = await _db.MediaItems.OrderBy(m => m.Title).ToListAsync();
+            MediaItems = await _apiClient.GetMediaItemsAsync(HttpContext);
         }
         catch (Exception ex)
         {

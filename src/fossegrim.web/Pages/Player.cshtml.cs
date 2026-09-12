@@ -1,22 +1,17 @@
-using Fossegrim.Lib.Data;
-using Fossegrim.Lib.Models;
-using Fossegrim.Lib.Services;
-using Microsoft.AspNetCore.Identity;
+using Fossegrim.Web.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Fossegrim.Web.Pages;
 
+[Authorize]
 public class PlayerModel : PageModel
 {
-    private readonly FossegrimDbContext _db;
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly IConfiguration _configuration;
+    private readonly FossegrimApiClient _apiClient;
 
-    public PlayerModel(FossegrimDbContext db, UserManager<ApplicationUser> userManager, IConfiguration configuration)
+    public PlayerModel(FossegrimApiClient apiClient)
     {
-        _db = db;
-        _userManager = userManager;
-        _configuration = configuration;
+        _apiClient = apiClient;
     }
 
     public string? Title { get; private set; }
@@ -27,16 +22,8 @@ public class PlayerModel : PageModel
 
     public async Task OnGetAsync(Guid id)
     {
-        var user = await _userManager.GetUserAsync(User);
-        if (user is null)
-        {
-            ErrorMessage = "You must be logged in to play this track.";
-            return;
-        }
-
-        var mediaItem = await _db.MediaItems.FindAsync(id);
-
-        if (mediaItem is null || string.IsNullOrWhiteSpace(mediaItem.FileLocation) || !System.IO.File.Exists(mediaItem.FileLocation))
+        var mediaItem = await _apiClient.GetMediaItemAsync(HttpContext, id);
+        if (mediaItem is null)
         {
             ErrorMessage = "Track not found.";
             return;
@@ -46,16 +33,6 @@ public class PlayerModel : PageModel
         Artist = mediaItem.ArtistName;
         Album = mediaItem.Album;
 
-        var roles = await _userManager.GetRolesAsync(user);
-        var jwtSection = _configuration.GetSection("Jwt");
-        var (token, _) = JwtTokenService.GenerateToken(
-            user,
-            roles,
-            jwtSection["Issuer"]!,
-            jwtSection["Audience"]!,
-            jwtSection["Key"]!,
-            jwtSection.GetValue<int>("ExpiryMinutes"));
-
-        StreamUrl = $"/stream/{mediaItem.Id}?access_token={Uri.EscapeDataString(token)}";
+        StreamUrl = await _apiClient.GetStreamUrlAsync(HttpContext, mediaItem.Id);
     }
 }

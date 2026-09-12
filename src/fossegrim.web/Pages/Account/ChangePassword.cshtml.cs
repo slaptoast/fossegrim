@@ -1,8 +1,7 @@
+using Fossegrim.Web.Services;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Fossegrim.Lib.Models;
 using System.ComponentModel.DataAnnotations;
 
 namespace Fossegrim.Web.Pages.Account;
@@ -10,17 +9,12 @@ namespace Fossegrim.Web.Pages.Account;
 [Authorize]
 public class ChangePasswordModel : PageModel
 {
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly SignInManager<ApplicationUser> _signInManager;
+    private readonly FossegrimApiClient _apiClient;
     private readonly ILogger<ChangePasswordModel> _logger;
 
-    public ChangePasswordModel(
-        UserManager<ApplicationUser> userManager,
-        SignInManager<ApplicationUser> signInManager,
-        ILogger<ChangePasswordModel> logger)
+    public ChangePasswordModel(FossegrimApiClient apiClient, ILogger<ChangePasswordModel> logger)
     {
-        _userManager = userManager;
-        _signInManager = signInManager;
+        _apiClient = apiClient;
         _logger = logger;
     }
 
@@ -48,14 +42,8 @@ public class ChangePasswordModel : PageModel
         public string ConfirmPassword { get; set; } = string.Empty;
     }
 
-    public async Task<IActionResult> OnGetAsync()
+    public IActionResult OnGet()
     {
-        var user = await _userManager.GetUserAsync(User);
-        if (user == null)
-        {
-            return NotFound($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-        }
-
         return Page();
     }
 
@@ -66,23 +54,16 @@ public class ChangePasswordModel : PageModel
             return Page();
         }
 
-        var user = await _userManager.GetUserAsync(User);
-        if (user == null)
+        var errors = await _apiClient.ChangePasswordAsync(HttpContext, Input.OldPassword, Input.NewPassword);
+        if (errors.Count > 0)
         {
-            return NotFound($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-        }
-
-        var changePasswordResult = await _userManager.ChangePasswordAsync(user, Input.OldPassword, Input.NewPassword);
-        if (!changePasswordResult.Succeeded)
-        {
-            foreach (var error in changePasswordResult.Errors)
+            foreach (var error in errors)
             {
-                ModelState.AddModelError(string.Empty, error.Description);
+                ModelState.AddModelError(string.Empty, error);
             }
             return Page();
         }
 
-        await _signInManager.RefreshSignInAsync(user);
         _logger.LogInformation("User changed their password successfully.");
         StatusMessage = "Your password has been changed.";
 

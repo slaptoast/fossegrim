@@ -1,24 +1,18 @@
-using Microsoft.AspNetCore.Identity;
+using Fossegrim.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Fossegrim.Lib.Models;
 using System.ComponentModel.DataAnnotations;
 
 namespace Fossegrim.Web.Pages.Account;
 
 public class RegisterModel : PageModel
 {
-    private readonly SignInManager<ApplicationUser> _signInManager;
-    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly FossegrimApiClient _apiClient;
     private readonly ILogger<RegisterModel> _logger;
 
-    public RegisterModel(
-        UserManager<ApplicationUser> userManager,
-        SignInManager<ApplicationUser> signInManager,
-        ILogger<RegisterModel> logger)
+    public RegisterModel(FossegrimApiClient apiClient, ILogger<RegisterModel> logger)
     {
-        _userManager = userManager;
-        _signInManager = signInManager;
+        _apiClient = apiClient;
         _logger = logger;
     }
 
@@ -62,27 +56,18 @@ public class RegisterModel : PageModel
 
         if (ModelState.IsValid)
         {
-            var user = new ApplicationUser
-            {
-                UserName = Input.Email,
-                Email = Input.Email,
-                DisplayName = Input.DisplayName,
-                DateJoined = DateTime.UtcNow
-            };
+            var result = await _apiClient.RegisterAsync(Input.Email, Input.DisplayName, Input.Password);
 
-            var result = await _userManager.CreateAsync(user, Input.Password);
-
-            if (result.Succeeded)
+            if (result.Success)
             {
                 _logger.LogInformation("User created a new account with password.");
-
-                await _signInManager.SignInAsync(user, isPersistent: false);
+                await AuthCookieSignIn.SignInAsync(HttpContext, result.Response!, isPersistent: false);
                 return LocalRedirect(returnUrl);
             }
 
             foreach (var error in result.Errors)
             {
-                ModelState.AddModelError(string.Empty, error.Description);
+                ModelState.AddModelError(string.Empty, error);
             }
         }
 

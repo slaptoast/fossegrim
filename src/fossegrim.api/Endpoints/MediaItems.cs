@@ -1,4 +1,4 @@
-using Fossegrim.Api.Dtos;
+using Fossegrim.Lib.Dtos;
 using Fossegrim.Lib.Data;
 using Microsoft.EntityFrameworkCore;
 

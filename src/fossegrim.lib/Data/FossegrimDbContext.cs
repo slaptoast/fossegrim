@@ -132,6 +132,11 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
                   .WithMany()
                   .HasForeignKey(p => p.OwnerId)
                   .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(p => p.CurrentMediaItem)
+                  .WithMany()
+                  .HasForeignKey(p => p.CurrentMediaItemId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Configure PlaylistItem entity (ordered tracks within a playlist)

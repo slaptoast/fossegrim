@@ -1,0 +1,278 @@
+@page "/playlists"
+@attribute [Authorize]
+@inject FossegrimApiClient ApiClient
+
+<div class="container wide">
+    <div class="header">
+        <h1>🎶 Playlists</h1>
+        <p>Create, edit, and reorder your playlists</p>
+    </div>
+
+    <div class="content">
+        @if (_isLoading)
+        {
+            <div class="loading"><h2>Loading playlists</h2></div>
+        }
+        else if (_errorMessage is not null)
+        {
+            <div class="error"><h3>Error</h3><p>@_errorMessage</p></div>
+        }
+        else
+        {
+            <div class="playlist-toolbar">
+                <div class="filter-group">
+                    <label for="playlistSelect">Playlist:</label>
+                    <select id="playlistSelect" value="@(_selectedPlaylistId?.ToString() ?? "")" @onchange="OnPlaylistSelectedAsync">
+                        <option value="">-- Select a playlist --</option>
+                        @foreach (var p in _playlists.Where(p => p.Type == "Standard").OrderBy(p => p.Name))
+                        {
+                            <option value="@p.Id">@p.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="new-playlist-box">
+                    <input type="text" placeholder="New playlist name..." @bind="_newPlaylistName" @bind:event="oninput" />
+                    <button type="button" class="button-secondary" disabled="@(string.IsNullOrWhiteSpace(_newPlaylistName) || _isSaving)" @onclick="CreatePlaylistAsync">+ Create</button>
+                </div>
+            </div>
+
+            @if (_selectedPlaylist is not null)
+            {
+                <div class="playlist-detail">
+                    <div class="playlist-detail-header">
+                        <input type="text" class="playlist-name-input" @bind="_editName" @bind:event="oninput" @onblur="RenameAsync" disabled="@(!CanEdit)" />
+                        <span class="playlist-access-badge">@_selectedPlaylist.AccessLevel</span>
+                        @if (_selectedPlaylist.AccessLevel == "Owner")
+                        {
+                            <button type="button" class="button-danger" @onclick="() => _showDeleteConfirm = true">Delete Playlist</button>
+                        }
+                    </div>
+
+                    @if (_playlistErrorMessage is not null)
+                    {
+                        <div class="error">@_playlistErrorMessage</div>
+                    }
+
+                    <div class="playlist-editor-grid">
+                        <div class="playlist-editor-column">
+                            <h3>Add Tracks</h3>
+                            <TrackList MediaItems="_mediaItems" Editable="CanEdit" @bind-SelectedIds="_selectedTrackIds" />
+                            @if (CanEdit)
+                            {
+                                <button type="button" class="button" disabled="@(_selectedTrackIds.Count == 0 || _isSaving)" @onclick="AddSelectedTracksAsync">
+                                    Add @(_selectedTrackIds.Count) Selected Track@(_selectedTrackIds.Count == 1 ? "" : "s") to Playlist
+                                </button>
+                            }
+                        </div>
+
+                        <div class="playlist-editor-column">
+                            <h3>Playlist Tracks (@_selectedPlaylist.Items.Count())</h3>
+                            <PlaylistTrackList Items="_selectedPlaylist.Items.ToList()" CanEdit="CanEdit" OnReorder="MoveItemAsync" OnRemove="RemoveItemAsync" />
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<ConfirmDialog IsOpen="_showDeleteConfirm"
+               Title="Delete Playlist"
+               Message="@($"Delete \"{_selectedPlaylist?.Name}\"? This cannot be undone.")"
+               ConfirmText="Delete"
+               OnConfirm="DeletePlaylistAsync"
+               OnCancel="() => _showDeleteConfirm = false" />
+
+@code {
+    private List<PlaylistDto> _playlists = [];
+    private List<MediaItemDto> _mediaItems = [];
+    private PlaylistDetailDto? _selectedPlaylist;
+    private Guid? _selectedPlaylistId;
+    private IReadOnlyList<Guid> _selectedTrackIds = [];
+    private string _newPlaylistName = "";
+    private string _editName = "";
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private bool _showDeleteConfirm;
+    private string? _errorMessage;
+    private string? _playlistErrorMessage;
+
+    private bool CanEdit => _selectedPlaylist is not null &&
+        (_selectedPlaylist.AccessLevel == "Owner" || _selectedPlaylist.AccessLevel == "Editor");
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _playlists = (await ApiClient.GetPlaylistsAsync()).ToList();
+            _mediaItems = (await ApiClient.GetMediaItemsAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error loading playlists: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnPlaylistSelectedAsync(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        if (string.IsNullOrEmpty(value) || !Guid.TryParse(value, out var id))
+        {
+            _selectedPlaylistId = null;
+            _selectedPlaylist = null;
+            return;
+        }
+
+        await LoadPlaylistAsync(id);
+    }
+
+    private async Task LoadPlaylistAsync(Guid id)
+    {
+        _playlistErrorMessage = null;
+        _selectedTrackIds = [];
+        try
+        {
+            _selectedPlaylist = await ApiClient.GetPlaylistAsync(id);
+            _selectedPlaylistId = _selectedPlaylist?.Id;
+            _editName = _selectedPlaylist?.Name ?? "";
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error loading playlist: {ex.Message}";
+        }
+    }
+
+    private async Task CreatePlaylistAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newPlaylistName))
+        {
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            var created = await ApiClient.CreatePlaylistAsync(_newPlaylistName.Trim());
+            _playlists.Add(created);
+            _newPlaylistName = "";
+            await LoadPlaylistAsync(created.Id);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error creating playlist: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task RenameAsync()
+    {
+        if (_selectedPlaylist is null || !CanEdit || string.IsNullOrWhiteSpace(_editName) || _editName == _selectedPlaylist.Name)
+        {
+            return;
+        }
+
+        try
+        {
+            var updated = await ApiClient.UpdatePlaylistAsync(_selectedPlaylist.Id, _editName.Trim());
+            var index = _playlists.FindIndex(p => p.Id == updated.Id);
+            if (index >= 0)
+            {
+                _playlists[index] = updated;
+            }
+            await LoadPlaylistAsync(updated.Id);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error renaming playlist: {ex.Message}";
+        }
+    }
+
+    private async Task DeletePlaylistAsync()
+    {
+        _showDeleteConfirm = false;
+
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        var deletedId = _selectedPlaylist.Id;
+        try
+        {
+            await ApiClient.DeletePlaylistAsync(deletedId);
+            _playlists.RemoveAll(p => p.Id == deletedId);
+            _selectedPlaylist = null;
+            _selectedPlaylistId = null;
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error deleting playlist: {ex.Message}";
+        }
+    }
+
+    private async Task AddSelectedTracksAsync()
+    {
+        if (_selectedPlaylist is null || _selectedTrackIds.Count == 0)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            _selectedPlaylist = await ApiClient.AddPlaylistItemsAsync(_selectedPlaylist.Id, _selectedTrackIds);
+            _selectedTrackIds = [];
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error adding tracks: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task RemoveItemAsync(Guid itemId)
+    {
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await ApiClient.RemovePlaylistItemAsync(_selectedPlaylist.Id, itemId);
+            await LoadPlaylistAsync(_selectedPlaylist.Id);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error removing track: {ex.Message}";
+        }
+    }
+
+    private async Task MoveItemAsync((Guid ItemId, Guid? AfterItemId) move)
+    {
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _selectedPlaylist = await ApiClient.MovePlaylistItemAsync(_selectedPlaylist.Id, move.ItemId, move.AfterItemId);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error reordering track: {ex.Message}";
+        }
+    }
+}

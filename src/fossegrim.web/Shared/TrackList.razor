@@ -1,0 +1,181 @@
+@inject PlayerState PlayerState
+
+<div class="track-list-component">
+    <div class="controls">
+        <div class="search-box">
+            <input type="text" placeholder="🔍 Search by title, artist, or album..." @oninput="OnSearchChanged" />
+        </div>
+        <div class="filter-group">
+            <label for="sortBy">Sort by:</label>
+            <select id="sortBy" @onchange="OnSortChanged">
+                <option value="title">Title</option>
+                <option value="artist">Artist</option>
+                <option value="album">Album</option>
+            </select>
+        </div>
+    </div>
+
+    @if (Editable && SelectedIds.Count > 0)
+    {
+        <div class="track-list-selection-bar">
+            <span>@SelectedIds.Count selected</span>
+            <button type="button" class="button-secondary" @onclick="ClearSelection">Clear selection</button>
+        </div>
+    }
+
+    <div class="content">
+        @if (VisibleItems.Count == 0)
+        {
+            <div class="no-results">
+                <h2>No tracks found</h2>
+                <p>@(MediaItems.Count == 0 ? "There are no tracks to show." : "No tracks match your search.")</p>
+            </div>
+        }
+        else
+        {
+            <table>
+                <thead>
+                    <tr>
+                        @if (Editable)
+                        {
+                            <th class="select-cell"></th>
+                        }
+                        <th @onclick='() => SetSort("title")'>Title</th>
+                        <th @onclick='() => SetSort("artist")'>Artist</th>
+                        <th @onclick='() => SetSort("album")'>Album</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in PagedItems)
+                    {
+                        <tr @onclick="() => PlayAsync(item)"
+                            @oncontextmenu="e => ShowContextMenu(e, item)" @oncontextmenu:preventDefault="true">
+                            @if (Editable)
+                            {
+                                <td class="select-cell" @onclick:stopPropagation="true">
+                                    <input type="checkbox" checked="@IsSelected(item.Id)" @onchange="e => ToggleSelected(item.Id, e)" />
+                                </td>
+                            }
+                            <td class="title-cell">@(item.Title ?? "Unknown")</td>
+                            <td class="artist-cell">@(item.ArtistName ?? "Unknown Artist")</td>
+                            <td class="album-cell">@(item.Album ?? "Unknown Album")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <Pager @bind-CurrentPage="_currentPage" TotalPages="TotalPages" />
+        }
+    </div>
+</div>
+
+<ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
+
+@code {
+    private const int PageSize = 25;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<MediaItemDto> MediaItems { get; set; } = [];
+
+    [Parameter]
+    public bool Editable { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<Guid> SelectedIds { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<IReadOnlyList<Guid>> SelectedIdsChanged { get; set; }
+
+    private string _searchFilter = "";
+    private string _sortBy = "title";
+    private int _currentPage = 1;
+
+    private bool _contextMenuOpen;
+    private double _contextMenuX;
+    private double _contextMenuY;
+    private IReadOnlyList<ContextMenuAction> _contextMenuActions = [];
+
+    private List<MediaItemDto> VisibleItems => MediaItems
+        .Where(m => Matches(m, _searchFilter))
+        .OrderBy(m => _sortBy switch
+        {
+            "artist" => m.ArtistName,
+            "album" => m.Album,
+            _ => m.Title
+        }, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(VisibleItems.Count / (double)PageSize));
+
+    private List<MediaItemDto> PagedItems =>
+        VisibleItems.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
+
+    private static bool Matches(MediaItemDto item, string filter)
+    {
+        if (string.IsNullOrWhiteSpace(filter))
+        {
+            return true;
+        }
+
+        return (item.Title?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (item.ArtistName?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (item.Album?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        _searchFilter = e.Value?.ToString() ?? "";
+        _currentPage = 1;
+    }
+
+    private void OnSortChanged(ChangeEventArgs e)
+    {
+        _sortBy = e.Value?.ToString() ?? "title";
+        _currentPage = 1;
+    }
+
+    private void SetSort(string sortBy)
+    {
+        _sortBy = sortBy;
+        _currentPage = 1;
+    }
+
+    private Task PlayAsync(MediaItemDto item) => PlayerState.PlayAsync(item);
+
+    private bool IsSelected(Guid id) => SelectedIds.Contains(id);
+
+    private Task ToggleSelected(Guid id, ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool b && b;
+        var newSelection = SelectedIds.ToList();
+
+        if (isChecked)
+        {
+            if (!newSelection.Contains(id))
+            {
+                newSelection.Add(id);
+            }
+        }
+        else
+        {
+            newSelection.Remove(id);
+        }
+
+        return SelectedIdsChanged.InvokeAsync(newSelection);
+    }
+
+    private Task ClearSelection() => SelectedIdsChanged.InvokeAsync(Array.Empty<Guid>());
+
+    private void ShowContextMenu(MouseEventArgs e, MediaItemDto item)
+    {
+        _contextMenuX = e.ClientX;
+        _contextMenuY = e.ClientY;
+        _contextMenuActions =
+        [
+            new ContextMenuAction("Add to next in queue", () => PlayerState.AddToQueueNextAsync([item.Id])),
+            new ContextMenuAction("Add to end of queue", () => PlayerState.AddToQueueEndAsync([item.Id]))
+        ];
+        _contextMenuOpen = true;
+    }
+
+    private void CloseContextMenu() => _contextMenuOpen = false;
+}

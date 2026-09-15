@@ -172,6 +172,97 @@ public class FossegrimApiClient
             ?? throw new ApiException("Profile update succeeded but returned no result.");
     }
 
+    public async Task<IReadOnlyList<PlaylistDto>> GetPlaylistsAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/playlists");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<PlaylistDto>>() ?? [];
+    }
+
+    public async Task<PlaylistDetailDto?> GetPlaylistAsync(Guid id)
+    {
+        var response = await _httpClient.GetAsync($"/api/playlists/{id}");
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlaylistDetailDto>();
+    }
+
+    public async Task<PlaylistDetailDto> GetQueueAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/playlists/queue");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlaylistDetailDto>()
+            ?? throw new ApiException("Get queue succeeded but returned no result.");
+    }
+
+    public async Task<PlaylistDetailDto> SetQueueAsync(IEnumerable<Guid> mediaItemIds, Guid? currentMediaItemId)
+    {
+        var response = await _httpClient.PutAsJsonAsync("/api/playlists/queue", new SetQueueRequest(mediaItemIds, currentMediaItemId));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlaylistDetailDto>()
+            ?? throw new ApiException("Set queue succeeded but returned no result.");
+    }
+
+    public async Task SetQueueCurrentTrackAsync(Guid? mediaItemId)
+    {
+        var response = await _httpClient.PatchAsJsonAsync("/api/playlists/queue/current", new SetQueueCurrentTrackRequest(mediaItemId));
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<PlaylistDto> CreatePlaylistAsync(string name)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/playlists", new CreatePlaylistRequest(name));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlaylistDto>()
+            ?? throw new ApiException("Create playlist succeeded but returned no result.");
+    }
+
+    public async Task<PlaylistDto> UpdatePlaylistAsync(Guid id, string name)
+    {
+        var response = await _httpClient.PutAsJsonAsync($"/api/playlists/{id}", new UpdatePlaylistRequest(name));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlaylistDto>()
+            ?? throw new ApiException("Update playlist succeeded but returned no result.");
+    }
+
+    public async Task DeletePlaylistAsync(Guid id)
+    {
+        var response = await _httpClient.DeleteAsync($"/api/playlists/{id}");
+        if (response.StatusCode != HttpStatusCode.NoContent && response.StatusCode != HttpStatusCode.NotFound)
+        {
+            response.EnsureSuccessStatusCode();
+        }
+    }
+
+    public async Task<PlaylistDetailDto> AddPlaylistItemsAsync(Guid playlistId, IEnumerable<Guid> mediaItemIds)
+    {
+        var response = await _httpClient.PostAsJsonAsync($"/api/playlists/{playlistId}/items", new AddPlaylistItemsRequest(mediaItemIds));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlaylistDetailDto>()
+            ?? throw new ApiException("Add tracks succeeded but returned no result.");
+    }
+
+    public async Task RemovePlaylistItemAsync(Guid playlistId, Guid itemId)
+    {
+        var response = await _httpClient.DeleteAsync($"/api/playlists/{playlistId}/items/{itemId}");
+        if (response.StatusCode != HttpStatusCode.NoContent && response.StatusCode != HttpStatusCode.NotFound)
+        {
+            response.EnsureSuccessStatusCode();
+        }
+    }
+
+    public async Task<PlaylistDetailDto> MovePlaylistItemAsync(Guid playlistId, Guid itemId, Guid? afterItemId)
+    {
+        var response = await _httpClient.PutAsJsonAsync($"/api/playlists/{playlistId}/items/{itemId}/move", new MovePlaylistItemRequest(afterItemId));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlaylistDetailDto>()
+            ?? throw new ApiException("Move track succeeded but returned no result.");
+    }
+
     private async Task<AuthResult> ReadAuthResultAsync(HttpResponseMessage response, string unauthorizedMessage)
     {
         if (response.StatusCode == HttpStatusCode.OK)

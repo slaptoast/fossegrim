@@ -1,0 +1,36 @@
+@if (IsOpen)
+{
+    <div class="context-menu-overlay" @onclick="CloseAsync" @oncontextmenu="CloseAsync" @oncontextmenu:preventDefault="true">
+        <div class="context-menu" style="left:@(X)px; top:@(Y)px;" @onclick:stopPropagation="true">
+            @foreach (var action in Actions)
+            {
+                <button type="button" class="context-menu-item" @onclick="() => SelectAsync(action)">@action.Label</button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public double X { get; set; }
+
+    [Parameter]
+    public double Y { get; set; }
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ContextMenuAction> Actions { get; set; } = [];
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+
+    private async Task SelectAsync(ContextMenuAction action)
+    {
+        await action.OnSelect();
+        await CloseAsync();
+    }
+}

@@ -1,0 +1,211 @@
+@inject PlayerState PlayerState
+
+<div class="playlist-track-list-component">
+    @if (Items.Count == 0)
+    {
+        <div class="no-results">
+            <p>This playlist has no tracks yet.</p>
+        </div>
+    }
+    else
+    {
+        <table class="playlist-track-table">
+            <thead>
+                <tr>
+                    @if (CanEdit)
+                    {
+                        <th class="drag-handle-cell"></th>
+                    }
+                    <th>Title</th>
+                    <th>Artist</th>
+                    <th>Album</th>
+                    @if (CanEdit)
+                    {
+                        <th class="remove-cell"></th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in OrderedItems)
+                {
+                    <tr draggable="@(CanEdit ? "true" : "false")"
+                        class="@RowClass(item.Id)"
+                        @onclick="() => PlayAsync(item)"
+                        @oncontextmenu="e => ShowContextMenu(e, item)" @oncontextmenu:preventDefault="true"
+                        @ondragstart="() => OnDragStart(item.Id)"
+                        @ondragover="OnDragOver" @ondragover:preventDefault
+                        @ondragenter="() => OnDragEnter(item.Id)" @ondragenter:preventDefault
+                        @ondrop="() => OnDrop(item.Id)"
+                        @ondragend="OnDragEnd">
+                        @if (CanEdit)
+                        {
+                            <td class="drag-handle-cell" title="Drag to reorder">⠿</td>
+                        }
+                        <td class="title-cell">@(item.MediaItem.Title ?? "Unknown")</td>
+                        <td class="artist-cell">@(item.MediaItem.ArtistName ?? "Unknown Artist")</td>
+                        <td class="album-cell">@(item.MediaItem.Album ?? "Unknown Album")</td>
+                        @if (CanEdit)
+                        {
+                            <td class="remove-cell" @onclick:stopPropagation="true">
+                                <button type="button" class="track-remove-button" title="Remove from playlist" @onclick="() => RemoveAsync(item.Id)">✕</button>
+                            </td>
+                        }
+                    </tr>
+                }
+                @if (CanEdit)
+                {
+                    <tr class="playlist-drop-zone-row @(_dragOverEnd ? "drag-over" : "")"
+                        @ondragover="OnDragOver" @ondragover:preventDefault
+                        @ondragenter="() => OnDragEnterEnd()" @ondragenter:preventDefault
+                        @ondrop="() => OnDrop(null)"
+                        @ondragend="OnDragEnd">
+                        <td colspan="@(CanEdit ? 5 : 3)">Drop here to move to the end</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<PlaylistItemDto> Items { get; set; } = [];
+
+    [Parameter]
+    public bool CanEdit { get; set; }
+
+    [Parameter]
+    public EventCallback<(Guid ItemId, Guid? AfterItemId)> OnReorder { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnRemove { get; set; }
+
+    private Guid? _draggedItemId;
+    private Guid? _dragOverItemId;
+    private bool _dragOverEnd;
+
+    private bool _contextMenuOpen;
+    private double _contextMenuX;
+    private double _contextMenuY;
+    private IReadOnlyList<ContextMenuAction> _contextMenuActions = [];
+
+    private List<PlaylistItemDto> OrderedItems => Items.OrderBy(i => i.Position).ToList();
+
+    private string RowClass(Guid itemId)
+    {
+        var classes = new List<string>();
+        if (itemId == _draggedItemId)
+        {
+            classes.Add("dragging");
+        }
+        if (itemId == _dragOverItemId)
+        {
+            classes.Add("drag-over");
+        }
+        return string.Join(' ', classes);
+    }
+
+    private void OnDragStart(Guid itemId)
+    {
+        if (!CanEdit)
+        {
+            return;
+        }
+        _draggedItemId = itemId;
+    }
+
+    private void OnDragOver()
+    {
+        // Handled via @ondragover:preventDefault so the row becomes a valid drop target.
+    }
+
+    private void OnDragEnter(Guid itemId)
+    {
+        if (!CanEdit || _draggedItemId is null)
+        {
+            return;
+        }
+        _dragOverItemId = itemId;
+        _dragOverEnd = false;
+    }
+
+    private void OnDragEnterEnd()
+    {
+        if (!CanEdit || _draggedItemId is null)
+        {
+            return;
+        }
+        _dragOverItemId = null;
+        _dragOverEnd = true;
+    }
+
+    private async Task OnDrop(Guid? targetItemId)
+    {
+        if (!CanEdit || _draggedItemId is null)
+        {
+            ResetDragState();
+            return;
+        }
+
+        var draggedId = _draggedItemId.Value;
+        var ordered = OrderedItems;
+
+        Guid? afterItemId;
+        if (targetItemId is null)
+        {
+            // Dropped on the end zone: place after the current last item (excluding itself).
+            afterItemId = ordered.LastOrDefault(i => i.Id != draggedId)?.Id;
+        }
+        else if (targetItemId == draggedId)
+        {
+            ResetDragState();
+            return;
+        }
+        else
+        {
+            // Dropping on a row inserts the dragged item immediately before it.
+            var others = ordered.Where(i => i.Id != draggedId).ToList();
+            var targetIndex = others.FindIndex(i => i.Id == targetItemId);
+            afterItemId = targetIndex > 0 ? others[targetIndex - 1].Id : null;
+        }
+
+        ResetDragState();
+
+        if (afterItemId == draggedId)
+        {
+            return;
+        }
+
+        await OnReorder.InvokeAsync((draggedId, afterItemId));
+    }
+
+    private void OnDragEnd() => ResetDragState();
+
+    private void ResetDragState()
+    {
+        _draggedItemId = null;
+        _dragOverItemId = null;
+        _dragOverEnd = false;
+    }
+
+    private Task RemoveAsync(Guid itemId) => OnRemove.InvokeAsync(itemId);
+
+    private Task PlayAsync(PlaylistItemDto item) => PlayerState.PlayAsync(PlaylistTrackMapper.ToMediaItemDto(item.MediaItem));
+
+    private void ShowContextMenu(MouseEventArgs e, PlaylistItemDto item)
+    {
+        var mediaItemId = item.MediaItem.Id;
+        _contextMenuX = e.ClientX;
+        _contextMenuY = e.ClientY;
+        _contextMenuActions =
+        [
+            new ContextMenuAction("Add to next in queue", () => PlayerState.AddToQueueNextAsync([mediaItemId])),
+            new ContextMenuAction("Add to end of queue", () => PlayerState.AddToQueueEndAsync([mediaItemId]))
+        ];
+        _contextMenuOpen = true;
+    }
+
+    private void CloseContextMenu() => _contextMenuOpen = false;
+}

@@ -19,7 +19,7 @@
             <ul class="album-list">
                 @foreach (var album in PagedAlbums)
                 {
-                    <li class="album-item">
+                    <li class="album-item" @oncontextmenu="e => ShowContextMenu(e, album)" @oncontextmenu:preventDefault="true">
                         <div class="album-art" @onclick="() => PlayAlbumAsync(album)">
                             <span class="album-art-placeholder">💿</span>
                             @if (_coverUrls.TryGetValue(album.Id, out var coverUrl))
@@ -44,6 +44,8 @@
     </div>
 </div>
 
+<ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
+
 @code {
     private const int PageSize = 10;
 
@@ -56,6 +58,11 @@
     private readonly Dictionary<Guid, string> _coverUrls = [];
     private string _filter = "";
     private int _currentPage = 1;
+
+    private bool _contextMenuOpen;
+    private double _contextMenuX;
+    private double _contextMenuY;
+    private IReadOnlyList<ContextMenuAction> _contextMenuActions = [];
 
     private List<AlbumDto> FilteredAlbums =>
         Albums.Where(a => a.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -85,14 +92,30 @@
         _currentPage = 1;
     }
 
+    private List<MediaItemDto> AlbumTracks(AlbumDto album) => AllMediaItems
+        .Where(m => m.Albums.Any(a => a.Id == album.Id))
+        .OrderBy(m => m.Track ?? int.MaxValue)
+        .ThenBy(m => m.Title, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
     private Task PlayAlbumAsync(AlbumDto album)
     {
-        var tracks = AllMediaItems
-            .Where(m => m.Albums.Any(a => a.Id == album.Id))
-            .OrderBy(m => m.Track ?? int.MaxValue)
-            .ThenBy(m => m.Title, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
+        var tracks = AlbumTracks(album);
         return tracks.Count > 0 ? PlayerState.PlayQueueAsync(tracks) : Task.CompletedTask;
     }
+
+    private void ShowContextMenu(MouseEventArgs e, AlbumDto album)
+    {
+        var trackIds = AlbumTracks(album).Select(m => m.Id).ToList();
+        _contextMenuX = e.ClientX;
+        _contextMenuY = e.ClientY;
+        _contextMenuActions =
+        [
+            new ContextMenuAction("Add to next in queue", () => PlayerState.AddToQueueNextAsync(trackIds)),
+            new ContextMenuAction("Add to end of queue", () => PlayerState.AddToQueueEndAsync(trackIds))
+        ];
+        _contextMenuOpen = true;
+    }
+
+    private void CloseContextMenu() => _contextMenuOpen = false;
 }

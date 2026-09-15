@@ -1,7 +1,6 @@
 @page "/"
 @attribute [Authorize]
 @inject FossegrimApiClient ApiClient
-@inject PlayerState PlayerState
 
 <div class="container wide">
 
@@ -13,20 +12,6 @@
         <AlbumList Albums="_albums" AllMediaItems="_mediaItems" />
     </div>
 
-    <div class="controls">
-        <div class="search-box">
-            <input type="text" placeholder="🔍 Search by title, artist, or album..." @oninput="OnSearchChanged" />
-        </div>
-        <div class="filter-group">
-            <label for="sortBy">Sort by:</label>
-            <select id="sortBy" @onchange="OnSortChanged">
-                <option value="title">Title</option>
-                <option value="artist">Artist</option>
-                <option value="album">Album</option>
-            </select>
-        </div>
-    </div>
-
     <div class="content">
         @if (_isLoading)
         {
@@ -36,65 +21,19 @@
         {
             <div class="error"><h3>Error</h3><p>@_errorMessage</p></div>
         }
-        else if (VisibleItems.Count == 0)
-        {
-            <div class="no-results">
-                <h2>No media files found</h2>
-                <p>@(_mediaItems.Count == 0 ? "The media library is empty." : "No tracks match your search.")</p>
-            </div>
-        }
         else
         {
-            <table>
-                <thead>
-                    <tr>
-                        <th @onclick='() => SetSort("title")'>Title</th>
-                        <th @onclick='() => SetSort("artist")'>Artist</th>
-                        <th @onclick='() => SetSort("album")'>Album</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var item in PagedItems)
-                    {
-                        <tr @onclick="() => PlayAsync(item)">
-                            <td class="title-cell">@(item.Title ?? "Unknown")</td>
-                            <td class="artist-cell">@(item.ArtistName ?? "Unknown Artist")</td>
-                            <td class="album-cell">@(item.Album ?? "Unknown Album")</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-            <Pager @bind-CurrentPage="_currentPage" TotalPages="TotalPages" />
+            <TrackList MediaItems="_mediaItems" />
         }
     </div>
 </div>
 
 @code {
-    private const int PageSize = 25;
-
     private List<MediaItemDto> _mediaItems = [];
     private List<ArtistDto> _artists = [];
     private List<AlbumDto> _albums = [];
     private bool _isLoading = true;
     private string? _errorMessage;
-    private string _searchFilter = "";
-    private string _sortBy = "title";
-    private int _currentPage = 1;
-
-    private List<MediaItemDto> VisibleItems => _mediaItems
-        .Where(m => Matches(m, _searchFilter))
-        .OrderBy(m => _sortBy switch
-        {
-            "artist" => m.ArtistName,
-            "album" => m.Album,
-            _ => m.Title
-        }, StringComparer.OrdinalIgnoreCase)
-        .ToList();
-
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(VisibleItems.Count / (double)PageSize));
-
-    private List<MediaItemDto> PagedItems =>
-        VisibleItems.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -114,35 +53,4 @@
         }
     }
 
-    private static bool Matches(MediaItemDto item, string filter)
-    {
-        if (string.IsNullOrWhiteSpace(filter))
-        {
-            return true;
-        }
-
-        return (item.Title?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false)
-            || (item.ArtistName?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false)
-            || (item.Album?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false);
-    }
-
-    private void OnSearchChanged(ChangeEventArgs e)
-    {
-        _searchFilter = e.Value?.ToString() ?? "";
-        _currentPage = 1;
-    }
-
-    private void OnSortChanged(ChangeEventArgs e)
-    {
-        _sortBy = e.Value?.ToString() ?? "title";
-        _currentPage = 1;
-    }
-
-    private void SetSort(string sortBy)
-    {
-        _sortBy = sortBy;
-        _currentPage = 1;
-    }
-
-    private Task PlayAsync(MediaItemDto item) => PlayerState.PlayAsync(item);
 }

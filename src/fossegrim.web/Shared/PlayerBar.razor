@@ -15,7 +15,7 @@
         }
         else if (PlayerState.StreamUrl is not null)
         {
-            <audio controls autoplay preload="metadata" src="@PlayerState.StreamUrl" class="player-audio" @onended="OnTrackEnded">
+            <audio controls autoplay="@PlayerState.AutoPlay" preload="metadata" src="@PlayerState.StreamUrl" class="player-audio" @onended="OnTrackEnded">
                 Your browser does not support the audio element.
             </audio>
         }

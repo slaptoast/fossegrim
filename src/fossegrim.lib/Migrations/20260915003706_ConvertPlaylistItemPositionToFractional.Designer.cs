@@ -3,6 +3,7 @@ using System;
 using Fossegrim.Lib.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace fossegrim.lib.Migrations
 {
     [DbContext(typeof(FossegrimDbContext))]
-    partial class FossegrimDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260915003706_ConvertPlaylistItemPositionToFractional")]
+    partial class ConvertPlaylistItemPositionToFractional
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -312,9 +315,6 @@ namespace fossegrim.lib.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("CurrentMediaItemId")
-                        .HasColumnType("TEXT");
-
                     b.Property<DateTime?>("DateAdded")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
@@ -337,8 +337,6 @@ namespace fossegrim.lib.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CurrentMediaItemId");
 
                     b.HasIndex("Name");
 
@@ -594,18 +592,11 @@ namespace fossegrim.lib.Migrations
 
             modelBuilder.Entity("Fossegrim.Lib.Models.Playlist", b =>
                 {
-                    b.HasOne("Fossegrim.Lib.Models.MediaItem", "CurrentMediaItem")
-                        .WithMany()
-                        .HasForeignKey("CurrentMediaItemId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("Fossegrim.Lib.Models.ApplicationUser", "Owner")
                         .WithMany()
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("CurrentMediaItem");
 
                     b.Navigation("Owner");
                 });

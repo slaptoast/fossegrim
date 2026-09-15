@@ -1,0 +1,51 @@
+@if (Compact)
+{
+    <td><input type="text" @bind="Model.Title" @bind:event="oninput" placeholder="Title" /></td>
+    <td><input type="text" @bind="Model.ArtistName" @bind:event="oninput" placeholder="Artist" /></td>
+    <td><input type="text" @bind="Model.Album" @bind:event="oninput" placeholder="Album" /></td>
+    <td><input type="number" @bind="Model.Track" @bind:event="oninput" /></td>
+    <td><input type="number" @bind="Model.Year" @bind:event="oninput" /></td>
+    <td><input type="text" @bind="Model.Genre" @bind:event="oninput" placeholder="Genre" /></td>
+}
+else
+{
+    <div class="tag-fields">
+        <div class="form-group">
+            <label>Title</label>
+            <input type="text" @bind="Model.Title" @bind:event="oninput" />
+        </div>
+        <div class="form-group">
+            <label>Artist</label>
+            <input type="text" @bind="Model.ArtistName" @bind:event="oninput" />
+        </div>
+        <div class="form-group">
+            <label>Album</label>
+            <input type="text" @bind="Model.Album" @bind:event="oninput" />
+        </div>
+        <div class="tag-fields-row">
+            <div class="form-group">
+                <label>Track #</label>
+                <input type="number" @bind="Model.Track" @bind:event="oninput" />
+            </div>
+            <div class="form-group">
+                <label>Year</label>
+                <input type="number" @bind="Model.Year" @bind:event="oninput" />
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Genre</label>
+            <input type="text" @bind="Model.Genre" @bind:event="oninput" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public MediaItemTagEditModel Model { get; set; } = null!;
+
+    // Compact renders bare <td> cells for use inside a caller-provided <tr>
+    // (the multi-track edit page); the default renders a labeled vertical
+    // form (the single-track edit modal).
+    [Parameter]
+    public bool Compact { get; set; }
+}

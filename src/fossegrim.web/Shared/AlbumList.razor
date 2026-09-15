@@ -1,5 +1,7 @@
 @inject FossegrimApiClient ApiClient
 @inject PlayerState PlayerState
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
 
 <div class="album-list-component">
     <div class="album-list-header">
@@ -58,11 +60,18 @@
     private readonly Dictionary<Guid, string> _coverUrls = [];
     private string _filter = "";
     private int _currentPage = 1;
+    private bool _isAdmin;
 
     private bool _contextMenuOpen;
     private double _contextMenuX;
     private double _contextMenuY;
     private IReadOnlyList<ContextMenuAction> _contextMenuActions = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        _isAdmin = state.User.IsInRole("Admin");
+    }
 
     private List<AlbumDto> FilteredAlbums =>
         Albums.Where(a => a.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -109,13 +118,31 @@
         var trackIds = AlbumTracks(album).Select(m => m.Id).ToList();
         _contextMenuX = e.ClientX;
         _contextMenuY = e.ClientY;
-        _contextMenuActions =
-        [
-            new ContextMenuAction("Add to next in queue", () => PlayerState.AddToQueueNextAsync(trackIds)),
-            new ContextMenuAction("Add to end of queue", () => PlayerState.AddToQueueEndAsync(trackIds))
-        ];
+
+        var actions = new List<ContextMenuAction>
+        {
+            new("Add to next in queue", () => PlayerState.AddToQueueNextAsync(trackIds)),
+            new("Add to end of queue", () => PlayerState.AddToQueueEndAsync(trackIds))
+        };
+
+        if (_isAdmin)
+        {
+            actions.Add(new ContextMenuAction("Edit all tags", () =>
+            {
+                NavigateToEditTags(trackIds);
+                return Task.CompletedTask;
+            }));
+        }
+
+        _contextMenuActions = actions;
         _contextMenuOpen = true;
     }
 
     private void CloseContextMenu() => _contextMenuOpen = false;
+
+    private void NavigateToEditTags(IEnumerable<Guid> trackIds)
+    {
+        var ids = string.Join(',', trackIds);
+        Navigation.NavigateTo($"/tags/edit?ids={Uri.EscapeDataString(ids)}");
+    }
 }

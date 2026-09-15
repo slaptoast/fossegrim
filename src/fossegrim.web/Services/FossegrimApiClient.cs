@@ -67,6 +67,14 @@ public class FossegrimApiClient
         return await response.Content.ReadFromJsonAsync<MediaItemDto>();
     }
 
+    public async Task<UpdateMediaItemTagsResponse> UpdateMediaItemTagsAsync(IEnumerable<MediaItemTagUpdate> items)
+    {
+        var response = await _httpClient.PutAsJsonAsync("/api/mediaitems/tags", new UpdateMediaItemTagsRequest(items));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<UpdateMediaItemTagsResponse>()
+            ?? throw new ApiException("Update tags succeeded but returned no result.");
+    }
+
     public async Task<IReadOnlyList<MediaFolderDto>> GetMediaFoldersAsync()
     {
         var response = await _httpClient.GetAsync("/api/admin/folders");

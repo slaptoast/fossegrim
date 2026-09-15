@@ -43,3 +43,21 @@ public record ArtistSummaryDto(Guid Id, string Name);
 public record AlbumSummaryDto(Guid Id, string Name, int? Year);
 
 public record MediaItemSummaryDto(Guid Id, string? Title, TimeSpan? Duration);
+
+// The desired final tag values for one media item - always a full replace, not a sparse patch.
+public record MediaItemTagUpdate(
+    Guid Id,
+    string? Title,
+    string? ArtistName,
+    string? Album,
+    int? Track,
+    int? Year,
+    string? Genre);
+
+public record UpdateMediaItemTagsRequest(IEnumerable<MediaItemTagUpdate> Items);
+
+public record MediaItemTagUpdateError(Guid Id, string Error);
+
+public record UpdateMediaItemTagsResponse(
+    IEnumerable<MediaItemDto> Updated,
+    IEnumerable<MediaItemTagUpdateError> Errors);

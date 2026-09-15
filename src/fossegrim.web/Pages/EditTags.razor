@@ -1,0 +1,146 @@
+@page "/tags/edit"
+@attribute [Authorize(Roles = "Admin")]
+@inject FossegrimApiClient ApiClient
+@inject NavigationManager Navigation
+
+<div class="container wide">
+    <div class="header">
+        <h1>🏷️ Edit Tags</h1>
+        <p>Editing @_models.Count track@(_models.Count == 1 ? "" : "s")</p>
+    </div>
+
+    <div class="content">
+        @if (_isLoading)
+        {
+            <div class="loading"><h2>Loading tracks</h2></div>
+        }
+        else if (_errorMessage is not null)
+        {
+            <div class="error">@_errorMessage</div>
+        }
+        else
+        {
+            @if (_saveErrors.Count > 0)
+            {
+                <div class="error">
+                    <strong>Some tracks failed to save:</strong>
+                    <ul>
+                        @foreach (var err in _saveErrors)
+                        {
+                            <li>@err</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            <div class="tag-edit-table-wrapper">
+                <table class="tag-edit-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Artist</th>
+                            <th>Album</th>
+                            <th>Track #</th>
+                            <th>Year</th>
+                            <th>Genre</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var model in _models)
+                        {
+                            <tr>
+                                <MediaItemTagFields Model="model" Compact="true" />
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="tag-edit-actions">
+                <button type="button" class="button-secondary" disabled="@_isSaving" @onclick="Cancel">Cancel</button>
+                <button type="button" class="button" disabled="@_isSaving" @onclick="SaveAllAsync">@(_isSaving ? "Saving..." : $"Save All ({_models.Count})")</button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "ids")]
+    public string? Ids { get; set; }
+
+    private List<MediaItemTagEditModel> _models = [];
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private string? _errorMessage;
+    private List<string> _saveErrors = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var requestedIds = (Ids ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => Guid.TryParse(s, out var id) ? id : (Guid?)null)
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .ToList();
+
+            if (requestedIds.Count == 0)
+            {
+                _errorMessage = "No tracks were specified to edit.";
+                return;
+            }
+
+            var allItems = await ApiClient.GetMediaItemsAsync();
+            var byId = allItems.ToDictionary(m => m.Id);
+
+            _models = requestedIds
+                .Where(id => byId.ContainsKey(id))
+                .Select(id => MediaItemTagEditModel.FromMediaItem(byId[id]))
+                .ToList();
+
+            if (_models.Count == 0)
+            {
+                _errorMessage = "None of the requested tracks could be found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error loading tracks: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void Cancel() => Navigation.NavigateTo("/");
+
+    private async Task SaveAllAsync()
+    {
+        _isSaving = true;
+        _saveErrors = [];
+        try
+        {
+            var result = await ApiClient.UpdateMediaItemTagsAsync(_models.Select(m => m.ToUpdateRequest()));
+            var errors = result.Errors.ToList();
+            if (errors.Count > 0)
+            {
+                _saveErrors = errors.Select(e => e.Error).ToList();
+            }
+            else
+            {
+                Navigation.NavigateTo("/");
+            }
+        }
+        catch (Exception ex)
+        {
+            _saveErrors = [$"Failed to save: {ex.Message}"];
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}

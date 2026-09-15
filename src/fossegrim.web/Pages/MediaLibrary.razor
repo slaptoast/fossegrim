@@ -23,7 +23,7 @@
         }
         else
         {
-            <TrackList MediaItems="_mediaItems" />
+            <TrackList MediaItems="_mediaItems" OnItemUpdated="HandleItemUpdated" />
         }
     </div>
 </div>
@@ -53,4 +53,25 @@
         }
     }
 
+    private async Task HandleItemUpdated(MediaItemDto updated)
+    {
+        var index = _mediaItems.FindIndex(m => m.Id == updated.Id);
+        if (index >= 0)
+        {
+            _mediaItems[index] = updated;
+        }
+
+        // A tag edit can change which artist/album a track belongs to, so
+        // refresh the groupings those components derive their lists from.
+        try
+        {
+            _artists = (await ApiClient.GetArtistsAsync()).OrderBy(a => a.Name).ToList();
+            _albums = (await ApiClient.GetAlbumsAsync()).OrderBy(a => a.Name).ToList();
+        }
+        catch
+        {
+            // The track edit itself already succeeded; leave the stale groupings
+            // in place rather than surfacing an error for this best-effort refresh.
+        }
+    }
 }

@@ -57,7 +57,7 @@
                     <div class="playlist-editor-grid">
                         <div class="playlist-editor-column">
                             <h3>Add Tracks</h3>
-                            <TrackList MediaItems="_mediaItems" Editable="CanEdit" @bind-SelectedIds="_selectedTrackIds" />
+                            <TrackList MediaItems="_mediaItems" Editable="CanEdit" @bind-SelectedIds="_selectedTrackIds" OnItemUpdated="HandleItemUpdated" />
                             @if (CanEdit)
                             {
                                 <button type="button" class="button" disabled="@(_selectedTrackIds.Count == 0 || _isSaving)" @onclick="AddSelectedTracksAsync">
@@ -68,7 +68,7 @@
 
                         <div class="playlist-editor-column">
                             <h3>Playlist Tracks (@_selectedPlaylist.Items.Count())</h3>
-                            <PlaylistTrackList Items="_selectedPlaylist.Items.ToList()" CanEdit="CanEdit" OnReorder="MoveItemAsync" OnRemove="RemoveItemAsync" />
+                            <PlaylistTrackList Items="_selectedPlaylist.Items.ToList()" CanEdit="CanEdit" OnReorder="MoveItemAsync" OnRemove="RemoveItemAsync" OnItemUpdated="HandlePlaylistItemTagsUpdatedAsync" />
                         </div>
                     </div>
                 </div>
@@ -275,4 +275,16 @@
             _playlistErrorMessage = $"Error reordering track: {ex.Message}";
         }
     }
+
+    private void HandleItemUpdated(MediaItemDto updated)
+    {
+        var index = _mediaItems.FindIndex(m => m.Id == updated.Id);
+        if (index >= 0)
+        {
+            _mediaItems[index] = updated;
+        }
+    }
+
+    private Task HandlePlaylistItemTagsUpdatedAsync() =>
+        _selectedPlaylist is null ? Task.CompletedTask : LoadPlaylistAsync(_selectedPlaylist.Id);
 }

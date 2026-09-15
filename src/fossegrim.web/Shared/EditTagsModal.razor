@@ -1,0 +1,77 @@
+@inject FossegrimApiClient ApiClient
+
+@if (IsOpen && Model is not null)
+{
+    <div class="modal-overlay" @onclick="Cancel">
+        <div class="modal-card tag-edit-modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Edit Tags</h3>
+            </div>
+            <div class="modal-body">
+                @if (_errorMessage is not null)
+                {
+                    <div class="error">@_errorMessage</div>
+                }
+                <MediaItemTagFields Model="Model" />
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="button-secondary" disabled="@_isSaving" @onclick="Cancel">Cancel</button>
+                <button type="button" class="button" disabled="@_isSaving" @onclick="SaveAsync">@(_isSaving ? "Saving..." : "Save")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public MediaItemTagEditModel? Model { get; set; }
+
+    [Parameter]
+    public EventCallback<MediaItemDto> OnSaved { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private bool _isSaving;
+    private string? _errorMessage;
+
+    private Task Cancel() => OnCancel.InvokeAsync();
+
+    private async Task SaveAsync()
+    {
+        if (Model is null)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+        try
+        {
+            var result = await ApiClient.UpdateMediaItemTagsAsync([Model.ToUpdateRequest()]);
+            var error = result.Errors.FirstOrDefault();
+            if (error is not null)
+            {
+                _errorMessage = error.Error;
+                return;
+            }
+
+            var updated = result.Updated.FirstOrDefault();
+            if (updated is not null)
+            {
+                await OnSaved.InvokeAsync(updated);
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to save tags: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}

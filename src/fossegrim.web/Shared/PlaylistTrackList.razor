@@ -1,4 +1,6 @@
 @inject PlayerState PlayerState
+@inject FossegrimApiClient ApiClient
+@inject AuthenticationStateProvider AuthStateProvider
 
 <div class="playlist-track-list-component">
     @if (Items.Count == 0)
@@ -69,6 +71,8 @@
 
 <ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
 
+<EditTagsModal IsOpen="_showEditModal" Model="_editingModel" OnSaved="OnTagsSavedAsync" OnCancel="() => _showEditModal = false" />
+
 @code {
     [Parameter, EditorRequired]
     public IReadOnlyList<PlaylistItemDto> Items { get; set; } = [];
@@ -82,14 +86,27 @@
     [Parameter]
     public EventCallback<Guid> OnRemove { get; set; }
 
+    [Parameter]
+    public EventCallback OnItemUpdated { get; set; }
+
     private Guid? _draggedItemId;
     private Guid? _dragOverItemId;
     private bool _dragOverEnd;
+    private bool _isAdmin;
 
     private bool _contextMenuOpen;
     private double _contextMenuX;
     private double _contextMenuY;
     private IReadOnlyList<ContextMenuAction> _contextMenuActions = [];
+
+    private bool _showEditModal;
+    private MediaItemTagEditModel? _editingModel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        _isAdmin = state.User.IsInRole("Admin");
+    }
 
     private List<PlaylistItemDto> OrderedItems => Items.OrderBy(i => i.Position).ToList();
 
@@ -199,13 +216,39 @@
         var mediaItemId = item.MediaItem.Id;
         _contextMenuX = e.ClientX;
         _contextMenuY = e.ClientY;
-        _contextMenuActions =
-        [
-            new ContextMenuAction("Add to next in queue", () => PlayerState.AddToQueueNextAsync([mediaItemId])),
-            new ContextMenuAction("Add to end of queue", () => PlayerState.AddToQueueEndAsync([mediaItemId]))
-        ];
+
+        var actions = new List<ContextMenuAction>
+        {
+            new("Add to next in queue", () => PlayerState.AddToQueueNextAsync([mediaItemId])),
+            new("Add to end of queue", () => PlayerState.AddToQueueEndAsync([mediaItemId]))
+        };
+
+        if (_isAdmin)
+        {
+            actions.Add(new ContextMenuAction("Edit tags", () => OpenEditModalAsync(mediaItemId)));
+        }
+
+        _contextMenuActions = actions;
         _contextMenuOpen = true;
     }
 
     private void CloseContextMenu() => _contextMenuOpen = false;
+
+    private async Task OpenEditModalAsync(Guid mediaItemId)
+    {
+        var fullItem = await ApiClient.GetMediaItemAsync(mediaItemId);
+        if (fullItem is null)
+        {
+            return;
+        }
+
+        _editingModel = MediaItemTagEditModel.FromMediaItem(fullItem);
+        _showEditModal = true;
+    }
+
+    private async Task OnTagsSavedAsync(MediaItemDto updated)
+    {
+        _showEditModal = false;
+        await OnItemUpdated.InvokeAsync();
+    }
 }

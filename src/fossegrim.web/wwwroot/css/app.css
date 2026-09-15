@@ -1222,6 +1222,78 @@ td {
     color: #212529;
 }
 
+/* Tag editing */
+.tag-edit-modal {
+    max-width: 480px;
+}
+
+.tag-fields .form-group:last-child {
+    margin-bottom: 0;
+}
+
+.tag-fields-row {
+    display: flex;
+    gap: 15px;
+}
+
+.tag-fields-row .form-group {
+    flex: 1;
+}
+
+.tag-edit-table-wrapper {
+    overflow-x: auto;
+}
+
+.tag-edit-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tag-edit-table th {
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+}
+
+.tag-edit-table td {
+    padding: 6px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.tag-edit-table input {
+    width: 100%;
+    min-width: 90px;
+    padding: 8px 10px;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.tag-edit-table input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.tag-edit-table input[type="number"] {
+    min-width: 70px;
+}
+
+.tag-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.tag-edit-actions .button,
+.tag-edit-actions .button-secondary {
+    width: auto;
+}
+
 /* Blazor framework defaults */
 #blazor-error-ui {
     background: lightyellow;

@@ -44,7 +44,11 @@ public class MediaLibraryService
         var itemsUpdated = 0;
 
         var artistsByName = await _db.Artists.ToDictionaryAsync(a => a.Name, StringComparer.OrdinalIgnoreCase);
-        var albumsByName = await _db.Albums.ToDictionaryAsync(a => a.Name, StringComparer.OrdinalIgnoreCase);
+        // Artists must be loaded up front: the album-artist link is only added
+        // below when missing, and an unloaded collection would look empty even
+        // when the link already exists, causing a duplicate-row insert to fail
+        // (e.g. on a rescan of an already-imported multi-track album).
+        var albumsByName = await _db.Albums.Include(a => a.Artists).ToDictionaryAsync(a => a.Name, StringComparer.OrdinalIgnoreCase);
 
         Artist? ResolveArtist(string? artistName)
         {
@@ -169,6 +173,153 @@ public class MediaLibraryService
             ItemsUpdated = itemsUpdated,
             FolderPath = folderPath
         };
+    }
+
+    /// <summary>
+    /// Writes ID3 tags to disk for each requested media item and mirrors the
+    /// change into the database, re-resolving the Artist/Album associations
+    /// the same way a fresh scan would. Items that fail (missing file, unreadable
+    /// tag data, etc.) are reported as errors and don't affect the others.
+    /// </summary>
+    public async Task<UpdateMediaItemTagsResponse> UpdateTagsAsync(IEnumerable<MediaItemTagUpdate> updates)
+    {
+        var errors = new List<MediaItemTagUpdateError>();
+        var updatedItems = new List<MediaItem>();
+
+        var artistsByName = await _db.Artists.ToDictionaryAsync(a => a.Name, StringComparer.OrdinalIgnoreCase);
+        // Artists must be loaded up front: the album-artist link is only added
+        // below when missing, and an unloaded collection would look empty even
+        // when the link already exists, causing a duplicate-row insert to fail.
+        var albumsByName = await _db.Albums.Include(a => a.Artists).ToDictionaryAsync(a => a.Name, StringComparer.OrdinalIgnoreCase);
+
+        Artist? ResolveArtist(string? artistName)
+        {
+            if (string.IsNullOrWhiteSpace(artistName))
+            {
+                return null;
+            }
+
+            var name = artistName.Trim();
+            if (artistsByName.TryGetValue(name, out var artist))
+            {
+                return artist;
+            }
+
+            artist = new Artist { Id = Guid.NewGuid(), Name = name };
+            artistsByName[name] = artist;
+            _db.Artists.Add(artist);
+            return artist;
+        }
+
+        Album? ResolveAlbum(string? albumName)
+        {
+            if (string.IsNullOrWhiteSpace(albumName))
+            {
+                return null;
+            }
+
+            var name = albumName.Trim();
+            if (albumsByName.TryGetValue(name, out var album))
+            {
+                return album;
+            }
+
+            album = new Album { Id = Guid.NewGuid(), Name = name };
+            albumsByName[name] = album;
+            _db.Albums.Add(album);
+            return album;
+        }
+
+        foreach (var update in updates)
+        {
+            var item = await _db.MediaItems
+                .Include(m => m.Artists)
+                .Include(m => m.Albums)
+                .FirstOrDefaultAsync(m => m.Id == update.Id);
+
+            if (item is null)
+            {
+                errors.Add(new MediaItemTagUpdateError(update.Id, "Media item not found."));
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(item.FileLocation) || !File.Exists(item.FileLocation))
+            {
+                errors.Add(new MediaItemTagUpdateError(update.Id, "File not found on disk."));
+                continue;
+            }
+
+            var title = string.IsNullOrWhiteSpace(update.Title) ? null : update.Title.Trim();
+            var artistName = string.IsNullOrWhiteSpace(update.ArtistName) ? null : update.ArtistName.Trim();
+            var albumName = string.IsNullOrWhiteSpace(update.Album) ? null : update.Album.Trim();
+            var genre = string.IsNullOrWhiteSpace(update.Genre) ? null : update.Genre.Trim();
+
+            try
+            {
+                using var tagFile = TagLib.File.Create(item.FileLocation);
+                tagFile.Tag.Title = title;
+                tagFile.Tag.Performers = artistName is null ? [] : [artistName];
+                tagFile.Tag.Album = albumName;
+                tagFile.Tag.Genres = genre is null ? [] : [genre];
+                tagFile.Tag.Track = (uint)Math.Max(0, update.Track ?? 0);
+                tagFile.Tag.Year = (uint)Math.Max(0, update.Year ?? 0);
+                tagFile.Save();
+            }
+            catch (Exception ex)
+            {
+                errors.Add(new MediaItemTagUpdateError(update.Id, $"Failed to write tags to file: {ex.Message}"));
+                continue;
+            }
+
+            var artist = ResolveArtist(artistName);
+            var album = ResolveAlbum(albumName);
+
+            if (album is not null && artist is not null && !album.Artists.Contains(artist))
+            {
+                album.Artists.Add(artist);
+            }
+
+            item.Title = title;
+            item.ArtistName = artistName;
+            item.Album = albumName;
+            item.Track = update.Track;
+            item.Year = update.Year;
+            item.Genre = genre;
+            item.LastModified = DateTime.UtcNow;
+
+            item.Artists.Clear();
+            if (artist is not null)
+            {
+                item.Artists.Add(artist);
+            }
+
+            item.Albums.Clear();
+            if (album is not null)
+            {
+                item.Albums.Add(album);
+            }
+
+            updatedItems.Add(item);
+        }
+
+        await _db.SaveChangesAsync();
+
+        var updatedDtos = updatedItems.Select(m => new MediaItemDto(
+            m.Id,
+            m.Title,
+            m.ArtistName,
+            m.Album,
+            m.DateAdded,
+            m.LastModified,
+            m.Year,
+            m.Track,
+            m.Genre,
+            m.Duration,
+            m.Bitrate,
+            m.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name)),
+            m.Albums.Select(a => new AlbumSummaryDto(a.Id, a.Name, a.Year))));
+
+        return new UpdateMediaItemTagsResponse(updatedDtos, errors);
     }
 
     /// <summary>

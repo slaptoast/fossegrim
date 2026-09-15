@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Fossegrim.Lib.Dtos;
+using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services;
 using Microsoft.AspNetCore.Identity;

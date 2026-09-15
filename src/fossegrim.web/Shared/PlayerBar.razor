@@ -1,0 +1,42 @@
+@implements IDisposable
+@inject PlayerState PlayerState
+
+@if (PlayerState.CurrentTrack is not null)
+{
+    <div class="player-bar">
+        <div class="player-track-info">
+            <span class="player-title">@(PlayerState.CurrentTrack.Title ?? "Unknown")</span>
+            <span class="player-artist">@(PlayerState.CurrentTrack.ArtistName ?? "Unknown Artist")</span>
+        </div>
+
+        @if (PlayerState.ErrorMessage is not null)
+        {
+            <span class="player-error">@PlayerState.ErrorMessage</span>
+        }
+        else if (PlayerState.StreamUrl is not null)
+        {
+            <audio controls autoplay preload="metadata" src="@PlayerState.StreamUrl" class="player-audio" @onended="OnTrackEnded">
+                Your browser does not support the audio element.
+            </audio>
+        }
+    </div>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        PlayerState.Changed += OnChanged;
+    }
+
+    private void OnChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private Task OnTrackEnded() => PlayerState.PlayNextAsync();
+
+    public void Dispose()
+    {
+        PlayerState.Changed -= OnChanged;
+    }
+}

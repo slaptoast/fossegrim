@@ -1,50 +1,63 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using Fossegrim.Lib.Dtos;
-using Fossegrim.Lib.Services;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using Fossegrim.Contracts.Dtos;
 
 namespace Fossegrim.Web.Services;
 
 /// <summary>
-/// The web app's client for Fossegrim.Api - it talks to the same endpoints a
-/// mobile app would, forwarding the JWT that Web stored in the caller's auth
-/// cookie at login time. Web never mints or validates tokens itself.
+/// The Blazor app's client for Fossegrim.Api - it talks to the same endpoints
+/// a mobile app would. AuthorizedHttpMessageHandler attaches the bearer token
+/// to every request, so this class just makes plain HTTP calls.
 /// </summary>
 public class FossegrimApiClient
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenStore _tokenStore;
 
-    public FossegrimApiClient(HttpClient httpClient)
+    public FossegrimApiClient(HttpClient httpClient, TokenStore tokenStore)
     {
         _httpClient = httpClient;
+        _tokenStore = tokenStore;
     }
 
-    public async Task<IReadOnlyList<ArtistDto>> GetArtistsAsync(HttpContext httpContext)
+    public async Task<IReadOnlyList<ArtistDto>> GetArtistsAsync()
     {
-        var response = await SendAsync(httpContext, HttpMethod.Get, "/api/artists");
+        var response = await _httpClient.GetAsync("/api/artists");
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<List<ArtistDto>>() ?? [];
     }
 
-    public async Task<string> GetStreamUrlAsync(HttpContext httpContext, Guid mediaItemId)
+    public async Task<string> GetStreamUrlAsync(Guid mediaItemId)
     {
-        var token = await GetAccessTokenAsync(httpContext);
+        var token = await _tokenStore.GetTokenAsync()
+            ?? throw new InvalidOperationException("Cannot build a stream URL without a stored access token.");
         return $"{_httpClient.BaseAddress}stream/{mediaItemId}?access_token={Uri.EscapeDataString(token)}";
     }
 
-    public async Task<IReadOnlyList<MediaItemDto>> GetMediaItemsAsync(HttpContext httpContext)
+    public async Task<IReadOnlyList<AlbumDto>> GetAlbumsAsync()
     {
-        var response = await SendAsync(httpContext, HttpMethod.Get, "/api/mediaitems");
+        var response = await _httpClient.GetAsync("/api/albums");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<AlbumDto>>() ?? [];
+    }
+
+    public async Task<string> GetAlbumCoverUrl(Guid albumId)
+    {
+        var token = await _tokenStore.GetTokenAsync()
+            ?? throw new InvalidOperationException("Cannot build a cover URL without a stored access token.");
+        return $"{_httpClient.BaseAddress}cover/{albumId}?access_token={Uri.EscapeDataString(token)}";
+    }
+
+    public async Task<IReadOnlyList<MediaItemDto>> GetMediaItemsAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/mediaitems");
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<List<MediaItemDto>>() ?? [];
     }
 
-    public async Task<MediaItemDto?> GetMediaItemAsync(HttpContext httpContext, Guid id)
+    public async Task<MediaItemDto?> GetMediaItemAsync(Guid id)
     {
-        var response = await SendAsync(httpContext, HttpMethod.Get, $"/api/mediaitems/{id}");
+        var response = await _httpClient.GetAsync($"/api/mediaitems/{id}");
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
@@ -54,16 +67,16 @@ public class FossegrimApiClient
         return await response.Content.ReadFromJsonAsync<MediaItemDto>();
     }
 
-    public async Task<IReadOnlyList<MediaFolderDto>> GetMediaFoldersAsync(HttpContext httpContext)
+    public async Task<IReadOnlyList<MediaFolderDto>> GetMediaFoldersAsync()
     {
-        var response = await SendAsync(httpContext, HttpMethod.Get, "/api/admin/folders");
+        var response = await _httpClient.GetAsync("/api/admin/folders");
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<List<MediaFolderDto>>() ?? [];
     }
 
-    public async Task<MediaFolderDto?> GetMediaFolderAsync(HttpContext httpContext, Guid id)
+    public async Task<MediaFolderDto?> GetMediaFolderAsync(Guid id)
     {
-        var response = await SendAsync(httpContext, HttpMethod.Get, $"/api/admin/folders/{id}");
+        var response = await _httpClient.GetAsync($"/api/admin/folders/{id}");
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
@@ -73,9 +86,9 @@ public class FossegrimApiClient
         return await response.Content.ReadFromJsonAsync<MediaFolderDto>();
     }
 
-    public async Task<AddFolderResult> AddMediaFolderAsync(HttpContext httpContext, string name, string location)
+    public async Task<AddFolderResult> AddMediaFolderAsync(string name, string location)
     {
-        var response = await SendAsync(httpContext, HttpMethod.Post, "/api/admin/folders", new AddMediaFolderRequest(name, location));
+        var response = await _httpClient.PostAsJsonAsync("/api/admin/folders", new AddMediaFolderRequest(name, location));
 
         if (response.StatusCode == HttpStatusCode.Created)
         {
@@ -92,18 +105,18 @@ public class FossegrimApiClient
         return new AddFolderResult(false, null, "Failed to add folder.");
     }
 
-    public async Task DeleteMediaFolderAsync(HttpContext httpContext, Guid id)
+    public async Task DeleteMediaFolderAsync(Guid id)
     {
-        var response = await SendAsync(httpContext, HttpMethod.Delete, $"/api/admin/folders/{id}");
+        var response = await _httpClient.DeleteAsync($"/api/admin/folders/{id}");
         if (response.StatusCode != HttpStatusCode.NoContent && response.StatusCode != HttpStatusCode.NotFound)
         {
             response.EnsureSuccessStatusCode();
         }
     }
 
-    public async Task<ScanResult> ScanAsync(HttpContext httpContext, string folderPath, int maxDegreeOfParallelism)
+    public async Task<ScanResult> ScanAsync(string folderPath, int maxDegreeOfParallelism)
     {
-        var response = await SendAsync(httpContext, HttpMethod.Post, "/api/admin/scan", new ScanRequest(folderPath, maxDegreeOfParallelism));
+        var response = await _httpClient.PostAsJsonAsync("/api/admin/scan", new ScanRequest(folderPath, maxDegreeOfParallelism));
 
         if (!response.IsSuccessStatusCode)
         {
@@ -127,9 +140,9 @@ public class FossegrimApiClient
         return await ReadAuthResultAsync(response, unauthorizedMessage: "Registration failed.");
     }
 
-    public async Task<IReadOnlyList<string>> ChangePasswordAsync(HttpContext httpContext, string oldPassword, string newPassword)
+    public async Task<IReadOnlyList<string>> ChangePasswordAsync(string oldPassword, string newPassword)
     {
-        var response = await SendAsync(httpContext, HttpMethod.Post, "/api/auth/change-password", new ChangePasswordRequest(oldPassword, newPassword));
+        var response = await _httpClient.PostAsJsonAsync("/api/auth/change-password", new ChangePasswordRequest(oldPassword, newPassword));
 
         if (response.IsSuccessStatusCode)
         {
@@ -140,9 +153,9 @@ public class FossegrimApiClient
         return errors?.Errors ?? ["Failed to change password."];
     }
 
-    public async Task<ProfileDto?> GetProfileAsync(HttpContext httpContext)
+    public async Task<ProfileDto?> GetProfileAsync()
     {
-        var response = await SendAsync(httpContext, HttpMethod.Get, "/api/auth/me");
+        var response = await _httpClient.GetAsync("/api/auth/me");
         if (!response.IsSuccessStatusCode)
         {
             return null;
@@ -151,9 +164,9 @@ public class FossegrimApiClient
         return await response.Content.ReadFromJsonAsync<ProfileDto>();
     }
 
-    public async Task<ProfileDto> UpdateProfileAsync(HttpContext httpContext, string? displayName, string? phoneNumber)
+    public async Task<ProfileDto> UpdateProfileAsync(string? displayName, string? phoneNumber)
     {
-        var response = await SendAsync(httpContext, HttpMethod.Put, "/api/auth/me", new UpdateProfileRequest(displayName, phoneNumber));
+        var response = await _httpClient.PutAsJsonAsync("/api/auth/me", new UpdateProfileRequest(displayName, phoneNumber));
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<ProfileDto>()
             ?? throw new ApiException("Profile update succeeded but returned no result.");
@@ -175,31 +188,6 @@ public class FossegrimApiClient
         var errors = await response.Content.ReadFromJsonAsync<IdentityErrorsResponse>();
         return new AuthResult(false, null, errors?.Errors ?? ["An unexpected error occurred."]);
     }
-
-    private async Task<string> GetAccessTokenAsync(HttpContext httpContext)
-    {
-        return await httpContext.GetTokenAsync("access_token")
-            ?? throw new InvalidOperationException("Cannot call Fossegrim.Api without a stored access token.");
-    }
-
-    private async Task<HttpResponseMessage> SendAsync(HttpContext httpContext, HttpMethod method, string requestUri, object? body = null)
-    {
-        var request = new HttpRequestMessage(method, requestUri);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await GetAccessTokenAsync(httpContext));
-        if (body is not null)
-        {
-            request.Content = JsonContent.Create(body);
-        }
-
-        var response = await _httpClient.SendAsync(request);
-        if (response.StatusCode == HttpStatusCode.Unauthorized)
-        {
-            await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            throw new ApiUnauthorizedException();
-        }
-
-        return response;
-    }
 }
 
 public record AddFolderResult(bool Success, MediaFolderDto? Folder, string? ErrorMessage);
@@ -209,13 +197,6 @@ public record AuthResult(bool Success, LoginResponse? Response, IReadOnlyList<st
 public class ApiException : Exception
 {
     public ApiException(string message) : base(message)
-    {
-    }
-}
-
-public class ApiUnauthorizedException : Exception
-{
-    public ApiUnauthorizedException() : base("The Fossegrim.Api session has expired or is invalid.")
     {
     }
 }

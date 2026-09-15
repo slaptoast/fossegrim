@@ -1,0 +1,170 @@
+@page "/settings"
+@attribute [Authorize(Roles = "Admin")]
+@inject FossegrimApiClient ApiClient
+@inject IJSRuntime JSRuntime
+
+<div class="container">
+    <div class="header">
+        <h1>⚙️ Settings</h1>
+        <p>Configure your Fossegrim application</p>
+    </div>
+
+    <div class="content">
+        <h2 class="section-header" style="margin-top: 40px;">Configured Folders</h2>
+
+        @if (_isLoading)
+        {
+            <div class="loading"><h2>Loading folders</h2></div>
+        }
+        else if (_folders.Count > 0)
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Location</th>
+                        <th style="width: 160px; text-align: center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var folder in _folders)
+                    {
+                        <tr>
+                            <td class="title-cell">@(string.IsNullOrEmpty(folder.Name) ? "Unnamed" : folder.Name)</td>
+                            <td><span class="file-path" title="@folder.Location">@folder.Location</span></td>
+                            <td style="text-align: center;">
+                                <button class="button-secondary" style="padding: 6px 12px; font-size: 0.85rem; margin-right: 8px;" @onclick="() => ScanFolderAsync(folder)">Scan</button>
+                                <button class="button-danger" style="padding: 6px 12px; font-size: 0.85rem;" @onclick="() => RemoveFolderAsync(folder)">Remove</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="no-results">
+                <p style="color: #6c757d; font-style: italic;">No media folders configured yet. Add one below to get started.</p>
+            </div>
+        }
+
+        @if (_statusMessage is not null)
+        {
+            <div class="@(_isSuccess ? "success-message" : "error-message")">@_statusMessage</div>
+        }
+
+        <h2 class="section-header">Add Media Folder</h2>
+
+        <EditForm Model="_newFolder" OnValidSubmit="AddFolderAsync">
+            <DataAnnotationsValidator />
+
+            <div class="folder-item">
+                <div class="form-group">
+                    <label for="location">Folder Location</label>
+                    <InputText id="location" @bind-Value="_newFolder.Location" placeholder="/Users/username/Music" />
+                    <ValidationMessage For="() => _newFolder.Location" />
+                </div>
+
+                <div class="form-group">
+                    <label for="name">Folder Name</label>
+                    <InputText id="name" @bind-Value="_newFolder.Name" placeholder="My Music Collection" />
+                    <ValidationMessage For="() => _newFolder.Name" />
+                </div>
+
+                <button type="submit" class="button-secondary">+ Add Folder</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private List<MediaFolderDto> _folders = [];
+    private readonly NewFolderInput _newFolder = new();
+    private bool _isLoading = true;
+    private string? _statusMessage;
+    private bool _isSuccess;
+
+    protected override async Task OnInitializedAsync() => await LoadFoldersAsync();
+
+    private async Task LoadFoldersAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _folders = (await ApiClient.GetMediaFoldersAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Failed to load media folders: {ex.Message}";
+            _isSuccess = false;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task AddFolderAsync()
+    {
+        var result = await ApiClient.AddMediaFolderAsync(_newFolder.Name, _newFolder.Location);
+        if (result.Success)
+        {
+            _statusMessage = $"Successfully added folder '{result.Folder!.Name}'.";
+            _isSuccess = true;
+            _newFolder.Name = "";
+            _newFolder.Location = "";
+            await LoadFoldersAsync();
+        }
+        else
+        {
+            _statusMessage = result.ErrorMessage;
+            _isSuccess = false;
+        }
+    }
+
+    private async Task RemoveFolderAsync(MediaFolderDto folder)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to remove {folder.Name}?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            await ApiClient.DeleteMediaFolderAsync(folder.Id);
+            _statusMessage = "Successfully removed folder.";
+            _isSuccess = true;
+            await LoadFoldersAsync();
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Failed to remove folder: {ex.Message}";
+            _isSuccess = false;
+        }
+    }
+
+    private async Task ScanFolderAsync(MediaFolderDto folder)
+    {
+        try
+        {
+            await ApiClient.ScanAsync(folder.Location, maxDegreeOfParallelism: 4);
+            _statusMessage = $"Scan of '{folder.Name}' complete.";
+            _isSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Scan failed: {ex.Message}";
+            _isSuccess = false;
+        }
+    }
+
+    private class NewFolderInput
+    {
+        [Required]
+        public string Location { get; set; } = string.Empty;
+
+        [Required]
+        public string Name { get; set; } = string.Empty;
+    }
+}

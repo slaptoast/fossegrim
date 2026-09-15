@@ -1,0 +1,89 @@
+@page "/profile"
+@attribute [Authorize]
+@inject FossegrimApiClient ApiClient
+
+<div class="container medium">
+    <div class="header small">
+        <h1>👤 Profile</h1>
+        <p>Manage your account settings</p>
+    </div>
+
+    <div class="content">
+        @if (_statusMessage is not null)
+        {
+            <div class="success-message">@_statusMessage</div>
+        }
+
+        <div class="info-section">
+            <h3>Account Information</h3>
+            <div class="info-item">
+                <span class="info-label">Username:</span>
+                <span class="info-value">@_username</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Email:</span>
+                <span class="info-value">@_email</span>
+            </div>
+        </div>
+
+        <h3 style="margin-bottom: 20px; color: #495057;">Update Profile</h3>
+
+        <EditForm Model="_input" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label for="displayName">Display Name</label>
+                <InputText id="displayName" @bind-Value="_input.DisplayName" />
+                <ValidationMessage For="() => _input.DisplayName" />
+            </div>
+
+            <div class="form-group">
+                <label for="phoneNumber">Phone Number</label>
+                <InputText id="phoneNumber" @bind-Value="_input.PhoneNumber" type="tel" />
+                <ValidationMessage For="() => _input.PhoneNumber" />
+            </div>
+
+            <button type="submit" class="button">Update Profile</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private string _username = "";
+    private string _email = "";
+    private readonly ProfileInput _input = new();
+    private string? _statusMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var profile = await ApiClient.GetProfileAsync();
+        if (profile is not null)
+        {
+            LoadFrom(profile);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        var updated = await ApiClient.UpdateProfileAsync(_input.DisplayName, _input.PhoneNumber);
+        LoadFrom(updated);
+        _statusMessage = "Your profile has been updated";
+    }
+
+    private void LoadFrom(ProfileDto profile)
+    {
+        _username = profile.UserName;
+        _email = profile.Email;
+        _input.DisplayName = profile.DisplayName;
+        _input.PhoneNumber = profile.PhoneNumber;
+    }
+
+    private class ProfileInput
+    {
+        [StringLength(100, MinimumLength = 3)]
+        public string? DisplayName { get; set; }
+
+        [Phone]
+        public string? PhoneNumber { get; set; }
+    }
+}

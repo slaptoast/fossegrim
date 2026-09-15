@@ -1,8 +1,0 @@
-@model Fossegrim.Web.ViewComponents.NavLinksViewModel
-
-<div class="nav-links@(Model.Centered ? " centered" : "")">
-    @foreach (var link in Model.Links)
-    {
-        <a href="@link.Url">@link.Text</a>
-    }
-</div>

@@ -1,0 +1,99 @@
+@page "/admin"
+@attribute [Authorize(Roles = "Admin")]
+@inject FossegrimApiClient ApiClient
+
+<div class="container">
+    <div class="header">
+        <h1>⚙️ Admin Panel</h1>
+        <p>Manage your media library</p>
+    </div>
+
+    <div class="content">
+        <EditForm Model="_input" OnValidSubmit="ScanAsync">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label for="folderPath">Media Folder Path</label>
+                <InputText id="folderPath" @bind-Value="_input.FolderPath" placeholder="/Users/username/Music" />
+            </div>
+
+            <div class="form-group">
+                <label for="maxThreads">Max Parallel Threads</label>
+                <InputNumber id="maxThreads" @bind-Value="_input.MaxDegreeOfParallelism" />
+            </div>
+
+            <button type="submit" class="button" disabled="@_isScanning">@(_isScanning ? "Scanning..." : "Scan Media Library")</button>
+        </EditForm>
+
+        @if (_isScanning)
+        {
+            <div class="scanning"><h2>Scanning media library</h2></div>
+        }
+
+        @if (_errorMessage is not null)
+        {
+            <div class="error"><strong>Error</strong>@_errorMessage</div>
+        }
+
+        @if (_lastScanResult is not null)
+        {
+            <div class="result-card">
+                <div class="success-icon">✅</div>
+                <h2>Scan Complete!</h2>
+
+                <div class="stats-grid">
+                    <div class="stat">
+                        <div class="stat-value">@_lastScanResult.ScannedCount</div>
+                        <div class="stat-label">Files Scanned</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">@_lastScanResult.ItemsAdded</div>
+                        <div class="stat-label">Items Added</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">@_lastScanResult.ItemsUpdated</div>
+                        <div class="stat-label">Items Updated</div>
+                    </div>
+                </div>
+
+                <p style="margin-top: 20px; color: #6c757d; font-size: 0.9rem;">
+                    <strong>Folder:</strong> @_lastScanResult.FolderPath
+                </p>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private readonly ScanInput _input = new();
+    private bool _isScanning;
+    private ScanResult? _lastScanResult;
+    private string? _errorMessage;
+
+    private async Task ScanAsync()
+    {
+        _isScanning = true;
+        _errorMessage = null;
+        try
+        {
+            _lastScanResult = await ApiClient.ScanAsync(_input.FolderPath, _input.MaxDegreeOfParallelism);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Scan failed: {ex.Message}";
+        }
+        finally
+        {
+            _isScanning = false;
+        }
+    }
+
+    private class ScanInput
+    {
+        [Required]
+        public string FolderPath { get; set; } = "/Users/tj/Documents/Music";
+
+        [Range(1, 16)]
+        public int MaxDegreeOfParallelism { get; set; } = 4;
+    }
+}

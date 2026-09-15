@@ -1,0 +1,21 @@
+@if (TotalPages > 1)
+{
+    <div class="pager">
+        <button type="button" class="button-secondary" disabled="@(CurrentPage <= 1)" @onclick="() => GoTo(CurrentPage - 1)">‹ Prev</button>
+        <span class="pager-status">Page @CurrentPage of @TotalPages</span>
+        <button type="button" class="button-secondary" disabled="@(CurrentPage >= TotalPages)" @onclick="() => GoTo(CurrentPage + 1)">Next ›</button>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int CurrentPage { get; set; } = 1;
+
+    [Parameter]
+    public EventCallback<int> CurrentPageChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public int TotalPages { get; set; }
+
+    private Task GoTo(int page) => CurrentPageChanged.InvokeAsync(page);
+}

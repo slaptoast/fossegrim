@@ -54,13 +54,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true
         };
 
-        // <audio>/<video> elements can't set an Authorization header, so callers
-        // pass the token via query string for the /stream endpoint.
+        // <audio>/<img> elements can't set an Authorization header, so callers
+        // pass the token via query string for the /stream and /cover endpoints.
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
             {
-                if (context.Request.Path.StartsWithSegments("/stream") &&
+                if ((context.Request.Path.StartsWithSegments("/stream") || context.Request.Path.StartsWithSegments("/cover")) &&
                     context.Request.Query.TryGetValue("access_token", out var token))
                 {
                     context.Token = token;
@@ -103,7 +103,9 @@ app.MapAuthEndpoints();
 app.MapAlbumEndpoints();
 app.MapArtistEndpoints();
 app.MapMediaItemEndpoints();
+app.MapPlaylistEndpoints();
 app.MapAdminEndpoints();
 app.MapStreamingEndpoints();
+app.MapCoverEndpoints();
 
 app.Run();

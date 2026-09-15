@@ -1,0 +1,98 @@
+@inject FossegrimApiClient ApiClient
+@inject PlayerState PlayerState
+
+<div class="album-list-component">
+    <div class="album-list-header">
+        <h2>Albums</h2>
+        <div class="search-box">
+            <input type="text" placeholder="🔍 Search albums..." @oninput="OnFilterChanged" />
+        </div>
+    </div>
+
+    <div class="album-list-stats">
+        <span class="stat">@Albums.Count album@(Albums.Count != 1 ? "s" : "")</span>
+    </div>
+
+    <div class="album-list-container">
+        @if (FilteredAlbums.Count > 0)
+        {
+            <ul class="album-list">
+                @foreach (var album in PagedAlbums)
+                {
+                    <li class="album-item">
+                        <div class="album-art" @onclick="() => PlayAlbumAsync(album)">
+                            <span class="album-art-placeholder">💿</span>
+                            @if (_coverUrls.TryGetValue(album.Id, out var coverUrl))
+                            {
+                                <img src="@coverUrl" alt="@album.Name" onerror="this.style.visibility='hidden'" />
+                            }
+                            <div class="album-play-overlay">▶</div>
+                        </div>
+                        <div class="album-title">@album.Name</div>
+                        <div class="album-artist">@ArtistNames(album)</div>
+                    </li>
+                }
+            </ul>
+            <Pager @bind-CurrentPage="_currentPage" TotalPages="TotalPages" />
+        }
+        else
+        {
+            <div class="no-results">
+                <p>No albums found.</p>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private const int PageSize = 10;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<AlbumDto> Albums { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<MediaItemDto> AllMediaItems { get; set; } = [];
+
+    private readonly Dictionary<Guid, string> _coverUrls = [];
+    private string _filter = "";
+    private int _currentPage = 1;
+
+    private List<AlbumDto> FilteredAlbums =>
+        Albums.Where(a => a.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredAlbums.Count / (double)PageSize));
+
+    private List<AlbumDto> PagedAlbums =>
+        FilteredAlbums.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        foreach (var album in Albums)
+        {
+            if (!_coverUrls.ContainsKey(album.Id))
+            {
+                _coverUrls[album.Id] = await ApiClient.GetAlbumCoverUrl(album.Id);
+            }
+        }
+    }
+
+    private static string ArtistNames(AlbumDto album) =>
+        album.Artists.Any() ? string.Join(", ", album.Artists.Select(a => a.Name)) : "Unknown Artist";
+
+    private void OnFilterChanged(ChangeEventArgs e)
+    {
+        _filter = e.Value?.ToString() ?? "";
+        _currentPage = 1;
+    }
+
+    private Task PlayAlbumAsync(AlbumDto album)
+    {
+        var tracks = AllMediaItems
+            .Where(m => m.Albums.Any(a => a.Id == album.Id))
+            .OrderBy(m => m.Track ?? int.MaxValue)
+            .ThenBy(m => m.Title, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return tracks.Count > 0 ? PlayerState.PlayQueueAsync(tracks) : Task.CompletedTask;
+    }
+}

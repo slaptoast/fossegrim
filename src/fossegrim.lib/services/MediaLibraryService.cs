@@ -1,3 +1,4 @@
+using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
 using Microsoft.EntityFrameworkCore;
@@ -42,11 +43,62 @@ public class MediaLibraryService
         var itemsAdded = 0;
         var itemsUpdated = 0;
 
+        var artistsByName = await _db.Artists.ToDictionaryAsync(a => a.Name, StringComparer.OrdinalIgnoreCase);
+        var albumsByName = await _db.Albums.ToDictionaryAsync(a => a.Name, StringComparer.OrdinalIgnoreCase);
+
+        Artist? ResolveArtist(string? artistName)
+        {
+            if (string.IsNullOrWhiteSpace(artistName))
+            {
+                return null;
+            }
+
+            var name = artistName.Trim();
+            if (artistsByName.TryGetValue(name, out var artist))
+            {
+                return artist;
+            }
+
+            artist = new Artist { Id = Guid.NewGuid(), Name = name };
+            artistsByName[name] = artist;
+            _db.Artists.Add(artist);
+            return artist;
+        }
+
+        Album? ResolveAlbum(string? albumName)
+        {
+            if (string.IsNullOrWhiteSpace(albumName))
+            {
+                return null;
+            }
+
+            var name = albumName.Trim();
+            if (albumsByName.TryGetValue(name, out var album))
+            {
+                return album;
+            }
+
+            album = new Album { Id = Guid.NewGuid(), Name = name };
+            albumsByName[name] = album;
+            _db.Albums.Add(album);
+            return album;
+        }
+
         foreach (var scannedItem in itemsList)
         {
             // Check if item already exists by FileLocation
             var existingItem = await _db.MediaItems
+                .Include(m => m.Artists)
+                .Include(m => m.Albums)
                 .FirstOrDefaultAsync(m => m.FileLocation == scannedItem.FileLocation);
+
+            var artist = ResolveArtist(scannedItem.ArtistName);
+            var album = ResolveAlbum(scannedItem.Album);
+
+            if (album is not null && artist is not null && !album.Artists.Contains(artist))
+            {
+                album.Artists.Add(artist);
+            }
 
             if (existingItem == null)
             {
@@ -66,6 +118,16 @@ public class MediaLibraryService
                     MediaFolderId = mediaFolder?.Id
                 };
 
+                if (artist is not null)
+                {
+                    newItem.Artists.Add(artist);
+                }
+
+                if (album is not null)
+                {
+                    newItem.Albums.Add(album);
+                }
+
                 _db.MediaItems.Add(newItem);
                 itemsAdded++;
             }
@@ -83,6 +145,16 @@ public class MediaLibraryService
                 existingItem.LastModified = DateTime.UtcNow;
                 existingItem.MediaFolderId = mediaFolder?.Id;
 
+                if (artist is not null && !existingItem.Artists.Contains(artist))
+                {
+                    existingItem.Artists.Add(artist);
+                }
+
+                if (album is not null && !existingItem.Albums.Contains(album))
+                {
+                    existingItem.Albums.Add(album);
+                }
+
                 itemsUpdated++;
             }
         }
@@ -98,13 +170,73 @@ public class MediaLibraryService
             FolderPath = folderPath
         };
     }
-}
 
-public class ScanResult
-{
-    public bool Success { get; set; }
-    public int ScannedCount { get; set; }
-    public int ItemsAdded { get; set; }
-    public int ItemsUpdated { get; set; }
-    public string FolderPath { get; set; } = string.Empty;
+    /// <summary>
+    /// Extracts album art, preferring embedded metadata (from the first
+    /// playable file found, ordered by track number then file path) and
+    /// falling back to a cover.jpg/cover.png file sitting next to the audio
+    /// files if none of the tracks have embedded art.
+    /// </summary>
+    public async Task<(byte[] Data, string ContentType)?> GetAlbumCoverAsync(Guid albumId)
+    {
+        var fileLocations = await _db.Albums
+            .Where(a => a.Id == albumId)
+            .SelectMany(a => a.MediaItems)
+            .OrderBy(m => m.Track ?? int.MaxValue)
+            .ThenBy(m => m.FileLocation)
+            .Select(m => m.FileLocation)
+            .ToListAsync();
+
+        var validFiles = fileLocations
+            .Where(f => !string.IsNullOrWhiteSpace(f) && File.Exists(f))
+            .ToList();
+
+        foreach (var fileLocation in validFiles)
+        {
+            try
+            {
+                using var tagFile = TagLib.File.Create(fileLocation);
+                var picture = tagFile.Tag.Pictures.FirstOrDefault();
+                if (picture is not null)
+                {
+                    var contentType = string.IsNullOrWhiteSpace(picture.MimeType) ? "image/jpeg" : picture.MimeType;
+                    return (picture.Data.ToArray(), contentType);
+                }
+            }
+            catch
+            {
+                // Try the next file in the album.
+            }
+        }
+
+        var checkedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var fileLocation in validFiles)
+        {
+            var directory = Path.GetDirectoryName(fileLocation);
+            if (directory is null || !checkedDirectories.Add(directory) || !Directory.Exists(directory))
+            {
+                continue;
+            }
+
+            var coverFile = Directory.EnumerateFiles(directory).FirstOrDefault(IsCoverFileName);
+            if (coverFile is not null)
+            {
+                var contentType = Path.GetExtension(coverFile).Equals(".png", StringComparison.OrdinalIgnoreCase)
+                    ? "image/png"
+                    : "image/jpeg";
+                return (await File.ReadAllBytesAsync(coverFile), contentType);
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsCoverFileName(string filePath)
+    {
+        var name = Path.GetFileNameWithoutExtension(filePath);
+        var extension = Path.GetExtension(filePath);
+        return string.Equals(name, "cover", StringComparison.OrdinalIgnoreCase)
+            && (extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".png", StringComparison.OrdinalIgnoreCase));
+    }
 }

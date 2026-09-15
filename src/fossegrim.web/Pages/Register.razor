@@ -1,0 +1,106 @@
+@page "/register"
+@layout LoginLayout
+@inject FossegrimApiClient ApiClient
+@inject TokenStore TokenStore
+@inject JwtAuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<div class="container narrow">
+    <div class="header small">
+        <h1>📝 Register</h1>
+        <p>Create a new Fossegrim account</p>
+    </div>
+
+    <div class="content">
+        <div class="info-text">
+            Password must be at least 6 characters and include uppercase, lowercase, and a digit.
+        </div>
+
+        @if (_errors.Count > 0)
+        {
+            <div class="validation-summary">
+                <ul>
+                    @foreach (var error in _errors)
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <EditForm Model="_input" OnValidSubmit="HandleRegisterAsync">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <InputText id="email" @bind-Value="_input.Email" type="email" autocomplete="username" />
+                <ValidationMessage For="() => _input.Email" />
+            </div>
+
+            <div class="form-group">
+                <label for="displayName">Display Name</label>
+                <InputText id="displayName" @bind-Value="_input.DisplayName" />
+                <ValidationMessage For="() => _input.DisplayName" />
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <InputText id="password" @bind-Value="_input.Password" type="password" autocomplete="new-password" />
+                <ValidationMessage For="() => _input.Password" />
+            </div>
+
+            <div class="form-group">
+                <label for="confirmPassword">Confirm Password</label>
+                <InputText id="confirmPassword" @bind-Value="_input.ConfirmPassword" type="password" autocomplete="new-password" />
+                <ValidationMessage For="() => _input.ConfirmPassword" />
+            </div>
+
+            <button type="submit" class="button">Register</button>
+        </EditForm>
+    </div>
+
+    <div class="content" style="padding-top: 0;">
+        <div class="nav-links centered">
+            <a href="/login">Already have an account?</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly RegisterInput _input = new();
+    private List<string> _errors = [];
+
+    private async Task HandleRegisterAsync()
+    {
+        _errors = [];
+        var result = await ApiClient.RegisterAsync(_input.Email, _input.DisplayName, _input.Password);
+        if (result.Success)
+        {
+            await TokenStore.SetTokenAsync(result.Response!.Token);
+            AuthStateProvider.MarkUserAsAuthenticated(result.Response);
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            _errors = result.Errors.ToList();
+        }
+    }
+
+    private class RegisterInput
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(100, MinimumLength = 3)]
+        public string DisplayName { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(100, MinimumLength = 6)]
+        public string Password { get; set; } = string.Empty;
+
+        [Compare(nameof(Password), ErrorMessage = "The password and confirmation password do not match.")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

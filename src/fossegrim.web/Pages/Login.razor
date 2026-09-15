@@ -1,0 +1,97 @@
+@page "/login"
+@layout LoginLayout
+@inject FossegrimApiClient ApiClient
+@inject TokenStore TokenStore
+@inject JwtAuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<div class="container narrow">
+    <div class="header">
+        <h1>🎵 Fossegrim</h1>
+        <p>Sign in to your account</p>
+    </div>
+
+    <div class="content">
+        @if (_errors.Count > 0)
+        {
+            <div class="validation-summary">
+                <ul>
+                    @foreach (var error in _errors)
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <EditForm Model="_input" OnValidSubmit="HandleLoginAsync">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <InputText id="email" @bind-Value="_input.Email" type="email" autocomplete="username" />
+                <ValidationMessage For="() => _input.Email" />
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <InputText id="password" @bind-Value="_input.Password" type="password" autocomplete="current-password" />
+                <ValidationMessage For="() => _input.Password" />
+            </div>
+
+            <button type="submit" class="button" disabled="@_isSubmitting">@(_isSubmitting ? "Signing in..." : "Sign in")</button>
+        </EditForm>
+    </div>
+
+    <div class="content" style="padding-top: 0;">
+        <div class="nav-links centered">
+            <a href="/register">Create account</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    private readonly LoginInput _input = new()
+    {
+        // dev convenience: prefill the seeded admin account
+        Email = "admin@fossegrim.local",
+        Password = "Admin123!"
+    };
+
+    private List<string> _errors = [];
+    private bool _isSubmitting;
+
+    private async Task HandleLoginAsync()
+    {
+        _isSubmitting = true;
+        _errors = [];
+
+        var result = await ApiClient.LoginAsync(_input.Email, _input.Password);
+        if (result.Success)
+        {
+            await TokenStore.SetTokenAsync(result.Response!.Token);
+            AuthStateProvider.MarkUserAsAuthenticated(result.Response);
+            Navigation.NavigateTo(string.IsNullOrEmpty(ReturnUrl) ? "/" : ReturnUrl);
+        }
+        else
+        {
+            _errors = result.Errors.ToList();
+        }
+
+        _isSubmitting = false;
+    }
+
+    private class LoginInput
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        public string Password { get; set; } = string.Empty;
+    }
+}

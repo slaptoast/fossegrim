@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Fossegrim.Lib\fossegrim.lib.csproj" />
+    <ProjectReference Include="..\Fossegrim.Contracts\Fossegrim.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

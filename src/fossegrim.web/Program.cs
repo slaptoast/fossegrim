@@ -1,47 +1,32 @@
-using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Fossegrim.Web;
 using Fossegrim.Web.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebAssemblyHostBuilder.CreateDefault(args);
+builder.RootComponents.Add<App>("#app");
+builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Add services to the container
-builder.Services.AddRazorPages();
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"]
+    ?? throw new InvalidOperationException("ApiBaseUrl is not configured.");
 
-// Web has no database of its own - it authenticates by calling Fossegrim.Api's
-// /api/auth endpoints and storing the JWT it gets back in this cookie.
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.Cookie.HttpOnly = true;
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(builder.Configuration.GetValue<int>("Jwt:ExpiryMinutes"));
-        options.SlidingExpiration = false; // the cookie must never outlive the token it carries
-        options.LoginPath = "/Account/Login";
-        options.LogoutPath = "/Account/Logout";
-        options.AccessDeniedPath = "/Account/AccessDenied";
-    });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorizationCore();
 
-// Fossegrim.Api is the sole owner of all data; the web app is just one more
-// client of it, same as a mobile app would be.
+// Singleton, not Scoped: IHttpClientFactory builds AuthorizedHttpMessageHandler
+// in its own internal DI scope, separate from the app's component scope - a
+// Scoped registration here would silently resolve a second, never-populated
+// TokenStore/JwtAuthenticationStateProvider inside the handler.
+builder.Services.AddSingleton<TokenStore>();
+builder.Services.AddSingleton<JwtAuthenticationStateProvider>();
+builder.Services.AddSingleton<AuthenticationStateProvider>(sp => sp.GetRequiredService<JwtAuthenticationStateProvider>());
+builder.Services.AddScoped<PlayerState>();
+
+builder.Services.AddTransient<AuthorizedHttpMessageHandler>();
 builder.Services.AddHttpClient<FossegrimApiClient>(client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["ApiBaseUrl"]!);
-});
+    client.BaseAddress = new Uri(apiBaseUrl);
+})
+.AddHttpMessageHandler<AuthorizedHttpMessageHandler>();
 
-var app = builder.Build();
-
-// Configure the HTTP request pipeline
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Error");
-    app.UseHsts();
-}
-
-app.UseHttpsRedirection();
-app.UseStaticFiles();
-app.UseRouting();
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapRazorPages();
-
-app.Run();
+await builder.Build().RunAsync();

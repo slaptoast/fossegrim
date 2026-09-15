@@ -1,0 +1,38 @@
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    @if (context.User.Identity?.IsAuthenticated == true)
+                    {
+                        <LayoutView Layout="@typeof(MainLayout)">
+                            <div class="container medium">
+                                <div class="header error large">
+                                    <h1>🚫</h1>
+                                    <h2>Access Denied</h2>
+                                </div>
+                                <div class="content centered">
+                                    <p>You do not have permission to access this page.</p>
+                                    <p>If you believe you should have access, please contact the administrator.</p>
+                                </div>
+                            </div>
+                        </LayoutView>
+                    }
+                    else
+                    {
+                        <RedirectToLogin />
+                    }
+                </NotAuthorized>
+            </AuthorizeRouteView>
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <div class="container medium">
+                    <div class="content centered">
+                        <p>Sorry, there's nothing at this address.</p>
+                    </div>
+                </div>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

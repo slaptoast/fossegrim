@@ -1,0 +1,65 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject JwtAuthenticationStateProvider AuthStateProvider
+@inject TokenStore TokenStore
+
+<div class="user-menu">
+    <button type="button" class="user-menu-toggle" @onclick="ToggleOpen">@_displayName ▾</button>
+
+    @if (_isOpen)
+    {
+        <div class="user-menu-dropdown">
+            <a href="/profile" @onclick="Close">Profile</a>
+            <a href="/change-password" @onclick="Close">Change Password</a>
+            @if (_isAdmin)
+            {
+                <a href="/settings" @onclick="Close">Settings</a>
+                <a href="/admin" @onclick="Close">Admin Panel</a>
+            }
+            <button type="button" class="user-menu-logout" @onclick="LogoutAsync">Log out</button>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _isOpen;
+    private bool _isAdmin;
+    private string _displayName = "Account";
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
+        await LoadStateAsync();
+    }
+
+    private async void OnAuthStateChanged(Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState> task)
+    {
+        await LoadStateAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadStateAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = state.User;
+        _isAdmin = user.IsInRole("Admin");
+        _displayName = user.Identity?.Name ?? "Account";
+    }
+
+    private void ToggleOpen() => _isOpen = !_isOpen;
+
+    private void Close() => _isOpen = false;
+
+    private async Task LogoutAsync()
+    {
+        _isOpen = false;
+        await TokenStore.ClearTokenAsync();
+        AuthStateProvider.MarkUserAsLoggedOut();
+        Navigation.NavigateTo("/login");
+    }
+
+    public void Dispose()
+    {
+        AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
+    }
+}

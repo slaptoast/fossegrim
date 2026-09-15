@@ -32,34 +32,24 @@ Press `Ctrl+C` in the terminal running the script to stop both servers.
 
 ## Architecture
 
-### Current Setup
-
-The Web project currently has its own `/api` endpoints that directly access the database. This means:
-- The Web project is self-contained and can run independently
-- The API endpoints in the Web project mirror those in the API project
-- No cross-origin requests are needed when using the Web project alone
-
-### Future Setup (Optional)
-
-If you want the Web project to use the external API project instead:
-
-1. Update `ArtistList/Default.cshtml` to use the external API:
-   ```javascript
-   const response = await fetch('http://localhost:5182/api/artists');
-   ```
-
-2. CORS is already configured in the API project to allow requests from:
-   - http://localhost:5085
-   - https://localhost:7049
+`Fossegrim.Web` is a standalone Blazor WebAssembly SPA - it runs entirely in the
+browser and has no server-side code or database access of its own. It
+authenticates against `Fossegrim.Api`'s `/api/auth` endpoints, stores the JWT
+it gets back in the browser's `localStorage`, and calls every other `/api/...`
+endpoint directly as a bearer-token client (the same way a mobile app would).
+CORS on the Api allows the Web origins:
+- http://localhost:5085
+- https://localhost:7049
 
 ## Project Structure
 
 ```
 fossegrim/
 ├── src/
-│   ├── Fossegrim.Api/      # Standalone API (port 5182/7182)
-│   ├── Fossegrim.Web/      # Web UI with embedded API endpoints (port 5085/7049)
-│   └── Fossegrim.Lib/      # Shared library
+│   ├── Fossegrim.Api/         # Standalone API (port 5182/7182) - owns the database
+│   ├── Fossegrim.Web/         # Blazor WebAssembly SPA (port 5085/7049) - browser-only client of the Api
+│   ├── Fossegrim.Contracts/   # Shared DTOs referenced by both Api and Web
+│   └── Fossegrim.Lib/         # Server-side data/services (EF Core, Identity, file scanning) - Api only
 ├── run-dev.sh              # Development runner script
 └── DEV-README.md          # This file
 ```
@@ -68,18 +58,18 @@ fossegrim/
 
 ### API Base URL
 
-The Web project's `appsettings.json` contains:
+The Web project's `wwwroot/appsettings.json` contains:
 ```json
 {
   "ApiBaseUrl": "http://localhost:5182"
 }
 ```
 
-This can be used to configure which API the Web project should use.
+This is loaded by the Blazor WASM app at startup to configure which Api it talks to.
 
 ### Database
 
-Both projects share the same SQLite database: `fossegrim.db`
+Only `Fossegrim.Api` touches the database (`fossegrim.db`, SQLite). `Fossegrim.Web` has no database access.
 
 ### CORS Policy
 

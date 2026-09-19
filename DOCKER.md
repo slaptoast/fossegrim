@@ -53,8 +53,25 @@ into the image for a given deployment.
 |---|---|
 | `JWT_KEY` | Secret signing key for auth tokens. **Required**, no default -- generate with `openssl rand -base64 48`. |
 | `JWT_ISSUER` / `JWT_AUDIENCE` / `JWT_EXPIRY_MINUTES` | JWT claims/expiry. Defaults match dev settings. |
-| `MUSIC_LIBRARY_PATH` | Host path to your music library; mounted read-only at `/music` in the container. After startup, register `/music` (or a subfolder) as a media folder from the admin UI. |
+| `MUSIC_LIBRARY_PATH` | Host path to your music library; mounted **read-write** at `/music` in the container. After startup, register `/music` (or a subfolder) as a media folder from the admin UI. |
 | `PORT` | Host-side port to publish. |
+
+### Music folder must be writable
+
+Fossegrim assumes read-write access to `/music`: it edits ID3 tags in place
+today, and will write fetched album art alongside your audio files in the
+future. The container runs as an unprivileged, fixed user (`uid=100,
+gid=101` -- Alpine's `fossegrim` system user), so whatever host folder you
+point `MUSIC_LIBRARY_PATH` at needs to already be writable by that
+uid/gid before you start the container, e.g.:
+
+```bash
+chown -R 100:101 /path/to/your/music
+```
+
+This is a one-time setup step per host/folder -- it's on you as the
+operator to set permissions accordingly; the container doesn't attempt to
+adjust its own permissions or the folder's ownership for you.
 
 The API's SQLite database persists in the `fossegrim-data` named volume
 (`/data/fossegrim.db` inside the container), independent of the image.

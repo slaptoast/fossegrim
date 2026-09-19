@@ -14,7 +14,9 @@ services:
       Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-10080}
     volumes:
       - fossegrim-data:/data
-      - ${MUSIC_LIBRARY_PATH:-./music}:/music:ro
+      # Read-write: the app edits ID3 tags in place and will eventually
+      # write fetched album art alongside the audio files.
+      - ${MUSIC_LIBRARY_PATH:-./music}:/music
 
 volumes:
   fossegrim-data:

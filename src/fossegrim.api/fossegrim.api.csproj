@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
@@ -16,6 +17,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Fossegrim.Lib\fossegrim.lib.csproj" />
     <ProjectReference Include="..\Fossegrim.Contracts\Fossegrim.Contracts.csproj" />
+    <!-- Hosted Blazor WebAssembly pattern: referencing the Web (WASM) project
+         makes `dotnet publish` on the Api automatically build it and copy its
+         output into this project's wwwroot, producing a single deployable. -->
+    <ProjectReference Include="..\Fossegrim.Web\Fossegrim.Web.csproj" />
   </ItemGroup>
 
 </Project>

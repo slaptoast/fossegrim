@@ -7,12 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="Id3.Net">
-      <HintPath>/Users/tj/Documents/Dev/Id3/src/Id3.Net/bin/Release/net9.0/Id3.Net.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\Fossegrim.Contracts\Fossegrim.Contracts.csproj" />
   </ItemGroup>
 

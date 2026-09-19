@@ -14,14 +14,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 // Configure CORS
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:5085", "https://localhost:7049"];
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowWeb", policy =>
     {
-        policy.WithOrigins(
-            "http://localhost:5085",
-            "https://localhost:7049"
-        )
+        policy.WithOrigins(allowedOrigins)
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials();
@@ -92,6 +91,13 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Serve the Blazor WebAssembly app (Fossegrim.Web) from this process's
+// wwwroot -- populated at publish time via the ProjectReference below.
+// Same-origin, so the browser never needs CORS for its own requests here;
+// AllowWeb below only matters when Web is hosted separately (local dev).
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+
 // Enable CORS
 app.UseCors("AllowWeb");
 
@@ -107,5 +113,7 @@ app.MapPlaylistEndpoints();
 app.MapAdminEndpoints();
 app.MapStreamingEndpoints();
 app.MapCoverEndpoints();
+
+app.MapFallbackToFile("index.html");
 
 app.Run();

@@ -4,6 +4,10 @@
 # This script runs both the API and Web projects simultaneously
 
 set -e
+set -m   # job control: puts each backgrounded `dotnet watch` in its own
+         # process group, so we can signal that whole group (watch + the
+         # app process it spawns) instead of just the watch wrapper -- see
+         # cleanup() below.
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -26,26 +30,59 @@ if [ ! -d "$SRC_DIR" ]; then
     exit 1
 fi
 
-# Cleanup function to kill background processes
+CLEANED_UP=false
+
+# `dotnet watch` forks the actual app (`dotnet exec .../*.dll`) as a child
+# process and does not reliably forward a plain `kill <watch-pid>` to it --
+# it mostly relies on the terminal delivering Ctrl+C to the whole foreground
+# process group at once. Without `set -m` above, that left the child running
+# after this script exited, orphaned and still holding its port, so the next
+# `run-dev.sh` (or dotnet watch's own restart-on-change) would fail with
+# "Address already in use". Killing the *negative* PID here signals the
+# whole process group instead of just the watch wrapper.
 cleanup() {
+    if [ "$CLEANED_UP" = true ]; then
+        return
+    fi
+    CLEANED_UP=true
+
     echo ""
     echo -e "${BLUE}Shutting down servers...${NC}"
-    if [ ! -z "$API_PID" ]; then
-        kill $API_PID 2>/dev/null || true
-    fi
-    if [ ! -z "$WEB_PID" ]; then
-        kill $WEB_PID 2>/dev/null || true
-    fi
-    exit 0
+
+    for pid in "$API_PID" "$WEB_PID"; do
+        [ -z "$pid" ] && continue
+        kill -TERM "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    done
+
+    # Give them a few seconds to shut down gracefully before forcing it.
+    for _ in 1 2 3 4 5; do
+        any_alive=false
+        for pid in "$API_PID" "$WEB_PID"; do
+            [ -z "$pid" ] && continue
+            kill -0 "$pid" 2>/dev/null && any_alive=true
+        done
+        [ "$any_alive" = true ] || break
+        sleep 1
+    done
+
+    for pid in "$API_PID" "$WEB_PID"; do
+        [ -z "$pid" ] && continue
+        kill -KILL "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+    done
 }
 
 # Set up trap to cleanup on exit
 trap cleanup EXIT INT TERM
 
 # Start API server
+# stdin is /dev/null, not this terminal: with `set -m` above, each of these
+# runs in its own process group, so if dotnet watch tried to read the
+# terminal or put it in raw mode (for its interactive "press r to restart"
+# keybinds) while backgrounded, the kernel would stop it outright (SIGTTIN/
+# SIGTTOU). Non-tty stdin makes dotnet watch skip that entirely.
 echo -e "${GREEN}Starting Fossegrim.Api on http://localhost:5182${NC}"
 cd "$SRC_DIR/Fossegrim.Api"
-dotnet watch run --no-hot-reload > /tmp/fossegrim-api.log 2>&1 &
+dotnet watch run --no-hot-reload < /dev/null > /tmp/fossegrim-api.log 2>&1 &
 API_PID=$!
 
 # Wait a bit for API to start
@@ -54,7 +91,7 @@ sleep 3
 # Start Web server
 echo -e "${GREEN}Starting Fossegrim.Web on https://localhost:7049${NC}"
 cd "$SRC_DIR/Fossegrim.Web"
-dotnet watch run --no-hot-reload > /tmp/fossegrim-web.log 2>&1 &
+dotnet watch run --no-hot-reload < /dev/null > /tmp/fossegrim-web.log 2>&1 &
 WEB_PID=$!
 
 echo ""

@@ -8,8 +8,14 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-var apiBaseUrl = builder.Configuration["ApiBaseUrl"]
-    ?? throw new InvalidOperationException("ApiBaseUrl is not configured.");
+// Empty/unset means "same origin" -- the case when the Api hosts this app
+// directly (see Fossegrim.Api/Program.cs). Local dev overrides this via
+// wwwroot/appsettings.Development.json to point at the separate Api process.
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"];
+if (string.IsNullOrWhiteSpace(apiBaseUrl))
+{
+    apiBaseUrl = builder.HostEnvironment.BaseAddress;
+}
 
 builder.Services.AddAuthorizationCore();
 

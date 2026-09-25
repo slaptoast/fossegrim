@@ -1,18 +1,26 @@
 @inject FossegrimApiClient ApiClient
 
-@if (_version is not null)
+@if (_displayVersion is not null)
 {
-    <footer class="app-footer">v@(_version)</footer>
+    <footer class="app-footer">@_displayVersion</footer>
 }
 
 @code {
-    private string? _version;
+    private string? _displayVersion;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            _version = await ApiClient.GetVersionAsync();
+            var version = await ApiClient.GetVersionAsync();
+            if (!string.IsNullOrEmpty(version))
+            {
+                // Real releases are bare semver ("1.2.3") and read best with a
+                // "v" prefix; anything else (e.g. "dev" for an untagged local
+                // build, or a PR/sha fallback from CI) already reads fine as-is
+                // -- "vdev" does not.
+                _displayVersion = char.IsDigit(version[0]) ? $"v{version}" : version;
+            }
         }
         catch
         {

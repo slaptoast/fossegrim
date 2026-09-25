@@ -27,6 +27,14 @@ public class FossegrimApiClient
         return await response.Content.ReadFromJsonAsync<List<ArtistDto>>() ?? [];
     }
 
+    public async Task<string?> GetVersionAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/version");
+        response.EnsureSuccessStatusCode();
+        var dto = await response.Content.ReadFromJsonAsync<VersionDto>();
+        return dto?.Version;
+    }
+
     public async Task<string> GetStreamUrlAsync(Guid mediaItemId)
     {
         var token = await _tokenStore.GetTokenAsync()

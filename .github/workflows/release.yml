@@ -1,15 +1,20 @@
-name: Build and publish Docker image
+name: Release
+
+# Publishing is version-tag-driven, not automatic on every push to main:
+#   git tag v1.2.3 && git push origin v1.2.3
+# builds once and pushes to both GHCR and Docker Hub, tagged 1.2.3, 1.2, 1,
+# and (for a non-prerelease tag) latest. A pull_request still gets a
+# build-only sanity check with nothing pushed anywhere.
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 concurrency:
-  group: docker-publish-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -34,22 +39,36 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Derive image metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/fossegrim
+          images: |
+            ghcr.io/${{ github.repository_owner }}/fossegrim
+            docker.io/slaptoast/fossegrim
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
             type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=ref,event=pr
             type=sha,format=short
+          flavor: |
+            latest=auto
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

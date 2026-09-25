@@ -1,0 +1,22 @@
+@inject FossegrimApiClient ApiClient
+
+@if (_version is not null)
+{
+    <footer class="app-footer">v@(_version)</footer>
+}
+
+@code {
+    private string? _version;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _version = await ApiClient.GetVersionAsync();
+        }
+        catch
+        {
+            // Version display is informational only -- never block the page on it.
+        }
+    }
+}

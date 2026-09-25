@@ -24,6 +24,13 @@ RUN dotnet publish src/Fossegrim.Api/Fossegrim.Api.csproj -c Release -o /app --n
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 WORKDIR /app
 
+# Set by the release workflow from the git tag that triggered the build
+# (e.g. VERSION=1.2.3 for tag v1.2.3), so the running app and its published
+# image tag always agree -- see /api/version and the footer that shows it.
+# Defaults to "dev" for anything built without it, e.g. local `docker
+# compose up --build`.
+ARG VERSION=dev
+
 RUN addgroup -S fossegrim && adduser -S fossegrim -G fossegrim \
     && mkdir -p /data /music \
     && chown -R fossegrim:fossegrim /app /data /music
@@ -31,7 +38,8 @@ RUN addgroup -S fossegrim && adduser -S fossegrim -G fossegrim \
 COPY --from=build /app .
 
 ENV ASPNETCORE_URLS=http://+:8080 \
-    ConnectionStrings__DefaultConnection="Data Source=/data/fossegrim.db"
+    ConnectionStrings__DefaultConnection="Data Source=/data/fossegrim.db" \
+    APP_VERSION=$VERSION
 
 EXPOSE 8080
 VOLUME ["/data", "/music"]

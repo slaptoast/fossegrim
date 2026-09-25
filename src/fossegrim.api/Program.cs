@@ -113,6 +113,7 @@ app.MapPlaylistEndpoints();
 app.MapAdminEndpoints();
 app.MapStreamingEndpoints();
 app.MapCoverEndpoints();
+app.MapVersionEndpoints();
 
 app.MapFallbackToFile("index.html");
 

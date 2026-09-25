@@ -155,9 +155,22 @@ body {
     color: #ff8787;
 }
 
+.app-footer {
+    text-align: center;
+    padding: 16px;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.6);
+}
+
 /* Login / register centering shell */
-.login-shell {
+.login-page {
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.login-shell {
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;

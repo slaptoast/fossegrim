@@ -27,22 +27,60 @@ docker compose up --build
   immediately -- that's a hardcoded seed account, not something Docker
   changes for you (`src/Fossegrim.Lib/services/RoleSeeder.cs`).
 
-## Using the published image
+## Cutting a release
 
-CI builds and pushes the image to GitHub Container Registry on every push
-to `main` (see `.github/workflows/docker-publish.yml`):
+Publishing is **version-tag-driven**, not automatic on every push to `main`
+(see `.github/workflows/release.yml`). A `pull_request` still gets a
+build-only sanity check -- Dockerfile/build breaks get caught in CI, but
+nothing is pushed anywhere until you deliberately tag a release:
 
 ```bash
-docker pull ghcr.io/slaptoast/fossegrim:latest
+git tag v1.2.3
+git push origin v1.2.3
 ```
 
-Tagged as `latest` (on `main`), by branch name, by semver (on `vX.Y.Z`
-tags), and by short commit SHA.
+That one push builds the image once and pushes it to **both**:
+
+```
+ghcr.io/slaptoast/fossegrim
+docker.io/slaptoast/fossegrim
+```
+
+tagged `1.2.3`, `1.2`, `1`, and (as long as the tag isn't a prerelease like
+`v1.2.3-beta.1`) `latest`. Use semver tags (`vMAJOR.MINOR.PATCH`) -- the
+workflow parses the version straight out of the tag, there's no separate
+version file to keep in sync.
+
+### One-time setup: Docker Hub credentials
+
+GHCR authenticates for free via the workflow's own `GITHUB_TOKEN` -- nothing
+to configure. Docker Hub needs its own access token, which only you can
+create (I don't have access to your Docker Hub account or this repo's
+GitHub secrets):
+
+1. Docker Hub -> your avatar -> **Account Settings** -> **Security** ->
+   **New Access Token**. Give it Read & Write permissions.
+2. In the GitHub repo -> **Settings** -> **Secrets and variables** ->
+   **Actions** -> **New repository secret**, add two:
+   - `DOCKERHUB_USERNAME` -- your Docker Hub username (`slaptoast`)
+   - `DOCKERHUB_TOKEN` -- the access token from step 1
+
+Until both secrets exist, a tag push will fail at the Docker Hub login step
+(GHCR will still succeed on its own).
+
+## Using the published image
+
+```bash
+docker pull docker.io/slaptoast/fossegrim:latest
+# or
+docker pull ghcr.io/slaptoast/fossegrim:latest
+```
 
 The first time a package is published from a public repo, GHCR may create it
 as **private**. If `docker pull` gets a 403/denied for an anonymous pull, go
 to the package's page on GitHub (your profile -> Packages) -> Package
-settings -> change visibility to Public.
+settings -> change visibility to Public. Docker Hub repos default to public
+already.
 
 ## Configuration
 
@@ -88,8 +126,11 @@ If you're building/pushing outside of GitHub Actions (e.g. from your own
 machine), use `scripts/docker-build.sh`:
 
 ```bash
-./scripts/docker-build.sh                      # build, tag :local
-REGISTRY=ghcr.io/slaptoast ./scripts/docker-build.sh --push --tag v1.2.3
+./scripts/docker-build.sh                                    # build, tag :local
+REGISTRY=slaptoast          ./scripts/docker-build.sh --push --tag 1.2.3  # Docker Hub
+REGISTRY=ghcr.io/slaptoast  ./scripts/docker-build.sh --push --tag 1.2.3  # GHCR
 ```
 
+You'll need to be logged in to whichever registry you're pushing to
+(`docker login` / `docker login ghcr.io`) -- the script doesn't handle auth.
 Run `./scripts/docker-build.sh --help` for all options.

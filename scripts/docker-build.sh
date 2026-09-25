@@ -50,7 +50,7 @@ fi
 ref="$image:$TAG"
 
 echo "==> Building $ref"
-docker build -f "$REPO_ROOT/Dockerfile" -t "$ref" "$REPO_ROOT"
+docker build -f "$REPO_ROOT/Dockerfile" -t "$ref" --build-arg "VERSION=$TAG" "$REPO_ROOT"
 
 if $PUSH; then
     echo "==> Pushing $ref"

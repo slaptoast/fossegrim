@@ -402,5 +402,6 @@ FodyWeavers.xsd
 /music/
 
 
-# Local SQLite database (created and updated by the API at runtime)
+# Local SQLite databases (created and updated at runtime)
 src/fossegrim.api/fossegrim.db
+src/fossegrim.lib/fossegrim.db

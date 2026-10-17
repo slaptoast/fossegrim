@@ -11,10 +11,6 @@
         </div>
     </div>
 
-    <div class="album-list-stats">
-        <span class="stat">@Albums.Count album@(Albums.Count != 1 ? "s" : "")</span>
-    </div>
-
     <div class="album-list-container">
         @if (FilteredAlbums.Count > 0)
         {
@@ -35,7 +31,6 @@
                     </li>
                 }
             </ul>
-            <Pager @bind-CurrentPage="_currentPage" TotalPages="TotalPages" />
         }
         else
         {
@@ -44,6 +39,8 @@
             </div>
         }
     </div>
+
+    <Pager @bind-CurrentPage="_currentPage" TotalPages="TotalPages" />
 </div>
 
 <ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />

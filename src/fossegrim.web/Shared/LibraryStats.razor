@@ -1,0 +1,63 @@
+@implements IDisposable
+@inject FossegrimApiClient ApiClient
+@inject NavigationManager Navigation
+
+@if (_stats is not null)
+{
+    <div class="topbar-stats" aria-label="Library size">
+        <span><strong>@_stats.ArtistCount.ToString("N0")</strong> artist@(_stats.ArtistCount != 1 ? "s" : "")</span>
+        <span><strong>@_stats.AlbumCount.ToString("N0")</strong> album@(_stats.AlbumCount != 1 ? "s" : "")</span>
+        <span><strong>@_stats.TrackCount.ToString("N0")</strong> track@(_stats.TrackCount != 1 ? "s" : "")</span>
+        <span><strong>@FormatSize(_stats.TotalBytes)</strong></span>
+    </div>
+}
+
+@code {
+    private LibraryStatsDto? _stats;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Scans and tag edits happen on other pages, so refresh on navigation
+        // to keep the counts current without wiring every page to this bar.
+        Navigation.LocationChanged += OnLocationChanged;
+        await LoadAsync();
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _stats = await ApiClient.GetLibraryStatsAsync();
+        }
+        catch
+        {
+            // Informational only -- never block the page on it. Keep the last
+            // values we had (or show nothing) if the request fails.
+        }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double size = bytes;
+        var unit = 0;
+        while (size >= 1024 && unit < units.Length - 1)
+        {
+            size /= 1024;
+            unit++;
+        }
+
+        return unit == 0 ? $"{bytes} B" : $"{size:0.#} {units[unit]}";
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}

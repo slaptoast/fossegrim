@@ -27,6 +27,13 @@ public class FossegrimApiClient
         return await response.Content.ReadFromJsonAsync<List<ArtistDto>>() ?? [];
     }
 
+    public async Task<LibraryStatsDto?> GetLibraryStatsAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/library/stats");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<LibraryStatsDto>();
+    }
+
     public async Task<string?> GetVersionAsync()
     {
         var response = await _httpClient.GetAsync("/api/version");

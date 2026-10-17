@@ -10,7 +10,7 @@
     </div>
 
     <div class="content">
-        <h2 class="section-header" style="margin-top: 40px;">Configured Folders</h2>
+        <h2 class="section-header">Configured Folders</h2>
 
         @if (_isLoading)
         {
@@ -23,7 +23,7 @@
                     <tr>
                         <th>Name</th>
                         <th>Location</th>
-                        <th style="width: 160px; text-align: center;">Actions</th>
+                        <th class="actions-cell">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -32,9 +32,9 @@
                         <tr>
                             <td class="title-cell">@(string.IsNullOrEmpty(folder.Name) ? "Unnamed" : folder.Name)</td>
                             <td><span class="file-path" title="@folder.Location">@folder.Location</span></td>
-                            <td style="text-align: center;">
-                                <button class="button-secondary" style="padding: 6px 12px; font-size: 0.85rem; margin-right: 8px;" @onclick="() => ScanFolderAsync(folder)">Scan</button>
-                                <button class="button-danger" style="padding: 6px 12px; font-size: 0.85rem;" @onclick="() => RemoveFolderAsync(folder)">Remove</button>
+                            <td class="actions-cell">
+                                <button class="button-secondary" @onclick="() => ScanFolderAsync(folder)">Scan</button>
+                                <button class="button-danger" @onclick="() => RemoveFolderAsync(folder)">Remove</button>
                             </td>
                         </tr>
                     }
@@ -44,7 +44,7 @@
         else
         {
             <div class="no-results">
-                <p style="color: #6c757d; font-style: italic;">No media folders configured yet. Add one below to get started.</p>
+                <p>No media folders configured yet. Add one below to get started.</p>
             </div>
         }
 

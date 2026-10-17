@@ -2,17 +2,12 @@
 @attribute [Authorize]
 @inject FossegrimApiClient ApiClient
 
-<div class="container wide">
+<div class="module-grid">
+    <ArtistList Artists="_artists" />
 
-    <div style="margin-bottom: 30px;">
-        <ArtistList Artists="_artists" />
-    </div>
+    <AlbumList Albums="_albums" AllMediaItems="_mediaItems" />
 
-    <div style="margin-bottom: 30px;">
-        <AlbumList Albums="_albums" AllMediaItems="_mediaItems" />
-    </div>
-
-    <div class="content">
+    <div class="module-span">
         @if (_isLoading)
         {
             <div class="loading"><h2>Loading media library</h2></div>

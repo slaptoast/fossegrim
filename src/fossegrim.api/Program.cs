@@ -109,6 +109,7 @@ app.MapAuthEndpoints();
 app.MapAlbumEndpoints();
 app.MapArtistEndpoints();
 app.MapMediaItemEndpoints();
+app.MapLibraryEndpoints();
 app.MapPlaylistEndpoints();
 app.MapAdminEndpoints();
 app.MapStreamingEndpoints();

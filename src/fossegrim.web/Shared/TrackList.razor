@@ -71,7 +71,7 @@
 
 <ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
 
-<AddToPlaylistModal IsOpen="_showAddToPlaylist" MediaItemIds="_addToPlaylistIds" OnClose="() => _showAddToPlaylist = false" />
+<AddToPlaylistModal IsOpen="_showAddToPlaylist" MediaItemIds="_addToPlaylistIds" OnClose="() => _showAddToPlaylist = false" OnAdded="OnAddedToPlaylist" />
 
 <EditTagsModal IsOpen="_showEditModal" Model="_editingModel" OnSaved="OnTagsSavedAsync" OnCancel="() => _showEditModal = false" />
 
@@ -92,6 +92,10 @@
 
     [Parameter]
     public EventCallback<MediaItemDto> OnItemUpdated { get; set; }
+
+    // Raised with the playlist id after the user adds tracks to it via the context menu.
+    [Parameter]
+    public EventCallback<Guid> OnAddedToPlaylist { get; set; }
 
     private string _searchFilter = "";
     private string _sortBy = "title";

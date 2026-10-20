@@ -51,6 +51,11 @@
     [Parameter]
     public EventCallback OnClose { get; set; }
 
+    // Raised with the playlist id after tracks were added, so a page showing
+    // that playlist can refresh it.
+    [Parameter]
+    public EventCallback<Guid> OnAdded { get; set; }
+
     private List<PlaylistDto> _playlists = [];
     private bool _isLoading;
     private bool _isSaving;
@@ -106,6 +111,7 @@
         {
             await ApiClient.AddPlaylistItemsAsync(playlist.Id, MediaItemIds);
             await OnClose.InvokeAsync();
+            await OnAdded.InvokeAsync(playlist.Id);
         }
         catch (Exception ex)
         {

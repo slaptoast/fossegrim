@@ -177,6 +177,11 @@ body {
 .player-artist { font-size: 0.75rem; line-height: 16px; color: var(--text-faint); }
 .player-audio { flex: 1; min-width: 240px; height: 32px; }
 .player-error { color: var(--player-error); }
+/* Frequency bars drawn by js/visualizer.js; hidden entirely for reduced motion. */
+.player-visualizer { width: 96px; height: 28px; flex: none; }
+@media (prefers-reduced-motion: reduce) {
+    .player-visualizer { display: none; }
+}
 
 .app-footer { text-align: right; padding: var(--space-4) var(--space-8); font-size: 0.75rem; color: var(--text-muted); }
 

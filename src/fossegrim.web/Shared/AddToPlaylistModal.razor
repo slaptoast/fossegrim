@@ -1,0 +1,121 @@
+@inject FossegrimApiClient ApiClient
+
+@if (IsOpen)
+{
+    <div class="modal-overlay" @onclick="Cancel">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Add @MediaItemIds.Count Track@(MediaItemIds.Count == 1 ? "" : "s") to Playlist</h3>
+            </div>
+            <div class="modal-body">
+                @if (_errorMessage is not null)
+                {
+                    <div class="error">@_errorMessage</div>
+                }
+
+                @if (_isLoading)
+                {
+                    <p>Loading playlists...</p>
+                }
+                else if (_playlists.Count == 0)
+                {
+                    <p>You have no playlists you can edit. Create one on the Playlists page.</p>
+                }
+                else
+                {
+                    <div class="playlist-picker-list">
+                        @foreach (var playlist in _playlists)
+                        {
+                            <button type="button" class="context-menu-item" disabled="@_isSaving" @onclick="() => AddAsync(playlist)">
+                                @playlist.Name
+                                <span class="playlist-picker-count">@playlist.TrackCount</span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="button-secondary" @onclick="Cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<Guid> MediaItemIds { get; set; } = [];
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private List<PlaylistDto> _playlists = [];
+    private bool _isLoading;
+    private bool _isSaving;
+    private bool _wasOpen;
+    private string? _errorMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload each time the modal opens so newly created or shared playlists show up.
+        if (IsOpen && !_wasOpen)
+        {
+            _wasOpen = true;
+            await LoadPlaylistsAsync();
+        }
+        else if (!IsOpen)
+        {
+            _wasOpen = false;
+        }
+    }
+
+    private async Task LoadPlaylistsAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            var playlists = await ApiClient.GetPlaylistsAsync();
+            _playlists = playlists
+                .Where(p => p.Type == "Standard" && (p.AccessLevel == "Owner" || p.AccessLevel == "Editor"))
+                .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error loading playlists: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task AddAsync(PlaylistDto playlist)
+    {
+        if (MediaItemIds.Count == 0)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+        try
+        {
+            await ApiClient.AddPlaylistItemsAsync(playlist.Id, MediaItemIds);
+            await OnClose.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error adding to \"{playlist.Name}\": {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private Task Cancel() => OnClose.InvokeAsync();
+}

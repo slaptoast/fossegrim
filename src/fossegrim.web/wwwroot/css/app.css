@@ -506,6 +506,13 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
 .context-menu { position: fixed; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-menu); min-width: 180px; padding: var(--space-4); }
 .context-menu-item { display: block; width: 100%; text-align: left; height: 28px; padding: 0 var(--space-8); background: none; border: none; border-radius: var(--radius-md); font: inherit; color: var(--text-secondary); cursor: pointer; }
 .context-menu-item:hover { background: var(--surface-muted); color: var(--ink); }
+.context-menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---- Add to playlist picker ---- */
+.playlist-picker-list { max-height: 280px; overflow-y: auto; margin-top: var(--space-6); }
+.playlist-picker-list .context-menu-item { display: flex; align-items: center; gap: var(--space-8); }
+.playlist-picker-count { margin-left: auto; font-size: 0.75rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.modal-body > .error { margin-bottom: var(--space-6); }
 
 /* ---- Tag editing ---- */
 .tag-edit-modal { max-width: 480px; }

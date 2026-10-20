@@ -71,6 +71,8 @@
 
 <ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
 
+<AddToPlaylistModal IsOpen="_showAddToPlaylist" MediaItemIds="_addToPlaylistIds" OnClose="() => _showAddToPlaylist = false" />
+
 <EditTagsModal IsOpen="_showEditModal" Model="_editingModel" OnSaved="OnTagsSavedAsync" OnCancel="() => _showEditModal = false" />
 
 @code {
@@ -100,6 +102,9 @@
     private double _contextMenuX;
     private double _contextMenuY;
     private IReadOnlyList<ContextMenuAction> _contextMenuActions = [];
+
+    private bool _showAddToPlaylist;
+    private IReadOnlyList<Guid> _addToPlaylistIds = [];
 
     private bool _showEditModal;
     private MediaItemTagEditModel? _editingModel;
@@ -189,7 +194,12 @@
         var actions = new List<ContextMenuAction>
         {
             new("Add to next in queue", () => PlayerState.AddToQueueNextAsync([item.Id])),
-            new("Add to end of queue", () => PlayerState.AddToQueueEndAsync([item.Id]))
+            new("Add to end of queue", () => PlayerState.AddToQueueEndAsync([item.Id])),
+            new("Add to playlist...", () =>
+            {
+                OpenAddToPlaylist([item.Id]);
+                return Task.CompletedTask;
+            })
         };
 
         if (_isAdmin)
@@ -206,6 +216,12 @@
     }
 
     private void CloseContextMenu() => _contextMenuOpen = false;
+
+    private void OpenAddToPlaylist(IReadOnlyList<Guid> mediaItemIds)
+    {
+        _addToPlaylistIds = mediaItemIds;
+        _showAddToPlaylist = true;
+    }
 
     private void OpenEditModal(MediaItemDto item)
     {

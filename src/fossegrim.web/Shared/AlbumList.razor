@@ -45,6 +45,8 @@
 
 <ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
 
+<AddToPlaylistModal IsOpen="_showAddToPlaylist" MediaItemIds="_addToPlaylistIds" OnClose="() => _showAddToPlaylist = false" />
+
 @code {
     private const int PageSize = 10;
 
@@ -63,6 +65,9 @@
     private double _contextMenuX;
     private double _contextMenuY;
     private IReadOnlyList<ContextMenuAction> _contextMenuActions = [];
+
+    private bool _showAddToPlaylist;
+    private IReadOnlyList<Guid> _addToPlaylistIds = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -119,7 +124,12 @@
         var actions = new List<ContextMenuAction>
         {
             new("Add to next in queue", () => PlayerState.AddToQueueNextAsync(trackIds)),
-            new("Add to end of queue", () => PlayerState.AddToQueueEndAsync(trackIds))
+            new("Add to end of queue", () => PlayerState.AddToQueueEndAsync(trackIds)),
+            new("Add to playlist...", () =>
+            {
+                OpenAddToPlaylist(trackIds);
+                return Task.CompletedTask;
+            })
         };
 
         if (_isAdmin)
@@ -136,6 +146,12 @@
     }
 
     private void CloseContextMenu() => _contextMenuOpen = false;
+
+    private void OpenAddToPlaylist(IReadOnlyList<Guid> mediaItemIds)
+    {
+        _addToPlaylistIds = mediaItemIds;
+        _showAddToPlaylist = true;
+    }
 
     private void NavigateToEditTags(IEnumerable<Guid> trackIds)
     {

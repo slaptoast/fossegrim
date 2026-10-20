@@ -286,6 +286,23 @@ public class FossegrimApiClient
             ?? throw new ApiException("Move track succeeded but returned no result.");
     }
 
+    public async Task<PlaylistShareDto> SharePlaylistAsync(Guid playlistId, string userId, string shareType)
+    {
+        var response = await _httpClient.PostAsJsonAsync($"/api/playlists/{playlistId}/shares", new SharePlaylistRequest(userId, shareType));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlaylistShareDto>()
+            ?? throw new ApiException("Share playlist succeeded but returned no result.");
+    }
+
+    public async Task RevokePlaylistShareAsync(Guid playlistId, string userId)
+    {
+        var response = await _httpClient.DeleteAsync($"/api/playlists/{playlistId}/shares/{Uri.EscapeDataString(userId)}");
+        if (response.StatusCode != HttpStatusCode.NoContent && response.StatusCode != HttpStatusCode.NotFound)
+        {
+            response.EnsureSuccessStatusCode();
+        }
+    }
+
     private async Task<AuthResult> ReadAuthResultAsync(HttpResponseMessage response, string unauthorizedMessage)
     {
         if (response.StatusCode == HttpStatusCode.OK)

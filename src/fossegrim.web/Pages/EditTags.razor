@@ -127,7 +127,11 @@
             var errors = result.Errors.ToList();
             if (errors.Count > 0)
             {
-                _saveErrors = errors.Select(e => e.Error).ToList();
+                // Errors only carry an id, so name the track they belong to.
+                var titles = _models.ToDictionary(m => m.Id, m => m.Title);
+                _saveErrors = errors
+                    .Select(e => $"{(titles.TryGetValue(e.Id, out var t) && !string.IsNullOrWhiteSpace(t) ? t : e.Id.ToString())}: {e.Error}")
+                    .ToList();
             }
             else
             {

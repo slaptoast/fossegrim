@@ -12,6 +12,8 @@ services:
       Jwt__Issuer: ${JWT_ISSUER:-Fossegrim}
       Jwt__Audience: ${JWT_AUDIENCE:-FossegrimClients}
       Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-10080}
+      LastFm__ApiKey: ${LASTFM_API_KEY:-}
+      LastFm__ApiSecret: ${LASTFM_API_SECRET:-}
     volumes:
       - fossegrim-data:/data
       # Read-write: the app edits ID3 tags in place and will eventually

@@ -74,6 +74,11 @@ builder.Services.AddAuthorization();
 // Register application services
 builder.Services.AddScoped<MediaLibraryService>();
 
+// Last.fm client is always registered but stays inert (IsConfigured == false)
+// until LastFm:ApiKey and LastFm:ApiSecret are set.
+builder.Services.Configure<LastFmOptions>(builder.Configuration.GetSection(LastFmOptions.SectionName));
+builder.Services.AddHttpClient<LastFmClient>();
+
 var app = builder.Build();
 
 // Apply migrations, then seed roles and admin user

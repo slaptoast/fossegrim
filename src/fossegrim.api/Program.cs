@@ -111,6 +111,7 @@ app.MapArtistEndpoints();
 app.MapMediaItemEndpoints();
 app.MapLibraryEndpoints();
 app.MapPlaylistEndpoints();
+app.MapPlayEndpoints();
 app.MapAdminEndpoints();
 app.MapStreamingEndpoints();
 app.MapCoverEndpoints();

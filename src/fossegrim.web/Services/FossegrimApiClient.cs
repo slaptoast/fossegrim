@@ -236,6 +236,20 @@ public class FossegrimApiClient
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task RecordPlayAsync(Guid mediaItemId)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/plays", new RecordPlayRequest(mediaItemId));
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<IReadOnlyList<PlayEventDto>> GetPlayHistoryAsync(int? limit = null)
+    {
+        var url = limit is null ? "/api/plays" : $"/api/plays?limit={limit}";
+        var response = await _httpClient.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<PlayEventDto>>() ?? [];
+    }
+
     public async Task<PlaylistDto> CreatePlaylistAsync(string name)
     {
         var response = await _httpClient.PostAsJsonAsync("/api/playlists", new CreatePlaylistRequest(name));

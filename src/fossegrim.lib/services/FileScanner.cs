@@ -70,6 +70,11 @@ public class FileScanner
                                         Album = tagFile.Tag.Album,
                                         ArtistName = tagFile.Tag.FirstPerformer ?? string.Join(", ", tagFile.Tag.Performers ?? Array.Empty<string>()),
                                         Title = tagFile.Tag.Title,
+                                        // The tag editor sends back full values for these, so they
+                                        // must be read here or a save would blank them in the file.
+                                        Year = tagFile.Tag.Year == 0 ? null : (int)tagFile.Tag.Year,
+                                        Track = tagFile.Tag.Track == 0 ? null : (int)tagFile.Tag.Track,
+                                        Genre = tagFile.Tag.FirstGenre,
                                         FileLocation = file
                                     });
                                 }

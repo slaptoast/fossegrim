@@ -14,6 +14,7 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Playlist> Playlists { get; set; }
     public DbSet<PlaylistItem> PlaylistItems { get; set; }
     public DbSet<PlaylistShare> PlaylistShares { get; set; }
+    public DbSet<PlayEvent> PlayEvents { get; set; }
 
     public FossegrimDbContext(DbContextOptions<FossegrimDbContext> options)
         : base(options)
@@ -179,6 +180,26 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
             entity.HasOne(ps => ps.User)
                   .WithMany()
                   .HasForeignKey(ps => ps.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure PlayEvent entity (per-user listening history)
+        modelBuilder.Entity<PlayEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            // History is always read per user, newest first
+            entity.HasIndex(e => new { e.UserId, e.PlayedAt });
+            entity.HasIndex(e => e.MediaItemId);
+
+            entity.HasOne(pe => pe.User)
+                  .WithMany()
+                  .HasForeignKey(pe => pe.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(pe => pe.MediaItem)
+                  .WithMany()
+                  .HasForeignKey(pe => pe.MediaItemId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
     }

@@ -42,6 +42,10 @@
                 <div class="playlist-detail-header">
                     <input type="text" class="playlist-name-input" @bind="_editName" @bind:event="oninput" @onblur="RenameAsync" disabled="@(!CanEdit)" />
                     <span class="playlist-access-badge">@_selectedPlaylist.AccessLevel</span>
+                    @if (_selectedPlaylist.AccessLevel != "Owner")
+                    {
+                        <span class="playlist-owner">Shared by @(_selectedPlaylist.OwnerDisplayName ?? "another user")</span>
+                    }
                     @if (_selectedPlaylist.AccessLevel == "Owner")
                     {
                         <button type="button" class="button-danger" @onclick="() => _showDeleteConfirm = true">Delete Playlist</button>
@@ -53,10 +57,50 @@
                     <div class="error">@_playlistErrorMessage</div>
                 }
 
+                @if (_selectedPlaylist.AccessLevel == "Owner")
+                {
+                    <div class="playlist-share-section">
+                        <h3>Shared With</h3>
+                        @if (!_selectedPlaylist.Shares.Any())
+                        {
+                            <p class="playlist-share-empty">Not shared with anyone.</p>
+                        }
+                        else
+                        {
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Access</th>
+                                        <th class="actions-cell"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var share in _selectedPlaylist.Shares.OrderBy(s => s.DisplayName ?? s.UserId, StringComparer.OrdinalIgnoreCase))
+                                    {
+                                        <tr>
+                                            <td class="title-cell">@(share.DisplayName ?? share.UserId)</td>
+                                            <td>
+                                                <select value="@share.ShareType" disabled="@_isSaving" @onchange="e => ChangeShareTypeAsync(share, e)">
+                                                    <option value="Editor">Editor</option>
+                                                    <option value="ReadOnly">Read-only</option>
+                                                </select>
+                                            </td>
+                                            <td class="actions-cell">
+                                                <button type="button" class="button-danger" disabled="@_isSaving" @onclick="() => RevokeShareAsync(share)">Remove</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                }
+
                 <div class="playlist-editor-grid">
                     <div class="playlist-editor-column">
                         <h3>Add Tracks</h3>
-                        <TrackList MediaItems="_mediaItems" Editable="CanEdit" @bind-SelectedIds="_selectedTrackIds" OnItemUpdated="HandleItemUpdated" />
+                        <TrackList MediaItems="_mediaItems" Editable="CanEdit" @bind-SelectedIds="_selectedTrackIds" OnItemUpdated="HandleItemUpdated" OnAddedToPlaylist="HandleAddedToPlaylistAsync" />
                         @if (CanEdit)
                         {
                             <button type="button" class="button" disabled="@(_selectedTrackIds.Count == 0 || _isSaving)" @onclick="AddSelectedTracksAsync">
@@ -67,7 +111,7 @@
 
                     <div class="playlist-editor-column">
                         <h3>Playlist Tracks (@_selectedPlaylist.Items.Count())</h3>
-                        <PlaylistTrackList Items="_selectedPlaylist.Items.ToList()" CanEdit="CanEdit" OnReorder="MoveItemAsync" OnRemove="RemoveItemAsync" OnItemUpdated="HandlePlaylistItemTagsUpdatedAsync" />
+                        <PlaylistTrackList Items="_selectedPlaylist.Items.ToList()" CanEdit="CanEdit" OnReorder="MoveItemAsync" OnRemove="RemoveItemAsync" OnItemUpdated="HandlePlaylistItemTagsUpdatedAsync" OnAddedToPlaylist="HandleAddedToPlaylistAsync" />
                     </div>
                 </div>
             </div>
@@ -285,4 +329,55 @@
 
     private Task HandlePlaylistItemTagsUpdatedAsync() =>
         _selectedPlaylist is null ? Task.CompletedTask : LoadPlaylistAsync(_selectedPlaylist.Id);
+
+    // Tracks added via the right-click menu may target the playlist being shown.
+    private Task HandleAddedToPlaylistAsync(Guid playlistId) =>
+        _selectedPlaylist?.Id == playlistId ? LoadPlaylistAsync(playlistId) : Task.CompletedTask;
+
+    private async Task ChangeShareTypeAsync(PlaylistShareDto share, ChangeEventArgs e)
+    {
+        var shareType = e.Value?.ToString();
+        if (_selectedPlaylist is null || string.IsNullOrEmpty(shareType) || shareType == share.ShareType)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            await ApiClient.SharePlaylistAsync(_selectedPlaylist.Id, share.UserId, shareType);
+            await LoadPlaylistAsync(_selectedPlaylist.Id);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error changing access: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task RevokeShareAsync(PlaylistShareDto share)
+    {
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            await ApiClient.RevokePlaylistShareAsync(_selectedPlaylist.Id, share.UserId);
+            await LoadPlaylistAsync(_selectedPlaylist.Id);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error removing share: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
 }

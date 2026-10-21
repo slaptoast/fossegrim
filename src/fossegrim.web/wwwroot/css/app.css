@@ -484,6 +484,11 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
 .playlist-editor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--space-8); padding: var(--space-8); align-items: start; }
 .playlist-editor-column h3 { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: var(--space-6); }
 .playlist-editor-column .button { margin-top: var(--space-8); }
+.playlist-owner { font-size: 0.8125rem; color: var(--text-muted); }
+.playlist-share-section { padding: var(--space-8) var(--space-12); border-bottom: 1px solid var(--border); }
+.playlist-share-section h3 { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: var(--space-6); }
+.playlist-share-empty { font-size: 0.8125rem; color: var(--text-muted); }
+.playlist-share-section select { width: auto; }
 .playlist-track-table .drag-handle-cell { width: 24px; padding: 0; text-align: center; color: var(--text-faint); cursor: grab; }
 .playlist-track-table .remove-cell { width: 32px; padding: 0; text-align: center; }
 .track-remove-button { background: none; border: none; color: var(--text-muted); cursor: pointer; width: 24px; height: 24px; border-radius: var(--radius-md); }
@@ -506,6 +511,13 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
 .context-menu { position: fixed; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-menu); min-width: 180px; padding: var(--space-4); }
 .context-menu-item { display: block; width: 100%; text-align: left; height: 28px; padding: 0 var(--space-8); background: none; border: none; border-radius: var(--radius-md); font: inherit; color: var(--text-secondary); cursor: pointer; }
 .context-menu-item:hover { background: var(--surface-muted); color: var(--ink); }
+.context-menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---- Add to playlist picker ---- */
+.playlist-picker-list { max-height: 280px; overflow-y: auto; margin-top: var(--space-6); }
+.playlist-picker-list .context-menu-item { display: flex; align-items: center; gap: var(--space-8); }
+.playlist-picker-count { margin-left: auto; font-size: 0.75rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.modal-body > .error { margin-bottom: var(--space-6); }
 
 /* ---- Tag editing ---- */
 .tag-edit-modal { max-width: 480px; }

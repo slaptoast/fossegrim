@@ -1,5 +1,6 @@
-@implements IDisposable
+@implements IAsyncDisposable
 @inject PlayerState PlayerState
+@inject IJSRuntime JSRuntime
 
 @if (PlayerState.CurrentTrack is not null)
 {
@@ -15,7 +16,6 @@
         }
         else if (PlayerState.StreamUrl is not null)
         {
-            <button type="button" class="player-button" aria-pressed="@(_visualizerOpen ? "true" : "false")" @onclick="ToggleVisualizer">Visualizer</button>
             @* crossorigin lets the visualizer read samples when the API is on another origin (local dev);
                without it Web Audio would see a tainted source and output silence. *@
             <audio @ref="_audio" controls autoplay="@PlayerState.AutoPlay" preload="metadata" crossorigin="anonymous" src="@PlayerState.StreamUrl" class="player-audio" @onended="OnTrackEnded">
@@ -23,27 +23,36 @@
             </audio>
         }
     </div>
-
-    @* A sibling of the bar, not a child: the bar's sticky stacking context would otherwise
-       trap the overlay, and the bar must stay on top so playback controls remain usable. *@
-    @if (_visualizerOpen && PlayerState.StreamUrl is not null && PlayerState.ErrorMessage is null)
-    {
-        <VisualizerOverlay Audio="_audio" Title="@PlayerState.CurrentTrack.Title" OnClose="CloseVisualizer" />
-    }
 }
 
 @code {
     private ElementReference _audio;
-    private bool _visualizerOpen;
+    private IJSObjectReference? _visualizer;
 
     protected override void OnInitialized()
     {
         PlayerState.Changed += OnChanged;
     }
 
-    private void ToggleVisualizer() => _visualizerOpen = !_visualizerOpen;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (PlayerState.StreamUrl is null || PlayerState.ErrorMessage is not null)
+        {
+            return;
+        }
 
-    private void CloseVisualizer() => _visualizerOpen = false;
+        try
+        {
+            // The visualizer module (library page) draws from whichever <audio> is registered.
+            // Idempotent on the JS side; re-run each render in case Blazor swapped the element.
+            _visualizer ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/visualizer.js");
+            await _visualizer.InvokeVoidAsync("registerAudio", _audio);
+        }
+        catch (JSException)
+        {
+            // The visualizer is decoration - never let it break playback.
+        }
+    }
 
     private void OnChanged()
     {
@@ -52,8 +61,19 @@
 
     private Task OnTrackEnded() => PlayerState.PlayNextAsync();
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         PlayerState.Changed -= OnChanged;
+
+        if (_visualizer is not null)
+        {
+            try
+            {
+                await _visualizer.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
     }
 }

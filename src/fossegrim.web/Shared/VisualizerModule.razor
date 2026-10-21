@@ -1,0 +1,150 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JSRuntime
+@inject PlayerState PlayerState
+
+<div class="visualizer-module" @ref="_host">
+    <div class="visualizer-header">
+        <h2>Visualizer</h2>
+        @if (_status is "running" or "paused")
+        {
+            <button type="button" class="button-secondary" title="Previous preset (← in fullscreen)" @onclick='() => CallAsync("previous")'>‹</button>
+            <button type="button" class="button-secondary" title="Next preset (→ in fullscreen)" @onclick='() => CallAsync("next")'>›</button>
+            <button type="button" class="button-secondary" aria-pressed="@(_isCycling ? "true" : "false")" title="Change preset every 20 seconds" @onclick="ToggleCycleAsync">Auto-cycle</button>
+        }
+        <button type="button" class="button-secondary visualizer-fullscreen" title="Fullscreen (F in fullscreen, Esc to exit)" disabled="@(_status is not ("running" or "paused" or "waiting"))" @onclick='() => CallAsync("toggleFullscreen")'>Fullscreen</button>
+    </div>
+
+    <div class="visualizer-stage">
+        <canvas @ref="_canvas" class="visualizer-canvas" aria-hidden="true"></canvas>
+
+        @if (Message is not null)
+        {
+            <div class="visualizer-message">
+                <p>@Message</p>
+                @if (_status == "reduced-motion")
+                {
+                    <button type="button" class="button" @onclick="ShowAnywayAsync">Show anyway</button>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="visualizer-footer">
+        <span class="visualizer-preset" @ref="_presetLabel"></span>
+    </div>
+</div>
+
+@code {
+    private ElementReference _host;
+    private ElementReference _canvas;
+    private ElementReference _presetLabel;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<VisualizerModule>? _selfReference;
+    private string _status = "waiting";
+    private bool _isCycling = true;
+    private Guid? _shownTrackId;
+
+    private string? Message => _status switch
+    {
+        "waiting" => "Play a track to start the visualizer.",
+        "loading" => "Loading the visualizer…",
+        "reduced-motion" => "Your system is set to reduce motion. This visualizer moves quickly and can flash brightly.",
+        "unsupported" => "This browser can't run the visualizer. It needs WebGL 2 and the Web Audio API.",
+        "load-failed" => "The visualizer couldn't load. Play a track again to retry.",
+        _ => null
+    };
+
+    protected override void OnInitialized()
+    {
+        PlayerState.Changed += OnPlayerChanged;
+        _shownTrackId = PlayerState.CurrentTrack?.Id;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await MountAsync(force: false);
+        }
+    }
+
+    private async Task MountAsync(bool force)
+    {
+        try
+        {
+            _module ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/visualizer.js");
+            _selfReference ??= DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("mount", _host, _canvas, _presetLabel, _selfReference, force);
+        }
+        catch (JSException)
+        {
+            _status = "load-failed";
+            StateHasChanged();
+        }
+    }
+
+    private Task ShowAnywayAsync() => MountAsync(force: true);
+
+    [JSInvokable]
+    public void SetStatus(string status)
+    {
+        _status = status;
+        StateHasChanged();
+    }
+
+    private async void OnPlayerChanged()
+    {
+        var track = PlayerState.CurrentTrack;
+        if (track is null || track.Id == _shownTrackId)
+        {
+            return;
+        }
+
+        _shownTrackId = track.Id;
+        await InvokeAsync(() => CallAsync("showTitle", track.Title));
+    }
+
+    private async Task ToggleCycleAsync()
+    {
+        if (_module is not null)
+        {
+            _isCycling = await _module.InvokeAsync<bool>("toggleCycle");
+        }
+    }
+
+    private async Task CallAsync(string identifier, params object?[] args)
+    {
+        if (_module is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _module.InvokeVoidAsync(identifier, args);
+        }
+        catch (JSException)
+        {
+            // Decoration only -- a failed preset change must never affect playback.
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        PlayerState.Changed -= OnPlayerChanged;
+
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("unmount");
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
+        _selfReference?.Dispose();
+    }
+}

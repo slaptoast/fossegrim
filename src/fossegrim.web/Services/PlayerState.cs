@@ -70,6 +70,7 @@ public class PlayerState
             }
 
             SyncQueueList(latest, out _, out _);
+            await EnsureCurrentTrackAsync();
             Changed?.Invoke();
         }
         catch (Exception ex)
@@ -92,6 +93,7 @@ public class PlayerState
             var queue = await _apiClient.GetQueueAsync();
             var updated = await _apiClient.AddPlaylistItemsAsync(queue.Id, ids);
             SyncQueueList(updated, out _, out _);
+            await EnsureCurrentTrackAsync();
             Changed?.Invoke();
         }
         catch (Exception ex)
@@ -166,6 +168,49 @@ public class PlayerState
         _queueIndex = currentIndex;
     }
 
+    // When nothing is "now playing" (e.g. the first right-click add into an empty queue),
+    // surface the first queued track in the player bar, paused, so the queue is visible and
+    // playable instead of filling up out of sight. PlayNextAsync then advances through it.
+    private async Task EnsureCurrentTrackAsync()
+    {
+        if (_queueIndex >= 0 || _queue.Count == 0)
+        {
+            return;
+        }
+
+        var existingIndex = CurrentTrack is null ? -1 : _queue.FindIndex(t => t.Id == CurrentTrack.Id);
+        if (existingIndex >= 0)
+        {
+            _queueIndex = existingIndex;
+        }
+        else
+        {
+            _queueIndex = 0;
+            CurrentTrack = _queue[0];
+            AutoPlay = false;
+            ErrorMessage = null;
+            StreamUrl = null;
+
+            try
+            {
+                StreamUrl = await _apiClient.GetStreamUrlAsync(CurrentTrack.Id);
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = $"Could not load track: {ex.Message}";
+            }
+        }
+
+        try
+        {
+            await _apiClient.SetQueueCurrentTrackAsync(CurrentTrack!.Id);
+        }
+        catch
+        {
+            // Best-effort: losing sync with the server shouldn't block local playback.
+        }
+    }
+
     private async Task HydrateFromServerAsync()
     {
         try
@@ -181,6 +226,17 @@ public class PlayerState
             {
                 currentIndex = 0;
                 _queueIndex = 0;
+
+                // Persist the default so a later "Add to next in queue" lands after this
+                // track rather than in front of it.
+                try
+                {
+                    await _apiClient.SetQueueCurrentTrackAsync(tracks[0].Id);
+                }
+                catch
+                {
+                    // Best-effort, as in PlayAtAsync.
+                }
             }
 
             CurrentTrack = tracks[currentIndex];

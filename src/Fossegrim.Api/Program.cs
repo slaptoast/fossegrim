@@ -37,8 +37,11 @@ builder.Services.AddIdentityCore<ApplicationUser>()
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<FossegrimDbContext>();
 
-// Configure JWT bearer authentication
+// Configure JWT bearer authentication. The resolved key is written back into
+// configuration so token issuing (Endpoints/Auth.cs) signs with the same key.
 var jwtSection = builder.Configuration.GetSection("Jwt");
+var (jwtKey, jwtKeySource) = JwtKeyStore.Resolve(jwtSection["Key"], jwtSection["KeyFile"]);
+jwtSection["Key"] = jwtKey;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -49,7 +52,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidAudience = jwtSection["Audience"],
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!)),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             ValidateLifetime = true
         };
 
@@ -80,6 +83,19 @@ builder.Services.Configure<LastFmOptions>(builder.Configuration.GetSection(LastF
 builder.Services.AddHttpClient<LastFmClient>();
 
 var app = builder.Build();
+
+switch (jwtKeySource)
+{
+    case JwtKeySource.KeyFileCreated:
+        app.Logger.LogInformation("Generated new JWT signing key at {KeyFile}", jwtSection["KeyFile"]);
+        break;
+    case JwtKeySource.KeyFileLoaded:
+        app.Logger.LogInformation("Loaded JWT signing key from {KeyFile}", jwtSection["KeyFile"]);
+        break;
+    case JwtKeySource.Ephemeral:
+        app.Logger.LogWarning("No Jwt:Key or Jwt:KeyFile configured; using a temporary signing key. All sessions end when the API restarts.");
+        break;
+}
 
 // Apply migrations, then seed roles and admin user
 using (var scope = app.Services.CreateScope())

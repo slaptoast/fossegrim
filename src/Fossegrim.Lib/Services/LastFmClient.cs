@@ -19,11 +19,13 @@ public record LastFmTrack(
 
 public record LastFmResult(bool Success, int? ErrorCode = null, string? ErrorMessage = null);
 
+public record LastFmSessionResult(bool Success, string? SessionKey = null, string? UserName = null, int? ErrorCode = null, string? ErrorMessage = null);
+
 /// <summary>
-/// Minimal client for the documented Last.fm scrobbling calls
-/// (track.updateNowPlaying and track.scrobble). Every call needs a user
-/// session key (sk) obtained through Last.fm's auth flow; obtaining and
-/// storing that key is left to the caller. Does nothing unless
+/// Minimal client for Last.fm's web auth flow (auth.getSession) and the
+/// documented scrobbling calls (track.updateNowPlaying and track.scrobble).
+/// Scrobbling calls need the user session key (sk) that auth.getSession
+/// returns; storing that key is left to the caller. Does nothing unless
 /// <see cref="LastFmOptions"/> is configured.
 /// See https://www.last.fm/api/scrobbling and https://www.last.fm/api/authspec.
 /// </summary>
@@ -40,10 +42,41 @@ public class LastFmClient
 
     public bool IsConfigured => _options.IsConfigured;
 
+    /// <summary>
+    /// The Last.fm page that asks the user to grant access. Last.fm then
+    /// redirects to <paramref name="callbackUrl"/> with a ?token= to pass to
+    /// <see cref="GetSessionAsync"/>.
+    /// </summary>
+    public string GetAuthorizeUrl(string callbackUrl) =>
+        $"{_options.AuthUrl}?api_key={Uri.EscapeDataString(_options.ApiKey ?? "")}&cb={Uri.EscapeDataString(callbackUrl)}";
+
+    // Exchanges the token from the auth callback for a session key, which
+    // doesn't expire until the user revokes access on Last.fm.
+    public async Task<LastFmSessionResult> GetSessionAsync(string token, CancellationToken cancellationToken = default)
+    {
+        var parameters = new Dictionary<string, string> { ["token"] = token };
+        var (result, root) = await PostSignedAsync("auth.getSession", sessionKey: null, parameters, cancellationToken);
+        if (!result.Success)
+        {
+            return new LastFmSessionResult(false, ErrorCode: result.ErrorCode, ErrorMessage: result.ErrorMessage);
+        }
+
+        if (root is { } json &&
+            json.TryGetProperty("session", out var session) &&
+            session.TryGetProperty("key", out var key) &&
+            key.GetString() is { Length: > 0 } sessionKey)
+        {
+            var userName = session.TryGetProperty("name", out var name) ? name.GetString() : null;
+            return new LastFmSessionResult(true, sessionKey, userName);
+        }
+
+        return new LastFmSessionResult(false, ErrorMessage: "Last.fm returned no session key.");
+    }
+
     public Task<LastFmResult> UpdateNowPlayingAsync(string sessionKey, LastFmTrack track, CancellationToken cancellationToken = default)
     {
         var parameters = TrackParameters(track);
-        return PostSignedAsync("track.updateNowPlaying", sessionKey, parameters, cancellationToken);
+        return PostTrackAsync("track.updateNowPlaying", sessionKey, parameters, cancellationToken);
     }
 
     // startedAt is when the track started playing; Last.fm expects it as a
@@ -52,7 +85,7 @@ public class LastFmClient
     {
         var parameters = TrackParameters(track);
         parameters["timestamp"] = startedAt.ToUnixTimeSeconds().ToString();
-        return PostSignedAsync("track.scrobble", sessionKey, parameters, cancellationToken);
+        return PostTrackAsync("track.scrobble", sessionKey, parameters, cancellationToken);
     }
 
     /// <summary>
@@ -99,20 +132,35 @@ public class LastFmClient
         return parameters;
     }
 
-    private async Task<LastFmResult> PostSignedAsync(
+    private async Task<LastFmResult> PostTrackAsync(
         string method,
         string sessionKey,
         Dictionary<string, string> parameters,
         CancellationToken cancellationToken)
     {
+        var (result, _) = await PostSignedAsync(method, sessionKey, parameters, cancellationToken);
+        return result;
+    }
+
+    // Returns the parsed response body alongside the result so callers that
+    // need data back (auth.getSession) can read it.
+    private async Task<(LastFmResult Result, JsonElement? Root)> PostSignedAsync(
+        string method,
+        string? sessionKey,
+        Dictionary<string, string> parameters,
+        CancellationToken cancellationToken)
+    {
         if (!IsConfigured)
         {
-            return new LastFmResult(false, ErrorMessage: "Last.fm is not configured.");
+            return (new LastFmResult(false, ErrorMessage: "Last.fm is not configured."), null);
         }
 
         parameters["method"] = method;
         parameters["api_key"] = _options.ApiKey!;
-        parameters["sk"] = sessionKey;
+        if (sessionKey is not null)
+        {
+            parameters["sk"] = sessionKey;
+        }
         parameters["api_sig"] = Sign(parameters, _options.ApiSecret!);
         // format is excluded from the signature, so it's added afterwards.
         parameters["format"] = "json";
@@ -125,20 +173,21 @@ public class LastFmClient
             // Errors come back as {"error": <code>, "message": "..."}, with
             // either a 2xx or non-2xx status.
             using var json = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
-            if (json.RootElement.ValueKind == JsonValueKind.Object &&
-                json.RootElement.TryGetProperty("error", out var error))
+            var root = json.RootElement.Clone();
+            if (root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("error", out var error))
             {
-                var message = json.RootElement.TryGetProperty("message", out var m) ? m.GetString() : null;
-                return new LastFmResult(false, error.TryGetInt32(out var code) ? code : null, message);
+                var message = root.TryGetProperty("message", out var m) ? m.GetString() : null;
+                return (new LastFmResult(false, error.TryGetInt32(out var code) ? code : null, message), root);
             }
 
             return response.IsSuccessStatusCode
-                ? new LastFmResult(true)
-                : new LastFmResult(false, ErrorMessage: $"HTTP {(int)response.StatusCode}");
+                ? (new LastFmResult(true), root)
+                : (new LastFmResult(false, ErrorMessage: $"HTTP {(int)response.StatusCode}"), root);
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
         {
-            return new LastFmResult(false, ErrorMessage: ex.Message);
+            return (new LastFmResult(false, ErrorMessage: ex.Message), null);
         }
     }
 

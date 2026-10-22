@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -7,6 +8,7 @@ using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services;
 using Fossegrim.Api.Endpoints;
+using Fossegrim.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -81,6 +83,18 @@ builder.Services.AddScoped<MediaLibraryService>();
 // until LastFm:ApiKey and LastFm:ApiSecret are set.
 builder.Services.Configure<LastFmOptions>(builder.Configuration.GetSection(LastFmOptions.SectionName));
 builder.Services.AddHttpClient<LastFmClient>();
+builder.Services.AddScoped<LastFmAccountStore>();
+
+// Data Protection encrypts stored secrets (Last.fm session keys). Its keys
+// must outlive the container or those secrets become unreadable, so Docker
+// points DataProtection:KeysDirectory at the /data volume. Unset, the
+// framework default (per-user profile folder) is used, which is fine for dev.
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("Fossegrim");
+var dataProtectionKeysDirectory = builder.Configuration["DataProtection:KeysDirectory"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysDirectory))
+{
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysDirectory));
+}
 
 var app = builder.Build();
 
@@ -136,6 +150,7 @@ app.MapAdminEndpoints();
 app.MapStreamingEndpoints();
 app.MapCoverEndpoints();
 app.MapVersionEndpoints();
+app.MapLastFmEndpoints();
 
 app.MapFallbackToFile("index.html");
 

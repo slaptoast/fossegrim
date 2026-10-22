@@ -40,6 +40,7 @@ COPY --from=build /app .
 ENV ASPNETCORE_URLS=http://+:8080 \
     ConnectionStrings__DefaultConnection="Data Source=/data/fossegrim.db" \
     Jwt__KeyFile=/data/jwt.key \
+    DataProtection__KeysDirectory=/data/dataprotection-keys \
     APP_VERSION=$VERSION
 
 EXPOSE 8080

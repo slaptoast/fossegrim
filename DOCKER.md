@@ -93,6 +93,7 @@ into the image for a given deployment.
 | `JWT_ISSUER` / `JWT_AUDIENCE` / `JWT_EXPIRY_MINUTES` | JWT claims/expiry. Defaults match dev settings. |
 | `MUSIC_LIBRARY_PATH` | Host path to your music library; mounted **read-write** at `/music` in the container. After startup, register `/music` (or a subfolder) as a media folder from the admin UI. |
 | `PORT` | Host-side port to publish. |
+| `LASTFM_API_KEY` / `LASTFM_API_SECRET` | Last.fm API application credentials. Optional -- Last.fm is off when unset. See [Last.fm](#lastfm). |
 
 ### Auth signing key
 
@@ -156,6 +157,24 @@ a separate secrets mount, set this in the compose `environment:` section.
 **Backups.** A backup of the `fossegrim-data` volume includes `jwt.key`, so
 store backups as securely as the key itself. Restoring without the key file
 is fine: a new one is generated and users just sign in again.
+
+### Last.fm
+
+Each user can link their own Last.fm account from their Profile page, after
+which Fossegrim reports what they're playing. The server needs one Last.fm
+API application for this:
+
+1. Create one at https://www.last.fm/api/account/create. The callback URL
+   field can be left blank; Fossegrim supplies it on every link.
+2. Put the key and secret in `.env` as `LASTFM_API_KEY` and
+   `LASTFM_API_SECRET`, then `docker compose up -d`.
+
+Users' Last.fm session keys are stored encrypted in the database. The
+encryption keys live in `/data/dataprotection-keys` (set by
+`DataProtection__KeysDirectory`), so keep that on the persistent volume
+along with everything else. If they're lost, nothing breaks, but every user
+has to link Last.fm again. Like `jwt.key`, treat backups of `/data` as
+sensitive.
 
 ### Music folder must be writable
 

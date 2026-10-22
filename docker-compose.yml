@@ -8,7 +8,8 @@ services:
     ports:
       - "${PORT:-8080}:8080"
     environment:
-      Jwt__Key: ${JWT_KEY:?Set JWT_KEY in your .env file to a long random secret}
+      # Optional: left empty, a key is generated into /data/jwt.key on first run.
+      Jwt__Key: ${JWT_KEY:-}
       Jwt__Issuer: ${JWT_ISSUER:-Fossegrim}
       Jwt__Audience: ${JWT_AUDIENCE:-FossegrimClients}
       Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-10080}

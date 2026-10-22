@@ -1,6 +1,7 @@
 @page "/profile"
 @attribute [Authorize]
 @inject FossegrimApiClient ApiClient
+@inject NavigationManager Navigation
 
 <div class="container medium">
     <div class="header small">
@@ -45,6 +46,30 @@
 
             <button type="submit" class="button">Update Profile</button>
         </EditForm>
+
+        @if (_lastFm is { Configured: true })
+        {
+            <h3 class="section-header">Last.fm</h3>
+
+            @if (_lastFmError is not null)
+            {
+                <div class="error-message">@_lastFmError</div>
+            }
+
+            @if (_lastFm.Connected)
+            {
+                <div class="info-item">
+                    <span class="info-label">Linked account:</span>
+                    <span class="info-value">@(_lastFm.UserName ?? "Linked")</span>
+                </div>
+                <button class="button-danger" disabled="@_lastFmBusy" @onclick="UnlinkLastFmAsync">Unlink Last.fm</button>
+            }
+            else
+            {
+                <p>Link your Last.fm account to report what you're playing.</p>
+                <button class="button-secondary" disabled="@_lastFmBusy" @onclick="ConnectLastFmAsync">Connect Last.fm</button>
+            }
+        }
     </div>
 </div>
 
@@ -53,6 +78,9 @@
     private string _email = "";
     private readonly ProfileInput _input = new();
     private string? _statusMessage;
+    private LastFmStatusDto? _lastFm;
+    private string? _lastFmError;
+    private bool _lastFmBusy;
 
     protected override async Task OnInitializedAsync()
     {
@@ -60,6 +88,50 @@
         if (profile is not null)
         {
             LoadFrom(profile);
+        }
+
+        try
+        {
+            _lastFm = await ApiClient.GetLastFmStatusAsync();
+        }
+        catch
+        {
+            // Leave the Last.fm section hidden if its status can't be loaded.
+        }
+    }
+
+    // Sends the user to Last.fm, which redirects back to LastFmCallback.razor.
+    private async Task ConnectLastFmAsync()
+    {
+        _lastFmBusy = true;
+        _lastFmError = null;
+        try
+        {
+            var url = await ApiClient.GetLastFmAuthUrlAsync(Navigation.ToAbsoluteUri("profile/lastfm").ToString());
+            Navigation.NavigateTo(url, forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            _lastFmError = $"Could not start linking Last.fm: {ex.Message}";
+            _lastFmBusy = false;
+        }
+    }
+
+    private async Task UnlinkLastFmAsync()
+    {
+        _lastFmBusy = true;
+        _lastFmError = null;
+        try
+        {
+            _lastFm = await ApiClient.UnlinkLastFmAsync();
+        }
+        catch (Exception ex)
+        {
+            _lastFmError = $"Could not unlink Last.fm: {ex.Message}";
+        }
+        finally
+        {
+            _lastFmBusy = false;
         }
     }
 

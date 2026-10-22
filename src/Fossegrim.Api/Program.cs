@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -7,6 +8,7 @@ using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services;
 using Fossegrim.Api.Endpoints;
+using Fossegrim.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -77,6 +79,26 @@ builder.Services.AddAuthorization();
 // Register application services
 builder.Services.AddScoped<MediaLibraryService>();
 
+// Last.fm client is always registered but stays inert (IsConfigured == false)
+// until an admin saves API credentials on the Settings page, or
+// LastFm:ApiKey and LastFm:ApiSecret are set (which take precedence).
+builder.Services.Configure<LastFmOptions>(builder.Configuration.GetSection(LastFmOptions.SectionName));
+builder.Services.AddSingleton<LastFmCredentialsHolder>();
+builder.Services.AddHttpClient<LastFmClient>();
+builder.Services.AddScoped<LastFmAccountStore>();
+builder.Services.AddScoped<LastFmSettingsStore>();
+
+// Data Protection encrypts stored secrets (Last.fm session keys). Its keys
+// must outlive the container or those secrets become unreadable, so Docker
+// points DataProtection:KeysDirectory at the /data volume. Unset, the
+// framework default (per-user profile folder) is used, which is fine for dev.
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("Fossegrim");
+var dataProtectionKeysDirectory = builder.Configuration["DataProtection:KeysDirectory"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysDirectory))
+{
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysDirectory));
+}
+
 var app = builder.Build();
 
 switch (jwtKeySource)
@@ -97,6 +119,7 @@ using (var scope = app.Services.CreateScope())
 {
     await scope.ServiceProvider.GetRequiredService<FossegrimDbContext>().Database.MigrateAsync();
     await RoleSeeder.SeedRolesAndAdminAsync(scope.ServiceProvider);
+    await scope.ServiceProvider.GetRequiredService<LastFmSettingsStore>().LoadAsync();
 }
 
 // Configure the HTTP request pipeline.
@@ -131,6 +154,7 @@ app.MapAdminEndpoints();
 app.MapStreamingEndpoints();
 app.MapCoverEndpoints();
 app.MapVersionEndpoints();
+app.MapLastFmEndpoints();
 
 app.MapFallbackToFile("index.html");
 

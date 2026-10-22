@@ -140,6 +140,26 @@ public class PlayerState
         }
     }
 
+    // Called when the <audio> element actually starts or resumes playing (not
+    // when a track is merely loaded, e.g. restored without autoplay). The
+    // server ignores this unless the user has linked Last.fm.
+    public async Task ReportNowPlayingAsync()
+    {
+        if (CurrentTrack is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _apiClient.UpdateLastFmNowPlayingAsync(CurrentTrack.Id);
+        }
+        catch
+        {
+            // Best-effort: a Last.fm hiccup shouldn't surface in the player.
+        }
+    }
+
     public void Stop()
     {
         _queue.Clear();

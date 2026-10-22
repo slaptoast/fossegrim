@@ -18,6 +18,8 @@ public static class LastFm
 {
     // Last.fm error 9: invalid session key, i.e. the user revoked access.
     private const int InvalidSessionKeyError = 9;
+    private const int InvalidApiKeyError = 10;
+    private const int InvalidSignatureError = 13;
 
     public static void MapLastFmEndpoints(this WebApplication app)
     {
@@ -177,5 +179,76 @@ public static class LastFm
         })
         .WithName("UpdateLastFmNowPlaying")
         .WithOpenApi();
+
+        // Admin: the server's Last.fm API application credentials.
+        var settingsGroup = app.MapGroup("/api/admin/lastfm")
+            .WithTags("Admin")
+            .RequireAuthorization(policy => policy.RequireRole("Admin"));
+
+        settingsGroup.MapGet("/", async (LastFmSettingsStore settings, LastFmClient lastFm) =>
+            Results.Ok(await ToDtoAsync(settings, lastFm)))
+        .WithName("GetLastFmSettings")
+        .WithOpenApi();
+
+        settingsGroup.MapPut("/", async (
+            UpdateLastFmSettingsRequest request,
+            LastFmSettingsStore settings,
+            LastFmClient lastFm,
+            CancellationToken cancellationToken) =>
+        {
+            if (settings.IsSetByConfiguration)
+            {
+                return Results.Problem("Last.fm is configured by LASTFM_API_KEY and LASTFM_API_SECRET; unset them to manage it here.", statusCode: StatusCodes.Status409Conflict);
+            }
+
+            var apiKey = request.ApiKey?.Trim();
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                return Results.BadRequest("API key is required.");
+            }
+
+            var apiSecret = string.IsNullOrWhiteSpace(request.ApiSecret)
+                ? await settings.GetSavedSecretAsync()
+                : request.ApiSecret.Trim();
+            if (string.IsNullOrEmpty(apiSecret))
+            {
+                return Results.BadRequest("Shared secret is required.");
+            }
+
+            var check = await lastFm.ValidateCredentialsAsync(apiKey, apiSecret, cancellationToken);
+            if (!check.Success)
+            {
+                return check.ErrorCode switch
+                {
+                    InvalidApiKeyError => Results.BadRequest("Last.fm doesn't recognize that API key."),
+                    InvalidSignatureError => Results.BadRequest("Last.fm rejected the shared secret; check it matches the API key."),
+                    _ => Results.Problem($"Couldn't check the credentials with Last.fm: {check.ErrorMessage}", statusCode: StatusCodes.Status502BadGateway)
+                };
+            }
+
+            await settings.SaveAsync(apiKey, apiSecret);
+            return Results.Ok(await ToDtoAsync(settings, lastFm));
+        })
+        .WithName("UpdateLastFmSettings")
+        .WithOpenApi();
+
+        settingsGroup.MapDelete("/", async (LastFmSettingsStore settings, LastFmClient lastFm) =>
+        {
+            await settings.ClearAsync();
+            return Results.Ok(await ToDtoAsync(settings, lastFm));
+        })
+        .WithName("ClearLastFmSettings")
+        .WithOpenApi();
+    }
+
+    private static async Task<LastFmSettingsDto> ToDtoAsync(LastFmSettingsStore settings, LastFmClient lastFm)
+    {
+        if (settings.IsSetByConfiguration)
+        {
+            return new LastFmSettingsDto(true, true, null, true);
+        }
+
+        var (apiKey, hasSecret) = await settings.GetSavedAsync();
+        return new LastFmSettingsDto(lastFm.IsConfigured, false, apiKey, hasSecret);
     }
 }

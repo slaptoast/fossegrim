@@ -1,9 +1,10 @@
 namespace Fossegrim.Lib.Services;
 
 /// <summary>
-/// Last.fm API application credentials, bound from the "LastFm" configuration
-/// section (or LastFm__ApiKey / LastFm__ApiSecret environment variables).
-/// Both are empty by default, which leaves Last.fm integration switched off.
+/// Last.fm settings bound from the "LastFm" configuration section (or
+/// LastFm__ApiKey / LastFm__ApiSecret environment variables). The key and
+/// secret are empty by default; when both are set they override whatever an
+/// admin saved on the Settings page (see <see cref="LastFmCredentialsHolder"/>).
 /// </summary>
 public class LastFmOptions
 {

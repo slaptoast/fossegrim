@@ -231,6 +231,33 @@ public class FossegrimApiClient
             ?? throw new ApiException("Unlinking Last.fm returned no result.");
     }
 
+    public async Task<LastFmSettingsDto> GetLastFmSettingsAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/admin/lastfm");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<LastFmSettingsDto>()
+            ?? throw new ApiException("Last.fm settings returned no result.");
+    }
+
+    public async Task<LastFmSettingsDto> UpdateLastFmSettingsAsync(string apiKey, string? apiSecret)
+    {
+        var response = await _httpClient.PutAsJsonAsync("/api/admin/lastfm", new UpdateLastFmSettingsRequest(apiKey, apiSecret));
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadProblemDetailAsync(response) ?? $"Saving Last.fm settings failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<LastFmSettingsDto>()
+            ?? throw new ApiException("Saving Last.fm settings returned no result.");
+    }
+
+    public async Task<LastFmSettingsDto> ClearLastFmSettingsAsync()
+    {
+        var response = await _httpClient.DeleteAsync("/api/admin/lastfm");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<LastFmSettingsDto>()
+            ?? throw new ApiException("Removing Last.fm settings returned no result.");
+    }
+
     public async Task UpdateLastFmNowPlayingAsync(Guid mediaItemId)
     {
         var response = await _httpClient.PostAsJsonAsync("/api/lastfm/now-playing", new LastFmNowPlayingRequest(mediaItemId));

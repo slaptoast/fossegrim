@@ -80,10 +80,13 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<MediaLibraryService>();
 
 // Last.fm client is always registered but stays inert (IsConfigured == false)
-// until LastFm:ApiKey and LastFm:ApiSecret are set.
+// until an admin saves API credentials on the Settings page, or
+// LastFm:ApiKey and LastFm:ApiSecret are set (which take precedence).
 builder.Services.Configure<LastFmOptions>(builder.Configuration.GetSection(LastFmOptions.SectionName));
+builder.Services.AddSingleton<LastFmCredentialsHolder>();
 builder.Services.AddHttpClient<LastFmClient>();
 builder.Services.AddScoped<LastFmAccountStore>();
+builder.Services.AddScoped<LastFmSettingsStore>();
 
 // Data Protection encrypts stored secrets (Last.fm session keys). Its keys
 // must outlive the container or those secrets become unreadable, so Docker
@@ -116,6 +119,7 @@ using (var scope = app.Services.CreateScope())
 {
     await scope.ServiceProvider.GetRequiredService<FossegrimDbContext>().Database.MigrateAsync();
     await RoleSeeder.SeedRolesAndAdminAsync(scope.ServiceProvider);
+    await scope.ServiceProvider.GetRequiredService<LastFmSettingsStore>().LoadAsync();
 }
 
 // Configure the HTTP request pipeline.

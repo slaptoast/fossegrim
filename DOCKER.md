@@ -93,7 +93,7 @@ into the image for a given deployment.
 | `JWT_ISSUER` / `JWT_AUDIENCE` / `JWT_EXPIRY_MINUTES` | JWT claims/expiry. Defaults match dev settings. |
 | `MUSIC_LIBRARY_PATH` | Host path to your music library; mounted **read-write** at `/music` in the container. After startup, register `/music` (or a subfolder) as a media folder from the admin UI. |
 | `PORT` | Host-side port to publish. |
-| `LASTFM_API_KEY` / `LASTFM_API_SECRET` | Last.fm API application credentials. Optional -- Last.fm is off when unset. See [Last.fm](#lastfm). |
+| `LASTFM_API_KEY` / `LASTFM_API_SECRET` | Last.fm API application credentials. Optional -- usually entered on the admin Settings page instead; when set, these override it. See [Last.fm](#lastfm). |
 
 ### Auth signing key
 
@@ -162,17 +162,24 @@ is fine: a new one is generated and users just sign in again.
 
 Each user can link their own Last.fm account from their Profile page, after
 which Fossegrim reports what they're playing. The server needs one Last.fm
-API application for this:
+API application for this (it belongs to whoever runs the server, not to any
+user; everyone links their own account to it):
 
 1. Create one at https://www.last.fm/api/account/create. The callback URL
    field can be left blank; Fossegrim supplies it on every link.
-2. Put the key and secret in `.env` as `LASTFM_API_KEY` and
-   `LASTFM_API_SECRET`, then `docker compose up -d`.
+2. As an admin, enter the API key and shared secret under Settings ->
+   Last.fm. They're checked with Last.fm before saving and take effect
+   immediately.
 
-Users' Last.fm session keys are stored encrypted in the database. The
-encryption keys live in `/data/dataprotection-keys` (set by
-`DataProtection__KeysDirectory`), so keep that on the persistent volume
-along with everything else. If they're lost, nothing breaks, but every user
+Alternatively, set `LASTFM_API_KEY` and `LASTFM_API_SECRET` in `.env` and
+`docker compose up -d`. When both are set they take precedence, and the
+Settings page shows Last.fm as managed by the environment.
+
+The saved shared secret and users' Last.fm session keys are stored
+encrypted in the database. The encryption keys live in
+`/data/dataprotection-keys` (set by `DataProtection__KeysDirectory`), so
+keep that on the persistent volume along with everything else. If they're
+lost, nothing breaks, but the secret has to be re-entered and every user
 has to link Last.fm again. Like `jwt.key`, treat backups of `/data` as
 sensitive.
 

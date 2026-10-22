@@ -33,14 +33,16 @@ public class LastFmClient
 {
     private readonly HttpClient _http;
     private readonly LastFmOptions _options;
+    private readonly LastFmCredentialsHolder _credentials;
 
-    public LastFmClient(HttpClient http, IOptions<LastFmOptions> options)
+    public LastFmClient(HttpClient http, IOptions<LastFmOptions> options, LastFmCredentialsHolder credentials)
     {
         _http = http;
         _options = options.Value;
+        _credentials = credentials;
     }
 
-    public bool IsConfigured => _options.IsConfigured;
+    public bool IsConfigured => _credentials.Current is not null;
 
     /// <summary>
     /// The Last.fm page that asks the user to grant access. Last.fm then
@@ -48,7 +50,18 @@ public class LastFmClient
     /// <see cref="GetSessionAsync"/>.
     /// </summary>
     public string GetAuthorizeUrl(string callbackUrl) =>
-        $"{_options.AuthUrl}?api_key={Uri.EscapeDataString(_options.ApiKey ?? "")}&cb={Uri.EscapeDataString(callbackUrl)}";
+        $"{_options.AuthUrl}?api_key={Uri.EscapeDataString(_credentials.Current?.ApiKey ?? "")}&cb={Uri.EscapeDataString(callbackUrl)}";
+
+    /// <summary>
+    /// Checks a key and secret before they're saved, using auth.getToken (a
+    /// signed call that needs no user session). Last.fm answers error 10 for
+    /// a bad key and 13 for a bad secret.
+    /// </summary>
+    public async Task<LastFmResult> ValidateCredentialsAsync(string apiKey, string apiSecret, CancellationToken cancellationToken = default)
+    {
+        var (result, _) = await PostSignedAsync("auth.getToken", sessionKey: null, [], cancellationToken, (apiKey, apiSecret));
+        return result;
+    }
 
     // Exchanges the token from the auth callback for a session key, which
     // doesn't expire until the user revokes access on Last.fm.
@@ -143,25 +156,29 @@ public class LastFmClient
     }
 
     // Returns the parsed response body alongside the result so callers that
-    // need data back (auth.getSession) can read it.
+    // need data back (auth.getSession) can read it. credentials overrides the
+    // ones in effect, for validating new ones before they're saved.
     private async Task<(LastFmResult Result, JsonElement? Root)> PostSignedAsync(
         string method,
         string? sessionKey,
         Dictionary<string, string> parameters,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        (string ApiKey, string ApiSecret)? credentials = null)
     {
-        if (!IsConfigured)
+        credentials ??= _credentials.Current is { } current ? (current.ApiKey, current.ApiSecret) : null;
+        if (credentials is not { } configured)
         {
             return (new LastFmResult(false, ErrorMessage: "Last.fm is not configured."), null);
         }
+        var (apiKey, apiSecret) = configured;
 
         parameters["method"] = method;
-        parameters["api_key"] = _options.ApiKey!;
+        parameters["api_key"] = apiKey;
         if (sessionKey is not null)
         {
             parameters["sk"] = sessionKey;
         }
-        parameters["api_sig"] = Sign(parameters, _options.ApiSecret!);
+        parameters["api_sig"] = Sign(parameters, apiSecret);
         // format is excluded from the signature, so it's added afterwards.
         parameters["format"] = "json";
 

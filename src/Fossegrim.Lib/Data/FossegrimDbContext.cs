@@ -14,6 +14,7 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Playlist> Playlists { get; set; }
     public DbSet<PlaylistItem> PlaylistItems { get; set; }
     public DbSet<PlaylistShare> PlaylistShares { get; set; }
+    public DbSet<AppSetting> AppSettings { get; set; }
 
     public FossegrimDbContext(DbContextOptions<FossegrimDbContext> options)
         : base(options)

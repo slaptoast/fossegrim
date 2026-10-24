@@ -4,8 +4,26 @@ namespace Fossegrim.Contracts.Dtos;
 // heard (excluding seeks). Both optional; StartedAt defaults to now.
 public record RecordPlayRequest(Guid MediaItemId, DateTimeOffset? StartedAt = null, TimeSpan? ListenedFor = null);
 
+// The track's tags as they are now (not when it was played), so a tag edit
+// shows up in history too.
+public record PlayedTrackDto(
+    Guid Id,
+    string? Title,
+    string? ArtistName,
+    string? Album,
+    int? Year,
+    int? Track,
+    string? Genre,
+    TimeSpan? Duration);
+
 public record PlayEventDto(
     Guid Id,
     DateTime PlayedAt,
     TimeSpan? ListenedFor,
-    PlaylistTrackDto MediaItem);
+    PlayedTrackDto MediaItem);
+
+public record PlayHistoryPageDto(
+    IReadOnlyList<PlayEventDto> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);

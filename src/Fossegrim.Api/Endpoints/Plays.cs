@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Security.Claims;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
@@ -9,8 +10,10 @@ namespace Fossegrim.Api.Endpoints;
 
 public static class Plays
 {
-    private const int DefaultHistoryLimit = 50;
-    private const int MaxHistoryLimit = 500;
+    private const int DefaultPageSize = 50;
+    private const int MaxPageSize = 500;
+    private const int MaxSearchTerms = 10;
+    private const string LikeEscape = "\\";
 
     // Tolerance for client clocks running ahead of the server's.
     private static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(5);
@@ -65,9 +68,13 @@ public static class Plays
         .WithName("RecordPlay")
         .WithOpenApi();
 
-        // The calling user's listening history, newest first.
+        // The calling user's listening history, newest first, a page at a
+        // time. q narrows it to plays whose track matches every word in it,
+        // each word against any of the track's tags (see MatchesTerm).
         playGroup.MapGet("/", async (
-            int? limit,
+            string? q,
+            int? page,
+            int? pageSize,
             ClaimsPrincipal principal,
             UserManager<ApplicationUser> userManager,
             FossegrimDbContext db) =>
@@ -78,16 +85,25 @@ public static class Plays
                 return Results.Unauthorized();
             }
 
-            var take = Math.Clamp(limit ?? DefaultHistoryLimit, 1, MaxHistoryLimit);
+            var size = Math.Clamp(pageSize ?? DefaultPageSize, 1, MaxPageSize);
+            var pageNumber = Math.Max(page ?? 1, 1);
 
-            var plays = await db.PlayEvents
-                .Include(pe => pe.MediaItem)
-                .Where(pe => pe.UserId == user.Id)
+            var query = db.PlayEvents.Where(pe => pe.UserId == user.Id);
+            foreach (var term in SearchTerms(q))
+            {
+                query = query.Where(MatchesTerm(term));
+            }
+
+            var totalCount = await query.CountAsync();
+            var plays = await query
                 .OrderByDescending(pe => pe.PlayedAt)
-                .Take(take)
+                .ThenByDescending(pe => pe.Id)
+                .Skip((pageNumber - 1) * size)
+                .Take(size)
+                .Include(pe => pe.MediaItem)
                 .ToListAsync();
 
-            return Results.Ok(plays.Select(ToPlayEventDto));
+            return Results.Ok(new PlayHistoryPageDto(plays.Select(ToPlayEventDto).ToList(), totalCount, pageNumber, size));
         })
         .WithName("GetPlayHistory")
         .WithOpenApi();
@@ -144,14 +160,46 @@ public static class Plays
         return null;
     }
 
+    private static IEnumerable<string> SearchTerms(string? q) =>
+        (q ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(MaxSearchTerms);
+
+    // A play matches a term when any of its track's tags contains it: title,
+    // artist, album, genre and year on the track, plus the names of its
+    // linked artists and albums and those albums' label and genre. SQLite's
+    // LIKE is case-insensitive for ASCII letters only.
+    private static Expression<Func<PlayEvent, bool>> MatchesTerm(string term)
+    {
+        var pattern = $"%{EscapeLike(term)}%";
+        return pe =>
+            EF.Functions.Like(pe.MediaItem!.Title, pattern, LikeEscape) ||
+            EF.Functions.Like(pe.MediaItem.ArtistName, pattern, LikeEscape) ||
+            EF.Functions.Like(pe.MediaItem.Album, pattern, LikeEscape) ||
+            EF.Functions.Like(pe.MediaItem.Genre, pattern, LikeEscape) ||
+            EF.Functions.Like(pe.MediaItem.Year.ToString(), pattern, LikeEscape) ||
+            pe.MediaItem.Artists.Any(a => EF.Functions.Like(a.Name, pattern, LikeEscape)) ||
+            pe.MediaItem.Albums.Any(a =>
+                EF.Functions.Like(a.Name, pattern, LikeEscape) ||
+                EF.Functions.Like(a.Label, pattern, LikeEscape) ||
+                EF.Functions.Like(a.Genre, pattern, LikeEscape));
+    }
+
+    // So a search for "100%" or "a_b" matches those characters literally.
+    private static string EscapeLike(string term) =>
+        term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
     private static PlayEventDto ToPlayEventDto(PlayEvent playEvent) => new(
         playEvent.Id,
         playEvent.PlayedAt,
         playEvent.ListenedFor,
-        new PlaylistTrackDto(
+        new PlayedTrackDto(
             playEvent.MediaItemId,
             playEvent.MediaItem?.Title,
             playEvent.MediaItem?.ArtistName,
             playEvent.MediaItem?.Album,
+            playEvent.MediaItem?.Year,
+            playEvent.MediaItem?.Track,
+            playEvent.MediaItem?.Genre,
             playEvent.MediaItem?.Duration));
 }

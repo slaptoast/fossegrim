@@ -461,6 +461,15 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
 .album-play-overlay { position: absolute; inset: 0; z-index: 2; display: none; align-items: center; justify-content: center; background: var(--overlay); color: var(--on-brand); font-size: 0.75rem; cursor: pointer; }
 .album-art:hover .album-play-overlay { display: flex; }
 
+/* ---- Listens ---- */
+.listens-count { color: var(--text-muted); font-size: 0.8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.listens-table th { cursor: default; }
+.listens-table th::after { content: none; }
+.listens-table tbody tr { cursor: pointer; }
+.listens-table .played-cell { width: 150px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.listens-table .year-cell { width: 64px; font-variant-numeric: tabular-nums; }
+.listens-table .listened-cell { width: 80px; text-align: right; font-variant-numeric: tabular-nums; }
+
 /* ---- Pager: a footer row inside the module ---- */
 .pager {
     display: flex;

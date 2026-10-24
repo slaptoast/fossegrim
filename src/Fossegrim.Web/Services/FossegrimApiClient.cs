@@ -311,12 +311,18 @@ public class FossegrimApiClient
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task<IReadOnlyList<PlayEventDto>> GetPlayHistoryAsync(int? limit = null)
+    public async Task<PlayHistoryPageDto> GetPlayHistoryAsync(string? query = null, int page = 1, int pageSize = 50)
     {
-        var url = limit is null ? "/api/plays" : $"/api/plays?limit={limit}";
+        var url = $"/api/plays?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            url += $"&q={Uri.EscapeDataString(query)}";
+        }
+
         var response = await _httpClient.GetAsync(url);
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<List<PlayEventDto>>() ?? [];
+        return await response.Content.ReadFromJsonAsync<PlayHistoryPageDto>()
+            ?? throw new ApiException("Play history returned no result.");
     }
 
     public async Task<PlaylistDto> CreatePlaylistAsync(string name)

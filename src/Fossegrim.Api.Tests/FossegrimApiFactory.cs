@@ -40,17 +40,35 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         return client;
     }
 
-    public async Task<MediaItem> AddMediaItemAsync(string title = "Song", string artist = "Band")
+    public async Task<MediaItem> AddMediaItemAsync(
+        string title = "Song",
+        string artist = "Band",
+        string album = "Record",
+        string? genre = null,
+        int? year = null,
+        string? linkedArtistName = null,
+        string? linkedAlbumLabel = null)
     {
         var item = new MediaItem
         {
             Id = Guid.NewGuid(),
             Title = title,
             ArtistName = artist,
-            Album = "Record",
+            Album = album,
+            Genre = genre,
+            Year = year,
             FileLocation = $"/music/{Guid.NewGuid():N}.mp3",
             Duration = TimeSpan.FromMinutes(3)
         };
+
+        if (linkedArtistName is not null)
+        {
+            item.Artists.Add(new Artist { Id = Guid.NewGuid(), Name = linkedArtistName });
+        }
+        if (linkedAlbumLabel is not null)
+        {
+            item.Albums.Add(new Album { Id = Guid.NewGuid(), Name = album, Label = linkedAlbumLabel });
+        }
 
         await WithDbAsync(async db =>
         {

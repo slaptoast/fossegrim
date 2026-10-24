@@ -3,6 +3,7 @@ using System;
 using Fossegrim.Lib.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace fossegrim.lib.Migrations
 {
     [DbContext(typeof(FossegrimDbContext))]
-    partial class FossegrimDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261022002625_AddAppSettings")]
+    partial class AddAppSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -103,6 +106,23 @@ namespace fossegrim.lib.Migrations
                     b.HasIndex("Year");
 
                     b.ToTable("Albums");
+                });
+
+            modelBuilder.Entity("Fossegrim.Lib.Models.AppSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("AppSettings");
                 });
 
             modelBuilder.Entity("Fossegrim.Lib.Models.ApplicationUser", b =>
@@ -304,31 +324,6 @@ namespace fossegrim.lib.Migrations
                     b.HasIndex("Title");
 
                     b.ToTable("MediaItems");
-                });
-
-            modelBuilder.Entity("Fossegrim.Lib.Models.PlayEvent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("MediaItemId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("PlayedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MediaItemId");
-
-                    b.HasIndex("UserId", "PlayedAt");
-
-                    b.ToTable("PlayEvents");
                 });
 
             modelBuilder.Entity("Fossegrim.Lib.Models.Playlist", b =>
@@ -615,25 +610,6 @@ namespace fossegrim.lib.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("MediaFolder");
-                });
-
-            modelBuilder.Entity("Fossegrim.Lib.Models.PlayEvent", b =>
-                {
-                    b.HasOne("Fossegrim.Lib.Models.MediaItem", "MediaItem")
-                        .WithMany()
-                        .HasForeignKey("MediaItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Fossegrim.Lib.Models.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("MediaItem");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Fossegrim.Lib.Models.Playlist", b =>

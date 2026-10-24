@@ -195,6 +195,75 @@ public class FossegrimApiClient
             ?? throw new ApiException("Profile update succeeded but returned no result.");
     }
 
+    public async Task<LastFmStatusDto> GetLastFmStatusAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/lastfm");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<LastFmStatusDto>()
+            ?? throw new ApiException("Last.fm status returned no result.");
+    }
+
+    public async Task<string> GetLastFmAuthUrlAsync(string callbackUrl)
+    {
+        var response = await _httpClient.GetAsync($"/api/lastfm/auth-url?callback={Uri.EscapeDataString(callbackUrl)}");
+        response.EnsureSuccessStatusCode();
+        var dto = await response.Content.ReadFromJsonAsync<LastFmAuthUrlDto>()
+            ?? throw new ApiException("Last.fm auth URL returned no result.");
+        return dto.Url;
+    }
+
+    public async Task<LastFmStatusDto> LinkLastFmAsync(string token)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/lastfm/session", new LastFmLinkRequest(token));
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadProblemDetailAsync(response) ?? $"Linking Last.fm failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<LastFmStatusDto>()
+            ?? throw new ApiException("Linking Last.fm returned no result.");
+    }
+
+    public async Task<LastFmStatusDto> UnlinkLastFmAsync()
+    {
+        var response = await _httpClient.DeleteAsync("/api/lastfm/session");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<LastFmStatusDto>()
+            ?? throw new ApiException("Unlinking Last.fm returned no result.");
+    }
+
+    public async Task<LastFmSettingsDto> GetLastFmSettingsAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/admin/lastfm");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<LastFmSettingsDto>()
+            ?? throw new ApiException("Last.fm settings returned no result.");
+    }
+
+    public async Task<LastFmSettingsDto> UpdateLastFmSettingsAsync(string apiKey, string? apiSecret)
+    {
+        var response = await _httpClient.PutAsJsonAsync("/api/admin/lastfm", new UpdateLastFmSettingsRequest(apiKey, apiSecret));
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadProblemDetailAsync(response) ?? $"Saving Last.fm settings failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<LastFmSettingsDto>()
+            ?? throw new ApiException("Saving Last.fm settings returned no result.");
+    }
+
+    public async Task<LastFmSettingsDto> ClearLastFmSettingsAsync()
+    {
+        var response = await _httpClient.DeleteAsync("/api/admin/lastfm");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<LastFmSettingsDto>()
+            ?? throw new ApiException("Removing Last.fm settings returned no result.");
+    }
+
+    public async Task UpdateLastFmNowPlayingAsync(Guid mediaItemId)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/lastfm/now-playing", new LastFmNowPlayingRequest(mediaItemId));
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<IReadOnlyList<PlaylistDto>> GetPlaylistsAsync()
     {
         var response = await _httpClient.GetAsync("/api/playlists");
@@ -315,6 +384,26 @@ public class FossegrimApiClient
 
         var errors = await response.Content.ReadFromJsonAsync<IdentityErrorsResponse>();
         return new AuthResult(false, null, errors?.Errors ?? ["An unexpected error occurred."]);
+    }
+
+    // Results.Problem bodies are {"detail": "..."}; plain BadRequest bodies are a JSON string.
+    private static async Task<string?> ReadProblemDetailAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(body);
+            return json.RootElement.ValueKind switch
+            {
+                System.Text.Json.JsonValueKind.Object when json.RootElement.TryGetProperty("detail", out var detail) => detail.GetString(),
+                System.Text.Json.JsonValueKind.String => json.RootElement.GetString(),
+                _ => null
+            };
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return string.IsNullOrWhiteSpace(body) ? null : body;
+        }
     }
 }
 

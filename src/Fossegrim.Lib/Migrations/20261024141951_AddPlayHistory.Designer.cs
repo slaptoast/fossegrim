@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace fossegrim.lib.Migrations
 {
     [DbContext(typeof(FossegrimDbContext))]
-    [Migration("20261020233319_AddPlayHistory")]
+    [Migration("20261024141951_AddPlayHistory")]
     partial class AddPlayHistory
     {
         /// <inheritdoc />
@@ -106,6 +106,23 @@ namespace fossegrim.lib.Migrations
                     b.HasIndex("Year");
 
                     b.ToTable("Albums");
+                });
+
+            modelBuilder.Entity("Fossegrim.Lib.Models.AppSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("AppSettings");
                 });
 
             modelBuilder.Entity("Fossegrim.Lib.Models.ApplicationUser", b =>

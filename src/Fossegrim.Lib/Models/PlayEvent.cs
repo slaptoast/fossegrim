@@ -16,6 +16,19 @@ public class PlayEvent
     public Guid MediaItemId { get; set; }
     public MediaItem? MediaItem { get; set; }
 
-    // Stamped by the server (UTC) when the play is recorded.
+    // When the track started playing (UTC). Reported by the client, since a
+    // play is only reported once enough of it has been heard (and Last.fm
+    // scrobbles need the start time); the server's time is used if omitted.
     public DateTime PlayedAt { get; set; }
+
+    // How long the user actually listened, not counting time skipped by
+    // seeking. Null when the client didn't report it.
+    public TimeSpan? ListenedFor { get; set; }
+
+    // Stamped by the server (UTC) when the play is recorded.
+    public DateTime RecordedAt { get; set; }
+
+    // When this play was sent to Last.fm; null until then, and stays null
+    // for users who haven't linked Last.fm.
+    public DateTime? ScrobbledAt { get; set; }
 }

@@ -12,6 +12,9 @@ public static class Plays
     private const int DefaultHistoryLimit = 50;
     private const int MaxHistoryLimit = 500;
 
+    // Tolerance for client clocks running ahead of the server's.
+    private static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(5);
+
     public static void MapPlayEndpoints(this WebApplication app)
     {
         var playGroup = app.MapGroup("/api/plays")
@@ -31,6 +34,13 @@ public static class Plays
                 return Results.Unauthorized();
             }
 
+            var now = DateTime.UtcNow;
+            var playedAt = request.StartedAt?.UtcDateTime ?? now;
+            if (ValidateRecordPlay(request, playedAt, now) is { } error)
+            {
+                return Results.BadRequest(error);
+            }
+
             var mediaItem = await db.MediaItems.FindAsync(request.MediaItemId);
             if (mediaItem is null)
             {
@@ -42,7 +52,9 @@ public static class Plays
                 Id = Guid.NewGuid(),
                 UserId = user.Id,
                 MediaItemId = mediaItem.Id,
-                PlayedAt = DateTime.UtcNow
+                PlayedAt = playedAt,
+                ListenedFor = request.ListenedFor,
+                RecordedAt = now
             };
 
             db.PlayEvents.Add(playEvent);
@@ -79,11 +91,63 @@ public static class Plays
         })
         .WithName("GetPlayHistory")
         .WithOpenApi();
+
+        // One of the calling user's plays (the Location returned by POST).
+        playGroup.MapGet("/{id:guid}", async (
+            Guid id,
+            ClaimsPrincipal principal,
+            UserManager<ApplicationUser> userManager,
+            FossegrimDbContext db) =>
+        {
+            var user = await userManager.GetUserAsync(principal);
+            if (user is null)
+            {
+                return Results.Unauthorized();
+            }
+
+            var play = await db.PlayEvents
+                .Include(pe => pe.MediaItem)
+                .FirstOrDefaultAsync(pe => pe.Id == id && pe.UserId == user.Id);
+
+            return play is null ? Results.NotFound() : Results.Ok(ToPlayEventDto(play));
+        })
+        .WithName("GetPlay")
+        .WithOpenApi();
+    }
+
+    private static string? ValidateRecordPlay(RecordPlayRequest request, DateTime playedAt, DateTime now)
+    {
+        if (request.MediaItemId == Guid.Empty)
+        {
+            return "mediaItemId is required.";
+        }
+
+        if (playedAt > now + ClockSkew)
+        {
+            return "startedAt is in the future.";
+        }
+
+        if (request.ListenedFor is { } listenedFor)
+        {
+            if (listenedFor < TimeSpan.Zero)
+            {
+                return "listenedFor can't be negative.";
+            }
+
+            // Can't have heard more than the time since the track started.
+            if (playedAt + listenedFor > now + ClockSkew)
+            {
+                return "listenedFor is longer than the time since startedAt.";
+            }
+        }
+
+        return null;
     }
 
     private static PlayEventDto ToPlayEventDto(PlayEvent playEvent) => new(
         playEvent.Id,
         playEvent.PlayedAt,
+        playEvent.ListenedFor,
         new PlaylistTrackDto(
             playEvent.MediaItemId,
             playEvent.MediaItem?.Title,

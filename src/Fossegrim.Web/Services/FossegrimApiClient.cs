@@ -305,9 +305,9 @@ public class FossegrimApiClient
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task RecordPlayAsync(Guid mediaItemId)
+    public async Task RecordPlayAsync(Guid mediaItemId, DateTimeOffset? startedAt = null, TimeSpan? listenedFor = null)
     {
-        var response = await _httpClient.PostAsJsonAsync("/api/plays", new RecordPlayRequest(mediaItemId));
+        var response = await _httpClient.PostAsJsonAsync("/api/plays", new RecordPlayRequest(mediaItemId, startedAt, listenedFor));
         response.EnsureSuccessStatusCode();
     }
 

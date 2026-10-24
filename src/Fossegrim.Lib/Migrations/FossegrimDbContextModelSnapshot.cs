@@ -329,10 +329,19 @@ namespace fossegrim.lib.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<TimeSpan?>("ListenedFor")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("MediaItemId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("PlayedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ScrobbledAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("UserId")

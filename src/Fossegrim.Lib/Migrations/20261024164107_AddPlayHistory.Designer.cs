@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace fossegrim.lib.Migrations
 {
     [DbContext(typeof(FossegrimDbContext))]
-    [Migration("20261024141951_AddPlayHistory")]
+    [Migration("20261024164107_AddPlayHistory")]
     partial class AddPlayHistory
     {
         /// <inheritdoc />
@@ -332,10 +332,19 @@ namespace fossegrim.lib.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<TimeSpan?>("ListenedFor")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("MediaItemId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("PlayedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ScrobbledAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("UserId")

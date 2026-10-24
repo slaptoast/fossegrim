@@ -18,7 +18,10 @@ namespace fossegrim.lib.Migrations
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
                     UserId = table.Column<string>(type: "TEXT", nullable: false),
                     MediaItemId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PlayedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    PlayedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    ListenedFor = table.Column<TimeSpan>(type: "TEXT", nullable: true),
+                    RecordedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    ScrobbledAt = table.Column<DateTime>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {

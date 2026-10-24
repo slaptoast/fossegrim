@@ -49,7 +49,8 @@ fossegrim/
 │   ├── Fossegrim.Api/         # Standalone API (port 5182/7182) - owns the database
 │   ├── Fossegrim.Web/         # Blazor WebAssembly SPA (port 5085/7049) - browser-only client of the Api
 │   ├── Fossegrim.Contracts/   # Shared DTOs referenced by both Api and Web
-│   └── Fossegrim.Lib/         # Server-side data/services (EF Core, Identity, file scanning) - Api only
+│   ├── Fossegrim.Lib/         # Server-side data/services (EF Core, Identity, file scanning) - Api only
+│   └── Fossegrim.Api.Tests/   # xUnit tests; runs the Api in-process against a throwaway SQLite db
 ├── run-dev.sh              # Development runner script
 └── DEV-README.md          # This file
 ```
@@ -104,3 +105,15 @@ The API project allows CORS requests from the Web project origins:
 3. Use https://localhost:7182/openapi for API documentation
 4. Make changes - both projects use `dotnet watch` for hot reload
 5. Stop servers with `Ctrl+C`
+
+## Tests
+
+```bash
+dotnet test src/Fossegrim.sln
+```
+
+`Fossegrim.Api.Tests` starts the real API in-process (`WebApplicationFactory`)
+with its own temporary SQLite database, migrated on startup just like
+production, so endpoint tests go through auth, routing and EF Core for real.
+`DatabaseTests` fails if the EF model changed without a migration. CI runs
+the suite on every pull request (`.github/workflows/test.yml`).

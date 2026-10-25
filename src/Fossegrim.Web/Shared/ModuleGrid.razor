@@ -1,0 +1,185 @@
+@implements IAsyncDisposable
+@inject AppearanceService Appearance
+@inject IJSRuntime JS
+
+@* A page's movable, resizable modules (GridStack via js/layoutGrid.js). The
+   layout is saved to the user's appearance settings under PageId. Any change
+   that didn't come from dragging (showing, hiding, resetting, an import)
+   rebuilds the grid from the saved layout (the @key below), which keeps
+   Blazor and GridStack from disagreeing about which elements exist. *@
+@* GridStack adds its own classes to .grid-stack, so nothing Blazor re-renders is bound there. *@
+<div class="module-grid-host @(Editing ? "editing" : null)">
+<div class="grid-stack" @ref="_element" @key="_gridVersion">
+    @foreach (var item in Layout.Where(i => !i.Hidden))
+    {
+        var module = Modules.First(m => m.Id == item.Id);
+        <div class="grid-stack-item" gs-id="@item.Id" gs-x="@item.X" gs-y="@item.Y" gs-w="@item.W" gs-h="@item.H"
+             gs-min-w="@module.MinW" gs-min-h="@module.MinH" @key="item.Id">
+            <div class="grid-stack-item-content">
+                <section class="layout-module" aria-label="@module.Title">
+                    @module.Content
+                    @if (Editing)
+                    {
+                        <div class="layout-module-overlay" title="Drag to move; drag an edge or corner to resize">
+                            <span class="layout-module-name">⠿ @module.Title</span>
+                            <button type="button" class="layout-module-hide" @onclick="() => SetHiddenAsync(module.Id, true)"
+                                    @onmousedown:stopPropagation="true" aria-label="Hide @module.Title">Hide</button>
+                        </div>
+                    }
+                </section>
+            </div>
+        </div>
+    }
+</div>
+</div>
+
+@code {
+    public record ModuleDefinition(string Id, string Title, LayoutItem Default, RenderFragment Content, int MinW = 4, int MinH = 3);
+
+    // The key under AppearancePreferences.Layouts.
+    [Parameter, EditorRequired]
+    public string PageId { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ModuleDefinition> Modules { get; set; } = [];
+
+    [Parameter]
+    public bool Editing { get; set; }
+
+    private ElementReference _element;
+    private int _gridVersion;
+    private int _createdVersion = -1;
+    // The layout the grid is showing, so outside changes (an import, another
+    // page's reset) can be spotted and the grid rebuilt to match.
+    private string _shownLayout = "";
+    private bool _editingApplied;
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _grid;
+    private DotNetObjectReference<ModuleGrid>? _self;
+
+    /// <summary>
+    /// The saved layout, with defaults for modules it doesn't mention (new
+    /// modules, or nothing saved yet) and without ones that no longer exist.
+    /// </summary>
+    public List<LayoutItem> Layout
+    {
+        get
+        {
+            var saved = Appearance.Current.Layouts.GetValueOrDefault(PageId) ?? [];
+            return Modules
+                .Select(m => saved.FirstOrDefault(i => i.Id == m.Id) ?? Copy(m.Default))
+                .ToList();
+        }
+    }
+
+    public IEnumerable<(ModuleDefinition Module, bool Hidden)> ModuleVisibility =>
+        Modules.Select(m => (m, Layout.First(i => i.Id == m.Id).Hidden));
+
+    public Task SetHiddenAsync(string moduleId, bool hidden) => SaveAsync(layout =>
+    {
+        var item = layout.First(i => i.Id == moduleId);
+        item.Hidden = hidden;
+        if (!hidden)
+        {
+            // Bring it back at the bottom, where there's room.
+            item.Y = layout.Where(i => !i.Hidden && i.Id != moduleId).Select(i => i.Y + i.H).DefaultIfEmpty(0).Max();
+        }
+    });
+
+    public Task ResetAsync() => Appearance.UpdateAsync(p => p.Layouts.Remove(PageId));
+
+    protected override void OnInitialized()
+    {
+        Appearance.Changed += OnAppearanceChanged;
+    }
+
+    private void OnAppearanceChanged() => InvokeAsync(() =>
+    {
+        if (Signature(Layout) != _shownLayout && _createdVersion == _gridVersion)
+        {
+            _gridVersion++; // changed elsewhere: rebuild from the saved layout
+        }
+        StateHasChanged();
+    });
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_createdVersion != _gridVersion)
+        {
+            if (_grid is not null)
+            {
+                await _grid.InvokeVoidAsync("destroy");
+                await _grid.DisposeAsync();
+            }
+
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/layoutGrid.js");
+            _self ??= DotNetObjectReference.Create(this);
+            _grid = await _module.InvokeAsync<IJSObjectReference>("create", _element, _self, Editing);
+            _createdVersion = _gridVersion;
+            _shownLayout = Signature(Layout);
+            _editingApplied = Editing;
+        }
+        else if (_grid is not null && _editingApplied != Editing)
+        {
+            await _grid.InvokeVoidAsync("setEditing", Editing);
+            _editingApplied = Editing;
+        }
+    }
+
+    // GridStack reports positions after a drag or resize (from the 24-column grid only).
+    [JSInvokable]
+    public Task OnLayoutChanged(LayoutItem[] positions)
+    {
+        var layout = Layout.Select(Copy).ToList();
+        foreach (var position in positions)
+        {
+            if (layout.FirstOrDefault(i => i.Id == position.Id) is { } item)
+            {
+                (item.X, item.Y, item.W, item.H) = (position.X, position.Y, position.W, position.H);
+            }
+        }
+
+        // The grid already shows this; don't treat the save as an outside change.
+        _shownLayout = Signature(layout);
+        return Appearance.UpdateAsync(p => p.Layouts[PageId] = layout);
+    }
+
+    private static string Signature(IEnumerable<LayoutItem> layout) =>
+        string.Join(";", layout.Select(i => $"{i.Id}:{i.X},{i.Y},{i.W},{i.H},{i.Hidden}"));
+
+    // Showing or hiding changes which elements exist, so the grid is rebuilt
+    // (OnAppearanceChanged sees the layout differs from what's shown).
+    private Task SaveAsync(Action<List<LayoutItem>> change)
+    {
+        var layout = Layout.Select(Copy).ToList();
+        change(layout);
+        return Appearance.UpdateAsync(p => p.Layouts[PageId] = layout);
+    }
+
+    private static LayoutItem Copy(LayoutItem item) => new()
+    {
+        Id = item.Id, X = item.X, Y = item.Y, W = item.W, H = item.H, Hidden = item.Hidden
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        Appearance.Changed -= OnAppearanceChanged;
+        try
+        {
+            if (_grid is not null)
+            {
+                await _grid.InvokeVoidAsync("destroy");
+                await _grid.DisposeAsync();
+            }
+            if (_module is not null)
+            {
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page is going away; nothing to clean up.
+        }
+        _self?.Dispose();
+    }
+}

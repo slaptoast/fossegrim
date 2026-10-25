@@ -16,6 +16,7 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PlaylistShare> PlaylistShares { get; set; }
     public DbSet<PlayEvent> PlayEvents { get; set; }
     public DbSet<AppSetting> AppSettings { get; set; }
+    public DbSet<UserPreferences> UserPreferences { get; set; }
 
     public FossegrimDbContext(DbContextOptions<FossegrimDbContext> options)
         : base(options)
@@ -204,6 +205,15 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
             entity.HasOne(pe => pe.MediaItem)
                   .WithMany()
                   .HasForeignKey(pe => pe.MediaItemId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Deleted along with the user
+        modelBuilder.Entity<UserPreferences>(entity =>
+        {
+            entity.HasOne(p => p.User)
+                  .WithOne()
+                  .HasForeignKey<UserPreferences>(p => p.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
     }

@@ -2,33 +2,76 @@
 @attribute [Authorize]
 @inject FossegrimApiClient ApiClient
 
-<div class="module-grid">
-    <ArtistList Artists="_artists" />
-
-    <AlbumList Albums="_albums" AllMediaItems="_mediaItems" />
-
-    <div class="module-span">
-        @if (_isLoading)
+<div class="layout-toolbar">
+    @if (_editing)
+    {
+        <span class="layout-toolbar-hint">Drag panels to move them; drag an edge or corner to resize.</span>
+        @if (_grid is not null)
         {
-            <div class="loading"><h2>Loading media library</h2></div>
+            @foreach (var (module, hidden) in _grid.ModuleVisibility.Where(m => m.Hidden))
+            {
+                <button type="button" class="button-secondary" @onclick="() => _grid.SetHiddenAsync(module.Id, false)">+ @module.Title</button>
+            }
+            <button type="button" class="button-secondary" @onclick="() => _grid.ResetAsync()">Reset layout</button>
         }
-        else if (_errorMessage is not null)
-        {
-            <div class="error"><h3>Error</h3><p>@_errorMessage</p></div>
-        }
-        else
-        {
-            <TrackList MediaItems="_mediaItems" OnItemUpdated="HandleItemUpdated" />
-        }
-    </div>
+        <button type="button" class="button" @onclick="() => _editing = false">Done</button>
+    }
+    else
+    {
+        <button type="button" class="button-secondary layout-edit-button" @onclick="() => _editing = true">Edit layout</button>
+    }
 </div>
 
+<ModuleGrid @ref="_grid" PageId="library" Modules="_modules" Editing="_editing" />
+
 @code {
+    private ModuleGrid? _grid;
+    private bool _editing;
+    private IReadOnlyList<ModuleGrid.ModuleDefinition> _modules = [];
+
     private List<MediaItemDto> _mediaItems = [];
     private List<ArtistDto> _artists = [];
     private List<AlbumDto> _albums = [];
     private bool _isLoading = true;
     private string? _errorMessage;
+
+    protected override void OnInitialized()
+    {
+        // Set before OnInitializedAsync's first await, which renders the page:
+        // OnParametersSet would only run once the library had loaded.
+        // Default layout on the 24-column grid; rows are 40px. Up next starts hidden.
+        _modules =
+        [
+            new("artists", "Artists", new LayoutItem { Id = "artists", X = 0, Y = 0, W = 8, H = 10 }, ArtistsModule),
+            new("albums", "Albums", new LayoutItem { Id = "albums", X = 8, Y = 0, W = 16, H = 10 }, AlbumsModule),
+            new("tracks", "Tracks", new LayoutItem { Id = "tracks", X = 0, Y = 10, W = 24, H = 14 }, TracksModule, MinW: 8, MinH: 5),
+            new("upnext", "Up next", new LayoutItem { Id = "upnext", X = 16, Y = 24, W = 8, H = 10, Hidden = true }, UpNextModule),
+        ];
+    }
+
+    private RenderFragment ArtistsModule => @<ArtistList Artists="_artists" />;
+
+    private RenderFragment AlbumsModule => @<AlbumList Albums="_albums" AllMediaItems="_mediaItems" />;
+
+    private RenderFragment TracksModule => @<text>
+        @if (_isLoading)
+        {
+            <div class="track-list-component"><div class="loading"><h2>Loading media library</h2></div></div>
+        }
+        else if (_errorMessage is not null)
+        {
+            <div class="track-list-component"><div class="error"><h3>Error</h3><p>@_errorMessage</p></div></div>
+        }
+        else
+        {
+            <TrackList MediaItems="_mediaItems" OnItemUpdated="HandleItemUpdated" />
+        }
+    </text>;
+
+    private RenderFragment UpNextModule => @<div class="track-list-component up-next-module">
+        <div class="up-next-module-header"><h2>Up next</h2></div>
+        <div class="up-next-module-body"><UpNextList /></div>
+    </div>;
 
     protected override async Task OnInitializedAsync()
     {

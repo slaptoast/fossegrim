@@ -11,29 +11,7 @@
                 <span>Up next</span>
                 <button type="button" class="player-button" @onclick="() => _showQueue = false" aria-label="Close">✕</button>
             </div>
-            <ol class="up-next-list">
-                @for (var i = 0; i < PlayerState.Queue.Count; i++)
-                {
-                    var entry = PlayerState.Queue[i];
-                    var isCurrent = i == PlayerState.CurrentIndex;
-                    <li class="@(isCurrent ? "current" : i < PlayerState.CurrentIndex ? "played" : "")" @key="entry.ItemId">
-                        <button type="button" class="up-next-track" disabled="@isCurrent" @onclick="() => PlayerState.JumpToAsync(entry.ItemId)"
-                                title="@(isCurrent ? "Now playing" : "Play this")">
-                            <span class="up-next-title">@(entry.Track.Title ?? "Unknown")</span>
-                            <span class="up-next-artist">@(entry.Track.ArtistName ?? "Unknown Artist")</span>
-                        </button>
-                        @if (isCurrent)
-                        {
-                            <span class="up-next-now">Now playing</span>
-                        }
-                        else
-                        {
-                            <button type="button" class="up-next-remove" @onclick="() => PlayerState.RemoveAsync(entry.ItemId)"
-                                    aria-label="Remove from queue" title="Remove from queue">✕</button>
-                        }
-                    </li>
-                }
-            </ol>
+            <UpNextList />
         </div>
     }
 

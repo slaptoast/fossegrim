@@ -1,0 +1,359 @@
+@page "/appearance"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@inject AppearanceService Appearance
+@inject ToastService Toasts
+@inject IJSRuntime JS
+
+<div class="container medium appearance-page">
+    <div class="header small">
+        <h1>🎨 Appearance</h1>
+        <p>Themes, layout and backups. Saved to your profile, so they follow you to any browser.</p>
+    </div>
+
+    <div class="content">
+        @if (!Appearance.IsLoaded)
+        {
+            <div class="info-text appearance-notice">Your saved settings haven't loaded, so changes here won't be saved yet.</div>
+        }
+
+        <h3 class="section-header">Theme</h3>
+        <div class="theme-cards" role="radiogroup" aria-label="Theme">
+            @foreach (var (choice, label, swatches) in BuiltInCards)
+            {
+                <button type="button" role="radio" aria-checked="@IsActive(choice).ToString().ToLowerInvariant()"
+                        class="theme-card @(IsActive(choice) ? "active" : null)" @onclick="() => Appearance.SetThemeChoiceAsync(choice)">
+                    <span class="theme-swatches">@foreach (var color in swatches) { <span style="background: @color"></span> }</span>
+                    <span class="theme-card-name">@label</span>
+                </button>
+            }
+            @foreach (var theme in Appearance.Current.Theme.Custom)
+            {
+                var choice = ThemeChoices.ForCustom(theme);
+                <button type="button" role="radio" aria-checked="@IsActive(choice).ToString().ToLowerInvariant()"
+                        class="theme-card @(IsActive(choice) ? "active" : null)" @onclick="() => Appearance.SetThemeChoiceAsync(choice)">
+                    <span class="theme-swatches">@foreach (var color in Swatches(theme)) { <span style="background: @color"></span> }</span>
+                    <span class="theme-card-name">@theme.Name</span>
+                </button>
+            }
+        </div>
+
+        <div class="appearance-actions">
+            <button type="button" class="button-secondary" @onclick="NewThemeAsync">+ New theme</button>
+            <label class="button-secondary file-button">
+                Import theme…
+                <InputFile accept=".json,application/json" OnChange="ImportThemeAsync" />
+            </label>
+        </div>
+
+        @if (EditingTheme is { } editing)
+        {
+            <div class="theme-editor" aria-label="Edit theme">
+                <div class="theme-editor-header">
+                    <div class="form-group">
+                        <label for="themeName">Name</label>
+                        <input id="themeName" type="text" maxlength="@AppearancePreferencesFile.MaxNameLength" value="@editing.Name"
+                               @onchange="e => EditThemeAsync(t => t.Name = e.Value?.ToString() ?? t.Name)" />
+                    </div>
+                    <div class="form-group">
+                        <label for="themeBase">Starts from</label>
+                        <select id="themeBase" value="@editing.Base" @onchange="e => EditThemeAsync(t => t.Base = e.Value?.ToString() ?? t.Base)">
+                            <option value="@ThemeChoices.Light">Light</option>
+                            <option value="@ThemeChoices.Dark">Dark</option>
+                        </select>
+                    </div>
+                </div>
+
+                @foreach (var group in ThemeTokens.All.GroupBy(t => t.Group))
+                {
+                    <h4 class="theme-editor-group">@group.Key</h4>
+                    @foreach (var token in group)
+                    {
+                        var overridden = editing.Colors.TryGetValue(token.Name, out var value);
+                        <div class="theme-color-row">
+                            <input type="color" id="color@(token.Name)" value="@(overridden ? value : token.DefaultFor(editing.Base))"
+                                   @oninput="e => SetColorAsync(token, e.Value?.ToString())" />
+                            <label for="color@(token.Name)">@token.Label</label>
+                            @if (overridden)
+                            {
+                                <button type="button" class="link-button" @onclick="() => ResetColorAsync(token)">Reset</button>
+                            }
+                        </div>
+                    }
+                }
+
+                <div class="appearance-actions">
+                    <button type="button" class="button-secondary" @onclick="DuplicateThemeAsync">Duplicate</button>
+                    <button type="button" class="button-secondary" @onclick="() => ExportThemeAsync(editing)">Export theme</button>
+                    <button type="button" class="button-danger" @onclick="DeleteThemeAsync">Delete theme</button>
+                </div>
+            </div>
+        }
+        else if (Appearance.Current.Theme.Custom.Count > 0)
+        {
+            <p class="appearance-hint">Pick one of your themes above to edit it.</p>
+        }
+
+        <h3 class="section-header">Layout</h3>
+        <div class="form-group">
+            <label>Player bar</label>
+            <div class="theme-switch appearance-switch" role="radiogroup" aria-label="Player bar position">
+                @foreach (var (position, label) in new[] { ("bottom", "Bottom"), ("top", "Top") })
+                {
+                    var active = Appearance.Current.Player.Position == position;
+                    <button type="button" role="radio" aria-checked="@active.ToString().ToLowerInvariant()" class="@(active ? "active" : null)"
+                            @onclick="() => Appearance.UpdateAsync(p => p.Player.Position = position)">@label</button>
+                }
+            </div>
+        </div>
+        <p class="appearance-hint">
+            To move and resize the Library's panels, use <strong>Edit layout</strong> on the Library page.
+            @if (Appearance.Current.Layouts.Count > 0)
+            {
+                <button type="button" class="link-button" @onclick="ResetLayoutsAsync">Reset all page layouts</button>
+            }
+        </p>
+
+        <h3 class="section-header">Backup</h3>
+        <p class="appearance-hint">Export saves your themes and layouts to a file; importing one replaces your current settings.</p>
+        <div class="appearance-actions">
+            <button type="button" class="button-secondary" @onclick="ExportAllAsync">Export settings</button>
+            <label class="button-secondary file-button">
+                Import settings…
+                <InputFile accept=".json,application/json" OnChange="ReadSettingsImportAsync" />
+            </label>
+        </div>
+
+        @if (_pendingImport is { } pending)
+        {
+            <div class="import-summary">
+                <p>
+                    This file has <strong>@pending.Theme.Custom.Count custom theme@(pending.Theme.Custom.Count == 1 ? "" : "s")</strong>,
+                    layouts for <strong>@pending.Layouts.Count page@(pending.Layouts.Count == 1 ? "" : "s")</strong>,
+                    uses the <strong>@ChoiceLabel(pending)</strong> theme, and puts the player bar at the <strong>@pending.Player.Position</strong>.
+                    Importing replaces all your current appearance settings.
+                </p>
+                <div class="appearance-actions">
+                    <button type="button" class="button" @onclick="ApplyImportAsync">Replace my settings</button>
+                    <button type="button" class="button-secondary" @onclick="() => _pendingImport = null">Cancel</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private const long MaxImportBytes = 256 * 1024;
+
+    // The colors shown on a theme's card.
+    private static readonly string[] SwatchTokens = ["--canvas", "--surface", "--brand-violet", "--chrome-bg"];
+
+    private static readonly (string Choice, string Label, string[] Swatches)[] BuiltInCards =
+    [
+        (ThemeChoices.System, "System", [Default("--canvas", "light"), Default("--canvas", "dark"), Default("--brand-violet", "light"), Default("--chrome-bg", "light")]),
+        (ThemeChoices.Light, "Light", SwatchTokens.Select(t => Default(t, "light")).ToArray()),
+        (ThemeChoices.Dark, "Dark", SwatchTokens.Select(t => Default(t, "dark")).ToArray()),
+    ];
+
+    private AppearancePreferences? _pendingImport;
+    private IJSObjectReference? _files;
+
+    // The custom theme being edited is whichever one is active.
+    private CustomTheme? EditingTheme => Appearance.ActiveCustomTheme;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Appearance.Changed += OnChanged;
+        await Appearance.EnsureLoadedAsync();
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private bool IsActive(string choice) => Appearance.Current.Theme.Choice == choice;
+
+    private static string Default(string token, string baseTheme) =>
+        ThemeTokens.All.First(t => t.Name == token).DefaultFor(baseTheme);
+
+    private static IEnumerable<string> Swatches(CustomTheme theme) =>
+        SwatchTokens.Select(t => theme.Colors.TryGetValue(t, out var c) ? c : Default(t, theme.Base));
+
+    private static string ChoiceLabel(AppearancePreferences preferences) =>
+        preferences.Theme.Custom.FirstOrDefault(t => ThemeChoices.ForCustom(t) == preferences.Theme.Choice)?.Name is { } name
+            ? $"“{name}”"
+            : preferences.Theme.Choice switch { ThemeChoices.Light => "Light", ThemeChoices.Dark => "Dark", _ => "System" };
+
+    private async Task NewThemeAsync()
+    {
+        if (Appearance.Current.Theme.Custom.Count >= AppearancePreferencesFile.MaxCustomThemes)
+        {
+            Toasts.Show($"You can have up to {AppearancePreferencesFile.MaxCustomThemes} custom themes.");
+            return;
+        }
+
+        // Start from whichever built-in look is showing, so the first edit isn't a jump.
+        var startFrom = EditingTheme?.Base ?? (await IsDarkShowingAsync() ? ThemeChoices.Dark : ThemeChoices.Light);
+        var theme = new CustomTheme { Name = $"My theme {Appearance.Current.Theme.Custom.Count + 1}", Base = startFrom };
+        await AddAndActivateAsync(theme);
+    }
+
+    private async Task DuplicateThemeAsync()
+    {
+        if (EditingTheme is not { } source)
+        {
+            return;
+        }
+
+        var copy = new CustomTheme { Name = $"{source.Name} copy", Base = source.Base, Colors = new(source.Colors) };
+        await AddAndActivateAsync(copy);
+    }
+
+    private Task AddAndActivateAsync(CustomTheme theme) => Appearance.UpdateAsync(p =>
+    {
+        p.Theme.Custom.Add(theme);
+        p.Theme.Choice = ThemeChoices.ForCustom(theme);
+    });
+
+    private Task EditThemeAsync(Action<CustomTheme> edit)
+    {
+        var id = EditingTheme?.Id;
+        return id is null
+            ? Task.CompletedTask
+            : Appearance.UpdateAsync(p =>
+            {
+                if (p.Theme.Custom.FirstOrDefault(t => t.Id == id) is { } theme)
+                {
+                    edit(theme);
+                }
+            });
+    }
+
+    private Task SetColorAsync(ThemeToken token, string? color) =>
+        string.IsNullOrEmpty(color) ? Task.CompletedTask : EditThemeAsync(t => t.Colors[token.Name] = color);
+
+    private Task ResetColorAsync(ThemeToken token) => EditThemeAsync(t => t.Colors.Remove(token.Name));
+
+    private async Task DeleteThemeAsync()
+    {
+        if (EditingTheme is not { } theme)
+        {
+            return;
+        }
+
+        await Appearance.UpdateAsync(p =>
+        {
+            p.Theme.Custom.RemoveAll(t => t.Id == theme.Id);
+            p.Theme.Choice = theme.Base;
+        });
+        Toasts.Show($"Deleted “{theme.Name}”");
+    }
+
+    private Task ResetLayoutsAsync() => Appearance.UpdateAsync(p => p.Layouts.Clear());
+
+    private Task ExportThemeAsync(CustomTheme theme) =>
+        DownloadAsync($"{FileSafe(theme.Name)}.fossegrim-theme.json", AppearancePreferencesFile.SerializeTheme(theme));
+
+    private Task ExportAllAsync() =>
+        DownloadAsync($"fossegrim-appearance-{DateTime.Now:yyyy-MM-dd}.json", Appearance.Export());
+
+    private async Task ImportThemeAsync(InputFileChangeEventArgs e)
+    {
+        var text = await ReadFileAsync(e.File);
+        if (text is null)
+        {
+            return;
+        }
+
+        if (AppearancePreferencesFile.ParseTheme(text) is not { } theme)
+        {
+            Toasts.Show("That file isn't a Fossegrim theme. (Full settings files go under Backup → Import settings.)");
+            return;
+        }
+
+        if (Appearance.Current.Theme.Custom.Count >= AppearancePreferencesFile.MaxCustomThemes)
+        {
+            Toasts.Show($"You can have up to {AppearancePreferencesFile.MaxCustomThemes} custom themes.");
+            return;
+        }
+
+        await AddAndActivateAsync(theme);
+        Toasts.Show($"Imported “{theme.Name}”");
+    }
+
+    private async Task ReadSettingsImportAsync(InputFileChangeEventArgs e)
+    {
+        var text = await ReadFileAsync(e.File);
+        if (text is null)
+        {
+            return;
+        }
+
+        _pendingImport = AppearancePreferencesFile.Parse(text);
+        if (_pendingImport is null)
+        {
+            Toasts.Show("That file isn't a Fossegrim settings export. (Single themes go under Theme → Import theme.)");
+        }
+    }
+
+    private async Task ApplyImportAsync()
+    {
+        if (_pendingImport is not { } import)
+        {
+            return;
+        }
+
+        _pendingImport = null;
+        await Appearance.ReplaceAsync(import);
+        Toasts.Show("Imported your settings");
+    }
+
+    private async Task<string?> ReadFileAsync(IBrowserFile file)
+    {
+        if (file.Size > MaxImportBytes)
+        {
+            Toasts.Show("That file is too big to be a Fossegrim export.");
+            return null;
+        }
+
+        try
+        {
+            using var reader = new StreamReader(file.OpenReadStream(MaxImportBytes));
+            return await reader.ReadToEndAsync();
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show($"Couldn't read the file: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task DownloadAsync(string fileName, string text)
+    {
+        _files ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/files.js");
+        await _files.InvokeVoidAsync("downloadText", fileName, text, "application/json");
+    }
+
+    private async Task<bool> IsDarkShowingAsync() =>
+        await JS.InvokeAsync<string>("document.documentElement.getAttribute", "data-theme") == ThemeChoices.Dark;
+
+    private static string FileSafe(string name)
+    {
+        var safe = new string(name.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '-').ToArray()).Trim('-');
+        return safe.Length == 0 ? "theme" : safe;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Appearance.Changed -= OnChanged;
+        if (_files is not null)
+        {
+            try
+            {
+                await _files.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The page is going away; nothing to clean up.
+            }
+        }
+    }
+}

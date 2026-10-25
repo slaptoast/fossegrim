@@ -195,6 +195,23 @@ public class FossegrimApiClient
             ?? throw new ApiException("Profile update succeeded but returned no result.");
     }
 
+    // The user's appearance settings document (see AppearancePreferences); "{}" if none saved yet.
+    public async Task<string> GetPreferencesJsonAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/me/preferences");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    public async Task SavePreferencesJsonAsync(string json)
+    {
+        var response = await _httpClient.PutAsync("/api/me/preferences", new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadProblemDetailAsync(response) ?? $"Saving failed ({(int)response.StatusCode}).");
+        }
+    }
+
     public async Task<LastFmStatusDto> GetLastFmStatusAsync()
     {
         var response = await _httpClient.GetAsync("/api/lastfm");

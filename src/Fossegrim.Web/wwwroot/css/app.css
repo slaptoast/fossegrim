@@ -215,6 +215,9 @@ body {
 .user-menu-dropdown .theme-switch button { flex: 1; width: auto; text-align: center; padding: var(--space-2) var(--space-4); border-radius: 0; font-size: 0.75rem; }
 .user-menu-dropdown .theme-switch button + button { border-left: 1px solid var(--border-strong); }
 .user-menu-dropdown .theme-switch button.active { background: var(--selection-bg); color: var(--selection-fg); font-weight: 600; }
+.user-menu-theme-custom { display: block; margin-top: var(--space-4); font-size: 0.75rem; color: var(--text-muted); }
+.user-menu-dropdown .user-menu-theme-more { padding: var(--space-4) 0 0; font-size: 0.75rem; color: var(--accent-fg); }
+.user-menu-dropdown .user-menu-theme-more:hover { background: none; color: var(--accent-fg-hover); text-decoration: underline; }
 .user-menu-logout { margin-top: var(--space-4); border-top: 1px solid var(--border) !important; border-radius: 0 0 var(--radius-md) var(--radius-md) !important; color: var(--danger-fg) !important; }
 
 .player-bar {
@@ -267,6 +270,11 @@ body {
     z-index: 600;
     overflow: hidden;
 }
+/* Player bar at the top (Appearance setting): it sticks under the top bar, and the
+   Up next panel and toasts drop down from it instead of rising above it. */
+.player-top .player-bar { top: 0; bottom: auto; }
+.player-top .up-next-panel { top: 104px; bottom: auto; }
+.player-top .toasts { top: 112px; bottom: auto; }
 .up-next-header { display: flex; justify-content: space-between; align-items: center; padding: var(--space-6) var(--space-12); background: var(--chrome-bg); color: var(--chrome-fg); font-weight: 600; }
 .up-next-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
 .up-next-list li { display: flex; align-items: center; gap: var(--space-8); padding-right: var(--space-8); border-bottom: 1px solid var(--border); }
@@ -389,6 +397,35 @@ body {
 .share-results-action { margin-left: auto; color: var(--selection-fg); font-size: 0.75rem; font-weight: 600; }
 .playlist-picker-new { margin-top: var(--space-8); }
 .playlist-picker-new input { flex: 1; }
+
+/* ---- Appearance page ---- */
+.appearance-notice { padding: var(--space-8) var(--space-12); border-radius: var(--radius-md); margin-bottom: var(--space-12); }
+.appearance-actions { display: flex; flex-wrap: wrap; gap: var(--space-6); margin-top: var(--space-8); }
+.appearance-hint { margin-top: var(--space-8); font-size: 0.8125rem; color: var(--text-muted); }
+.appearance-switch { display: inline-flex; }
+.appearance-switch button { background: var(--surface); color: var(--text-secondary); border: none; padding: var(--space-4) var(--space-12); font: inherit; cursor: pointer; }
+.appearance-switch button + button { border-left: 1px solid var(--border-strong); }
+.appearance-switch button.active { background: var(--selection-bg); color: var(--selection-fg); font-weight: 600; }
+.theme-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: var(--space-8); }
+.theme-card { display: flex; flex-direction: column; gap: var(--space-6); padding: var(--space-8); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); font: inherit; color: var(--ink); cursor: pointer; text-align: left; }
+.theme-card:hover { background: var(--surface-muted); }
+.theme-card.active { border-color: var(--brand-indigo); box-shadow: var(--shadow-focus); }
+.theme-card-name { font-size: 0.8125rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.theme-swatches { display: flex; height: 28px; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border); }
+.theme-swatches span { flex: 1; }
+.theme-editor { margin-top: var(--space-12); padding: var(--space-12); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-muted); }
+.theme-editor-header { display: grid; grid-template-columns: 1fr auto; gap: var(--space-12); }
+.theme-editor-group { margin: var(--space-12) 0 var(--space-4); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.theme-color-row { display: flex; align-items: center; gap: var(--space-8); min-height: 32px; }
+.theme-color-row input[type="color"] { width: 40px; height: 28px; padding: 0 2px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); cursor: pointer; }
+.theme-color-row label { flex: 1; font-size: 0.8125rem; color: var(--text-secondary); }
+.link-button { background: none; border: none; padding: 0; font: inherit; font-size: 0.75rem; color: var(--accent-fg); cursor: pointer; }
+.link-button:hover { color: var(--accent-fg-hover); text-decoration: underline; }
+.file-button { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+.file-button input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.file-button:focus-within { box-shadow: var(--shadow-focus); }
+.import-summary { margin-top: var(--space-12); padding: var(--space-12); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--info-bg); color: var(--info-fg); }
+.import-summary p { color: inherit; }
 
 /* ---- Buttons: 28px, solid, no lift ---- */
 .button,
@@ -533,6 +570,46 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
     font-size: 0.8125rem;
     border-bottom: 1px solid var(--border);
 }
+
+/* ---- Movable, resizable page modules (ModuleGrid + GridStack) ---- */
+.layout-toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-6); }
+.layout-toolbar-hint { margin-right: auto; font-size: 0.8125rem; color: var(--text-muted); }
+@media (max-width: 720px) {
+    /* The grid is a single column here, and layouts are only edited at full width. */
+    .layout-toolbar { display: none; }
+}
+.module-grid-host { margin: 0 calc(-1 * var(--space-4)); } /* cancels the grid's outer margin so panels line up with the page */
+.module-grid-host .grid-stack > .grid-stack-item > .grid-stack-item-content { overflow: hidden; }
+.layout-module { position: relative; height: 100%; }
+/* Each module fills its panel; its list scrolls inside instead of the page growing. */
+.layout-module > .artist-list-component,
+.layout-module > .album-list-component,
+.layout-module > .track-list-component { height: 100%; display: flex; flex-direction: column; }
+.layout-module .artist-list-container,
+.layout-module .album-list-container { max-height: none; flex: 1; min-height: 0; }
+.layout-module .track-list-component > .content { flex: 1; min-height: 0; overflow-y: auto; }
+.layout-module-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-8);
+    padding: var(--space-8);
+    background: color-mix(in srgb, var(--selection-bg) 70%, transparent);
+    border: 2px dashed var(--brand-indigo);
+    border-radius: var(--radius-lg);
+    cursor: move;
+}
+.layout-module-name { padding: var(--space-4) var(--space-8); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font-size: 0.8125rem; font-weight: 600; box-shadow: var(--shadow-menu); }
+.layout-module-hide { padding: var(--space-4) var(--space-8); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--text-secondary); font: inherit; font-size: 0.75rem; cursor: pointer; }
+.layout-module-hide:hover { color: var(--danger-fg); }
+.grid-stack-placeholder > .placeholder-content { border: 2px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-muted); }
+.up-next-module-header { min-height: 36px; padding: var(--space-4) var(--space-12); display: flex; align-items: center; background: var(--surface-muted); border-bottom: 1px solid var(--border); }
+.up-next-module-header h2 { font-size: 0.875rem; font-weight: 600; color: var(--ink); margin: 0; }
+.up-next-module-body { flex: 1; min-height: 0; overflow-y: auto; }
+.up-next-empty { padding: var(--space-12); font-size: 0.8125rem; color: var(--text-muted); }
 
 /* ---- Artist and album lists: 40px rows ---- */
 .artist-list-container,

@@ -164,6 +164,7 @@ app.MapCoverEndpoints();
 app.MapVersionEndpoints();
 app.MapLastFmEndpoints();
 app.MapUserEndpoints();
+app.MapPreferenceEndpoints();
 
 app.MapFallbackToFile("index.html");
 

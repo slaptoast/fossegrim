@@ -475,6 +475,23 @@ namespace fossegrim.lib.Migrations
                     b.ToTable("PlaylistShares");
                 });
 
+            modelBuilder.Entity("Fossegrim.Lib.Models.UserPreferences", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Json")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("UserPreferences");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")
@@ -729,6 +746,17 @@ namespace fossegrim.lib.Migrations
                         .IsRequired();
 
                     b.Navigation("Playlist");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Fossegrim.Lib.Models.UserPreferences", b =>
+                {
+                    b.HasOne("Fossegrim.Lib.Models.ApplicationUser", "User")
+                        .WithOne()
+                        .HasForeignKey("Fossegrim.Lib.Models.UserPreferences", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("User");
                 });

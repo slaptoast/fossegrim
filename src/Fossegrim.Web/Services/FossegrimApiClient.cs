@@ -375,6 +375,40 @@ public class FossegrimApiClient
             ?? throw new ApiException("Move track succeeded but returned no result.");
     }
 
+    public async Task<PlaylistShareDto> SharePlaylistAsync(Guid playlistId, string userId, string shareType)
+    {
+        var response = await _httpClient.PostAsJsonAsync($"/api/playlists/{playlistId}/shares", new SharePlaylistRequest(userId, shareType));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlaylistShareDto>()
+            ?? throw new ApiException("Share playlist succeeded but returned no result.");
+    }
+
+    // Removes the caller's own access to a playlist shared with them.
+    public async Task LeavePlaylistAsync(Guid playlistId)
+    {
+        var response = await _httpClient.PostAsync($"/api/playlists/{playlistId}/leave", null);
+        if (response.StatusCode != HttpStatusCode.NoContent && response.StatusCode != HttpStatusCode.NotFound)
+        {
+            response.EnsureSuccessStatusCode();
+        }
+    }
+
+    public async Task<IReadOnlyList<UserSummaryDto>> SearchUsersAsync(string query)
+    {
+        var response = await _httpClient.GetAsync($"/api/users/search?q={Uri.EscapeDataString(query)}");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<UserSummaryDto>>() ?? [];
+    }
+
+    public async Task RevokePlaylistShareAsync(Guid playlistId, string userId)
+    {
+        var response = await _httpClient.DeleteAsync($"/api/playlists/{playlistId}/shares/{Uri.EscapeDataString(userId)}");
+        if (response.StatusCode != HttpStatusCode.NoContent && response.StatusCode != HttpStatusCode.NotFound)
+        {
+            response.EnsureSuccessStatusCode();
+        }
+    }
+
     private async Task<AuthResult> ReadAuthResultAsync(HttpResponseMessage response, string unauthorizedMessage)
     {
         if (response.StatusCode == HttpStatusCode.OK)

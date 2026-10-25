@@ -291,17 +291,17 @@ public class FossegrimApiClient
             ?? throw new ApiException("Get queue succeeded but returned no result.");
     }
 
-    public async Task<PlaylistDetailDto> SetQueueAsync(IEnumerable<Guid> mediaItemIds, Guid? currentMediaItemId)
+    public async Task<PlaylistDetailDto> SetQueueAsync(IEnumerable<Guid> mediaItemIds, int? currentIndex)
     {
-        var response = await _httpClient.PutAsJsonAsync("/api/playlists/queue", new SetQueueRequest(mediaItemIds, currentMediaItemId));
+        var response = await _httpClient.PutAsJsonAsync("/api/playlists/queue", new SetQueueRequest(mediaItemIds, currentIndex));
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<PlaylistDetailDto>()
             ?? throw new ApiException("Set queue succeeded but returned no result.");
     }
 
-    public async Task SetQueueCurrentTrackAsync(Guid? mediaItemId)
+    public async Task SetQueueCurrentItemAsync(Guid? itemId)
     {
-        var response = await _httpClient.PatchAsJsonAsync("/api/playlists/queue/current", new SetQueueCurrentTrackRequest(mediaItemId));
+        var response = await _httpClient.PatchAsJsonAsync("/api/playlists/queue/current", new SetQueueCurrentItemRequest(itemId));
         response.EnsureSuccessStatusCode();
     }
 

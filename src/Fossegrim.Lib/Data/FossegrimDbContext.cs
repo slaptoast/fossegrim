@@ -135,9 +135,9 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
                   .HasForeignKey(p => p.OwnerId)
                   .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasOne(p => p.CurrentMediaItem)
+            entity.HasOne(p => p.CurrentItem)
                   .WithMany()
-                  .HasForeignKey(p => p.CurrentMediaItemId)
+                  .HasForeignKey(p => p.CurrentItemId)
                   .OnDelete(DeleteBehavior.SetNull);
         });
 

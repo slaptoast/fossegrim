@@ -378,7 +378,7 @@ namespace fossegrim.lib.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("CurrentMediaItemId")
+                    b.Property<Guid?>("CurrentItemId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("DateAdded")
@@ -404,7 +404,7 @@ namespace fossegrim.lib.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CurrentMediaItemId");
+                    b.HasIndex("CurrentItemId");
 
                     b.HasIndex("Name");
 
@@ -679,9 +679,9 @@ namespace fossegrim.lib.Migrations
 
             modelBuilder.Entity("Fossegrim.Lib.Models.Playlist", b =>
                 {
-                    b.HasOne("Fossegrim.Lib.Models.MediaItem", "CurrentMediaItem")
+                    b.HasOne("Fossegrim.Lib.Models.PlaylistItem", "CurrentItem")
                         .WithMany()
-                        .HasForeignKey("CurrentMediaItemId")
+                        .HasForeignKey("CurrentItemId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Fossegrim.Lib.Models.ApplicationUser", "Owner")
@@ -690,7 +690,7 @@ namespace fossegrim.lib.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("CurrentMediaItem");
+                    b.Navigation("CurrentItem");
 
                     b.Navigation("Owner");
                 });

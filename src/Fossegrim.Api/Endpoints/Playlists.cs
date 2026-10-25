@@ -32,6 +32,8 @@ public static class Playlists
                 .Include(p => p.Shares)
                 .Include(p => p.Items)
                 .Where(p => p.OwnerId == user.Id || p.Shares.Any(s => s.UserId == user.Id))
+                // The queue has its own endpoints and lives in the player's Up next panel.
+                .Where(p => p.Type != PlaylistType.Queue)
                 .ToListAsync();
 
             return Results.Ok(playlists.Select(p => ToPlaylistDto(p, user.Id)));
@@ -84,30 +86,30 @@ public static class Playlists
                 }
             }
 
-            if (request.CurrentMediaItemId is not null && !mediaItemIds.Contains(request.CurrentMediaItemId.Value))
+            if (request.CurrentIndex is { } currentIndex && (currentIndex < 0 || currentIndex >= mediaItemIds.Count))
             {
-                return Results.BadRequest(new ApiErrorResponse("CurrentMediaItemId must be one of the provided MediaItemIds."));
+                return Results.BadRequest(new ApiErrorResponse("CurrentIndex must be a position in MediaItemIds."));
             }
 
             var queue = await GetOrCreateQueueAsync(db, user.Id);
 
+            // Clear the pointer first: it references one of the entries being removed.
+            queue.CurrentItemId = null;
+            await db.SaveChangesAsync();
             db.PlaylistItems.RemoveRange(queue.Items);
 
-            var position = 0.0;
-            foreach (var mediaItemId in mediaItemIds)
+            var newItems = mediaItemIds.Select((mediaItemId, index) => new PlaylistItem
             {
-                db.PlaylistItems.Add(new PlaylistItem
-                {
-                    Id = Guid.NewGuid(),
-                    PlaylistId = queue.Id,
-                    MediaItemId = mediaItemId,
-                    Position = position,
-                    DateAdded = DateTime.UtcNow
-                });
-                position += PositionGap;
-            }
+                Id = Guid.NewGuid(),
+                PlaylistId = queue.Id,
+                MediaItemId = mediaItemId,
+                Position = index * PositionGap,
+                DateAdded = DateTime.UtcNow
+            }).ToList();
+            db.PlaylistItems.AddRange(newItems);
+            await db.SaveChangesAsync();
 
-            queue.CurrentMediaItemId = request.CurrentMediaItemId;
+            queue.CurrentItemId = request.CurrentIndex is { } index ? newItems[index].Id : null;
             queue.LastModified = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
@@ -118,7 +120,7 @@ public static class Playlists
         .WithOpenApi();
 
         playlistGroup.MapPatch("/queue/current", async (
-            SetQueueCurrentTrackRequest request,
+            SetQueueCurrentItemRequest request,
             ClaimsPrincipal principal,
             UserManager<ApplicationUser> userManager,
             FossegrimDbContext db) =>
@@ -131,18 +133,18 @@ public static class Playlists
 
             var queue = await GetOrCreateQueueAsync(db, user.Id);
 
-            if (request.MediaItemId is not null && !queue.Items.Any(i => i.MediaItemId == request.MediaItemId))
+            if (request.ItemId is not null && !queue.Items.Any(i => i.Id == request.ItemId))
             {
-                return Results.BadRequest(new ApiErrorResponse("MediaItemId must already be in the queue."));
+                return Results.BadRequest(new ApiErrorResponse("ItemId must be an entry in the queue."));
             }
 
-            queue.CurrentMediaItemId = request.MediaItemId;
+            queue.CurrentItemId = request.ItemId;
             queue.LastModified = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
             return Results.NoContent();
         })
-        .WithName("SetQueueCurrentTrack")
+        .WithName("SetQueueCurrentItem")
         .WithOpenApi();
 
         playlistGroup.MapGet("/{id:guid}", async (
@@ -701,7 +703,7 @@ public static class Playlists
         GetAccess(p, currentUserId).ToString(),
         p.DateAdded,
         p.LastModified,
-        p.CurrentMediaItemId,
+        p.CurrentItemId,
         p.Items
             .OrderBy(i => i.Position)
             .Select(i => new PlaylistItemDto(

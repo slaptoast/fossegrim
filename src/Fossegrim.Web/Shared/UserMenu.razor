@@ -1,0 +1,94 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject JwtAuthenticationStateProvider AuthStateProvider
+@inject TokenStore TokenStore
+@inject AppearanceService Appearance
+
+<div class="user-menu">
+    <button type="button" class="user-menu-toggle" @onclick="ToggleOpen">@_displayName ▾</button>
+
+    @if (_isOpen)
+    {
+        <div class="user-menu-dropdown">
+            <a href="/profile" @onclick="Close">Profile</a>
+            <a href="/change-password" @onclick="Close">Change Password</a>
+            @if (_isAdmin)
+            {
+                <a href="/settings" @onclick="Close">Settings</a>
+                <a href="/admin" @onclick="Close">Admin Panel</a>
+            }
+            <div class="user-menu-theme" role="group" aria-label="Theme">
+                <span class="user-menu-theme-label">Theme</span>
+                <div class="theme-switch">
+                    @foreach (var (choice, label) in BuiltInThemes)
+                    {
+                        var active = Appearance.Current.Theme.Choice == choice;
+                        <button type="button"
+                                class="@(active ? "active" : null)"
+                                aria-pressed="@(active ? "true" : "false")"
+                                @onclick="() => Appearance.SetThemeChoiceAsync(choice)">@label</button>
+                    }
+                </div>
+                @if (Appearance.ActiveCustomTheme is { } custom)
+                {
+                    <span class="user-menu-theme-custom">Using “@custom.Name”</span>
+                }
+                <a href="/appearance" class="user-menu-theme-more" @onclick="Close">Appearance and layout…</a>
+            </div>
+            <button type="button" class="user-menu-logout" @onclick="LogoutAsync">Log out</button>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _isOpen;
+    private bool _isAdmin;
+    private string _displayName = "Account";
+    private static readonly (string Choice, string Label)[] BuiltInThemes =
+    [
+        (ThemeChoices.System, "System"),
+        (ThemeChoices.Light, "Light"),
+        (ThemeChoices.Dark, "Dark"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
+        Appearance.Changed += OnAppearanceChanged;
+        await LoadStateAsync();
+    }
+
+    private void OnAppearanceChanged() => InvokeAsync(StateHasChanged);
+
+    private async void OnAuthStateChanged(Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState> task)
+    {
+        await LoadStateAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadStateAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = state.User;
+        _isAdmin = user.IsInRole("Admin");
+        _displayName = user.Identity?.Name ?? "Account";
+    }
+
+    private void ToggleOpen() => _isOpen = !_isOpen;
+
+    private void Close() => _isOpen = false;
+
+    private async Task LogoutAsync()
+    {
+        _isOpen = false;
+        await TokenStore.ClearTokenAsync();
+        AuthStateProvider.MarkUserAsLoggedOut();
+        Navigation.NavigateTo("/login");
+    }
+
+    public void Dispose()
+    {
+        AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
+        Appearance.Changed -= OnAppearanceChanged;
+    }
+}

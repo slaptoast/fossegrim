@@ -1,0 +1,144 @@
+@implements IAsyncDisposable
+@inject PlayerState PlayerState
+@inject IJSRuntime JS
+
+@if (PlayerState.CurrentTrack is not null)
+{
+    @if (_showQueue)
+    {
+        <div class="up-next-panel" role="dialog" aria-label="Up next">
+            <div class="up-next-header">
+                <span>Up next</span>
+                <button type="button" class="player-button" @onclick="() => _showQueue = false" aria-label="Close">✕</button>
+            </div>
+            <UpNextList />
+        </div>
+    }
+
+    <div class="player-bar">
+        <div class="player-track-info">
+            <span class="player-title">@(PlayerState.CurrentTrack.Title ?? "Unknown")</span>
+            <span class="player-artist">@(PlayerState.CurrentTrack.ArtistName ?? "Unknown Artist")</span>
+        </div>
+
+        <div class="player-controls">
+            <button type="button" class="player-button" @onclick="OnPreviousAsync" aria-label="Previous" title="Previous (restarts the track if it's past 3 seconds)">⏮</button>
+            <button type="button" class="player-button" disabled="@(!PlayerState.HasNext)" @onclick="PlayerState.PlayNextAsync" aria-label="Next" title="Next">⏭</button>
+        </div>
+
+        @if (PlayerState.ErrorMessage is not null)
+        {
+            <span class="player-error">@PlayerState.ErrorMessage</span>
+        }
+        else if (PlayerState.StreamUrl is not null)
+        {
+            @* crossorigin lets the visualizer read samples when the API is on another origin (local dev);
+               without it Web Audio would see a tainted source and output silence. *@
+            <audio @ref="_audio" controls autoplay="@PlayerState.AutoPlay" preload="metadata" crossorigin="anonymous" src="@PlayerState.StreamUrl" class="player-audio" @onplay="OnPlay" @onended="OnTrackEnded">
+                Your browser does not support the audio element.
+            </audio>
+        }
+
+        <button type="button" class="player-button up-next-toggle @(_showQueue ? "active" : "")" @onclick="() => _showQueue = !_showQueue"
+                aria-expanded="@_showQueue" title="Up next">☰ @UpNextCount</button>
+    </div>
+}
+
+@code {
+    // Past this point, Previous restarts the track instead of going back one.
+    private const double RestartThresholdSeconds = 3;
+
+    private ElementReference _audio;
+    private bool _showQueue;
+    private IJSObjectReference? _playerModule;
+    // The <audio> element is recreated when the track changes, so the
+    // listen tracker and visualizer are given each new one (identified by its Id).
+    private string? _trackedAudioId;
+    private IJSObjectReference? _listenTracker;
+    private IJSObjectReference? _visualizer;
+    private DotNetObjectReference<PlayerBar>? _selfReference;
+
+    protected override void OnInitialized()
+    {
+        PlayerState.Changed += OnChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (PlayerState.StreamUrl is null || _audio.Id is null || _audio.Id == _trackedAudioId)
+        {
+            return;
+        }
+
+        _trackedAudioId = _audio.Id;
+        _listenTracker ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/listenTracker.js");
+        _selfReference ??= DotNetObjectReference.Create(this);
+        await _listenTracker.InvokeVoidAsync("attach", _audio, _selfReference);
+
+        try
+        {
+            // The visualizer module (Library page) draws from whichever <audio> is registered.
+            _visualizer ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/visualizer.js");
+            await _visualizer.InvokeVoidAsync("registerAudio", _audio);
+        }
+        catch (JSException)
+        {
+            // The visualizer is decoration; never let it break playback.
+        }
+    }
+
+    // Called by listenTracker.js once enough of the current track has been heard.
+    [JSInvokable]
+    public Task OnListened(string startedAt, double listenedSeconds) =>
+        PlayerState.RecordListenAsync(DateTimeOffset.Parse(startedAt, System.Globalization.CultureInfo.InvariantCulture), TimeSpan.FromSeconds(listenedSeconds));
+
+    private void OnChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private Task OnPlay() => PlayerState.ReportNowPlayingAsync();
+
+    // Tracks after the one playing.
+    private int UpNextCount => Math.Max(0, PlayerState.Queue.Count - PlayerState.CurrentIndex - 1);
+
+    private async Task OnPreviousAsync()
+    {
+        if (PlayerState.StreamUrl is not null && _audio.Id is not null)
+        {
+            _playerModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/player.js");
+            var position = await _playerModule.InvokeAsync<double>("getCurrentTime", _audio);
+            if (position > RestartThresholdSeconds || !PlayerState.HasPrevious)
+            {
+                await _playerModule.InvokeVoidAsync("restart", _audio);
+                return;
+            }
+        }
+
+        await PlayerState.PlayPreviousAsync();
+    }
+
+    private Task OnTrackEnded() => PlayerState.PlayNextAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        PlayerState.Changed -= OnChanged;
+        _selfReference?.Dispose();
+        foreach (var module in new[] { _listenTracker, _playerModule, _visualizer })
+        {
+            if (module is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                await module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The page is going away; nothing to clean up.
+            }
+        }
+    }
+}

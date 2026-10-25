@@ -1,0 +1,187 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JSRuntime
+@inject PlayerState PlayerState
+@inject AppearanceService Appearance
+
+@* A Library module (see MediaLibrary.razor). Nothing loads, and the player's
+   audio isn't touched, until the viewer has accepted the flashing-lights
+   notice and a track plays; a hidden module isn't rendered at all. *@
+<div class="visualizer-module" @ref="_host">
+    <div class="visualizer-header">
+        <h2>Visualizer</h2>
+        @if (_status is "running" or "paused")
+        {
+            <button type="button" class="button-secondary" title="Previous preset (← in fullscreen)" @onclick='() => CallAsync("previous")'>‹</button>
+            <button type="button" class="button-secondary" title="Next preset (→ in fullscreen)" @onclick='() => CallAsync("next")'>›</button>
+            <button type="button" class="button-secondary" aria-pressed="@(Settings.AutoCycle ? "true" : "false")" title="Change preset every 20 seconds" @onclick="ToggleCycleAsync">Auto-cycle</button>
+        }
+        <button type="button" class="button-secondary visualizer-fullscreen" title="Fullscreen (F in fullscreen, Esc to exit)" disabled="@(_status is not ("running" or "paused" or "waiting"))" @onclick='() => CallAsync("toggleFullscreen")'>Fullscreen</button>
+    </div>
+
+    <div class="visualizer-stage">
+        <canvas @ref="_canvas" class="visualizer-canvas" aria-hidden="true"></canvas>
+
+        @if (Message is not null)
+        {
+            <div class="visualizer-message">
+                <p>@Message</p>
+                @if (_status == "notice")
+                {
+                    <button type="button" class="button" @onclick="AcceptNoticeAsync">Start visualizer</button>
+                }
+                else if (_status == "reduced-motion")
+                {
+                    <button type="button" class="button" @onclick="() => MountAsync(force: true)">Show anyway</button>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="visualizer-footer">
+        <span class="visualizer-preset" @ref="_presetLabel"></span>
+    </div>
+</div>
+
+@code {
+    private ElementReference _host;
+    private ElementReference _canvas;
+    private ElementReference _presetLabel;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<VisualizerModule>? _selfReference;
+    private string _status = "settings";
+    private bool _mounted;
+    private Guid? _shownTrackId;
+
+    private VisualizerSettings Settings => Appearance.Current.Visualizer;
+
+    private string? Message => _status switch
+    {
+        "settings" => null,
+        "notice" => "MilkDrop presets can flash brightly and move quickly. If flashing lights affect you, leave the visualizer off (or hide this panel with Edit layout).",
+        "waiting" => "Play a track to start the visualizer.",
+        "loading" => "Loading the visualizer…",
+        "reduced-motion" => "Your system is set to reduce motion. This visualizer moves quickly and can flash brightly.",
+        "unsupported" => "This browser can't run the visualizer. It needs WebGL 2 and the Web Audio API.",
+        "load-failed" => "The visualizer couldn't load. Play a track again to retry.",
+        _ => null
+    };
+
+    protected override void OnInitialized()
+    {
+        PlayerState.Changed += OnPlayerChanged;
+        _shownTrackId = PlayerState.CurrentTrack?.Id;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await StartIfReadyAsync();
+        }
+    }
+
+    // Waits for the profile, so the notice isn't shown to someone who already
+    // accepted it. If it doesn't load, the notice is shown.
+    private async Task StartIfReadyAsync()
+    {
+        await Appearance.EnsureLoadedAsync();
+        if (_mounted)
+        {
+            return;
+        }
+
+        if (!Settings.FlashingNoticeAccepted)
+        {
+            SetStatus("notice");
+            return;
+        }
+
+        await MountAsync(force: false);
+    }
+
+    private async Task AcceptNoticeAsync()
+    {
+        await Appearance.UpdateAsync(p => p.Visualizer.FlashingNoticeAccepted = true);
+        // If the profile didn't load, nothing is saved; start for this visit anyway.
+        await MountAsync(force: false);
+    }
+
+    private async Task MountAsync(bool force)
+    {
+        _mounted = true;
+        try
+        {
+            _module ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/visualizer.js");
+            _selfReference ??= DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("mount", _host, _canvas, _presetLabel, _selfReference, force, Settings.AutoCycle);
+        }
+        catch (JSException)
+        {
+            SetStatus("load-failed");
+        }
+    }
+
+    [JSInvokable]
+    public void SetStatus(string status)
+    {
+        _status = status;
+        StateHasChanged();
+    }
+
+    private async void OnPlayerChanged()
+    {
+        var track = PlayerState.CurrentTrack;
+        if (track is null || track.Id == _shownTrackId)
+        {
+            return;
+        }
+
+        _shownTrackId = track.Id;
+        await InvokeAsync(() => CallAsync("showTitle", track.Title));
+    }
+
+    private async Task ToggleCycleAsync()
+    {
+        if (_module is not null)
+        {
+            var cycling = await _module.InvokeAsync<bool>("setCycle", !Settings.AutoCycle);
+            await Appearance.UpdateAsync(p => p.Visualizer.AutoCycle = cycling);
+        }
+    }
+
+    private async Task CallAsync(string identifier, params object?[] args)
+    {
+        if (_module is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _module.InvokeVoidAsync(identifier, args);
+        }
+        catch (JSException)
+        {
+            // Decoration only -- a failed preset change must never affect playback.
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        PlayerState.Changed -= OnPlayerChanged;
+
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("unmount", _host);
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
+        _selfReference?.Dispose();
+    }
+}

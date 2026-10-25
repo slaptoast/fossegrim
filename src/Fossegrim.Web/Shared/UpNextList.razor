@@ -1,0 +1,49 @@
+@implements IDisposable
+@inject PlayerState PlayerState
+
+@* The queue, with the playing entry highlighted: click to jump, ✕ to remove.
+   Shown in the player bar's Up next popup and as a Library module. *@
+@if (PlayerState.Queue.Count == 0)
+{
+    <p class="up-next-empty">The queue is empty. Right-click a track or album to add it.</p>
+}
+else
+{
+    <ol class="up-next-list">
+        @for (var i = 0; i < PlayerState.Queue.Count; i++)
+        {
+            var entry = PlayerState.Queue[i];
+            var isCurrent = i == PlayerState.CurrentIndex;
+            <li class="@(isCurrent ? "current" : i < PlayerState.CurrentIndex ? "played" : "")" @key="entry.ItemId">
+                <button type="button" class="up-next-track" disabled="@isCurrent" @onclick="() => PlayerState.JumpToAsync(entry.ItemId)"
+                        title="@(isCurrent ? "Now playing" : "Play this")">
+                    <span class="up-next-title">@(entry.Track.Title ?? "Unknown")</span>
+                    <span class="up-next-artist">@(entry.Track.ArtistName ?? "Unknown Artist")</span>
+                </button>
+                @if (isCurrent)
+                {
+                    <span class="up-next-now">Now playing</span>
+                }
+                else
+                {
+                    <button type="button" class="up-next-remove" @onclick="() => PlayerState.RemoveAsync(entry.ItemId)"
+                            aria-label="Remove from queue" title="Remove from queue">✕</button>
+                }
+            </li>
+        }
+    </ol>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        PlayerState.Changed += OnChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        PlayerState.Changed -= OnChanged;
+    }
+}

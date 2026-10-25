@@ -1,0 +1,39 @@
+name: Test
+
+# Runs the test suite on every pull request to main and every push to main.
+# Separate from release.yml, which only builds the Docker image.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore src/Fossegrim.sln
+
+      - name: Build
+        run: dotnet build src/Fossegrim.sln --no-restore -c Release
+
+      - name: Test
+        run: dotnet test src/Fossegrim.sln --no-build -c Release --logger "console;verbosity=normal"

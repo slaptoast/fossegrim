@@ -49,7 +49,8 @@ fossegrim/
 │   ├── Fossegrim.Api/         # Standalone API (port 5182/7182) - owns the database
 │   ├── Fossegrim.Web/         # Blazor WebAssembly SPA (port 5085/7049) - browser-only client of the Api
 │   ├── Fossegrim.Contracts/   # Shared DTOs referenced by both Api and Web
-│   └── Fossegrim.Lib/         # Server-side data/services (EF Core, Identity, file scanning) - Api only
+│   ├── Fossegrim.Lib/         # Server-side data/services (EF Core, Identity, file scanning) - Api only
+│   └── Fossegrim.Api.Tests/   # xUnit tests; runs the Api in-process against a throwaway SQLite db
 ├── run-dev.sh              # Development runner script
 └── DEV-README.md          # This file
 ```
@@ -71,6 +72,26 @@ This is loaded by the Blazor WASM app at startup to configure which Api it talks
 
 Only `Fossegrim.Api` touches the database (`fossegrim.db`, SQLite). `Fossegrim.Web` has no database access.
 
+### Auth signing key
+
+There's no JWT key in `appsettings.json`. Locally, with no key configured,
+the Api makes a new random key every time it starts, so **every restart
+(including `dotnet watch` rebuilds) signs you out**. The Web app handles the
+resulting 401 by sending you back to the login page.
+
+To stay signed in across restarts, give the Api a key file or a fixed key:
+
+```bash
+cd src/Fossegrim.Api
+# either: generated once, then reused
+dotnet user-secrets set "Jwt:KeyFile" "$HOME/.fossegrim/jwt.key"
+# or: a fixed key
+dotnet user-secrets set "Jwt:Key" "$(openssl rand -base64 48)"
+```
+
+User-secrets are stored outside the repo, so they never get committed. See
+`DOCKER.md` → *Auth signing key* for the full lookup order.
+
 ### CORS Policy
 
 The API project allows CORS requests from the Web project origins:
@@ -84,3 +105,15 @@ The API project allows CORS requests from the Web project origins:
 3. Use https://localhost:7182/openapi for API documentation
 4. Make changes - both projects use `dotnet watch` for hot reload
 5. Stop servers with `Ctrl+C`
+
+## Tests
+
+```bash
+dotnet test src/Fossegrim.sln
+```
+
+`Fossegrim.Api.Tests` starts the real API in-process (`WebApplicationFactory`)
+with its own temporary SQLite database, migrated on startup just like
+production, so endpoint tests go through auth, routing and EF Core for real.
+`DatabaseTests` fails if the EF model changed without a migration. CI runs
+the suite on every pull request (`.github/workflows/test.yml`).

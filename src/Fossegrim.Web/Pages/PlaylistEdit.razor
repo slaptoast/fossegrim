@@ -1,0 +1,523 @@
+@page "/playlists"
+@attribute [Authorize]
+@implements IDisposable
+@inject FossegrimApiClient ApiClient
+@inject ToastService Toasts
+
+<div class="container wide">
+    <div class="header">
+        <h1>🎶 Playlists</h1>
+        <p>Create, edit, and reorder your playlists</p>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="content"><div class="loading"><h2>Loading playlists</h2></div></div>
+    }
+    else if (_errorMessage is not null)
+    {
+        <div class="content"><div class="error"><h3>Error</h3><p>@_errorMessage</p></div></div>
+    }
+    else
+    {
+        <div class="playlist-toolbar">
+            <div class="filter-group">
+                <label for="playlistSelect">Playlist:</label>
+                <select id="playlistSelect" value="@(_selectedPlaylistId?.ToString() ?? "")" @onchange="OnPlaylistSelectedAsync">
+                    <option value="">-- Select a playlist --</option>
+                    @foreach (var p in _playlists.Where(p => p.Type == "Standard").OrderBy(p => p.Name))
+                    {
+                        <option value="@p.Id">@p.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="new-playlist-box">
+                <input type="text" placeholder="New playlist name..." @bind="_newPlaylistName" @bind:event="oninput" />
+                <button type="button" class="button-secondary" disabled="@(string.IsNullOrWhiteSpace(_newPlaylistName) || _isSaving)" @onclick="CreatePlaylistAsync">+ Create</button>
+            </div>
+        </div>
+
+        @if (_selectedPlaylist is not null)
+        {
+            <div class="playlist-detail">
+                <div class="playlist-detail-header">
+                    <input type="text" class="playlist-name-input" @bind="_editName" @bind:event="oninput" @onblur="RenameAsync" disabled="@(!CanEdit)" />
+                    <span class="playlist-access-badge">@_selectedPlaylist.AccessLevel</span>
+                    @if (_selectedPlaylist.AccessLevel != "Owner")
+                    {
+                        <span class="playlist-owner">Shared by @(_selectedPlaylist.OwnerDisplayName ?? "another user")</span>
+                        <button type="button" class="button-secondary" disabled="@_isSaving" @onclick="() => _showLeaveConfirm = true"
+                                title="Remove this playlist from your list. It isn't deleted for anyone else.">Leave Playlist</button>
+                    }
+                    @if (_selectedPlaylist.AccessLevel == "Owner")
+                    {
+                        <button type="button" class="button-danger" @onclick="() => _showDeleteConfirm = true">Delete Playlist</button>
+                    }
+                </div>
+
+                @if (_playlistErrorMessage is not null)
+                {
+                    <div class="error">@_playlistErrorMessage</div>
+                }
+
+                @if (_selectedPlaylist.AccessLevel == "Owner")
+                {
+                    <div class="playlist-share-section">
+                        <h3>Shared With</h3>
+                        @if (!_selectedPlaylist.Shares.Any())
+                        {
+                            <p class="playlist-share-empty">Not shared with anyone.</p>
+                        }
+                        else
+                        {
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Access</th>
+                                        <th class="actions-cell"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var share in _selectedPlaylist.Shares.OrderBy(s => s.DisplayName ?? s.UserId, StringComparer.OrdinalIgnoreCase))
+                                    {
+                                        <tr>
+                                            <td class="title-cell">@(share.DisplayName ?? share.UserId)</td>
+                                            <td>
+                                                <select value="@share.ShareType" disabled="@_isSaving" @onchange="e => ChangeShareTypeAsync(share, e)">
+                                                    <option value="Editor">Editor</option>
+                                                    <option value="ReadOnly">Read-only</option>
+                                                </select>
+                                            </td>
+                                            <td class="actions-cell">
+                                                <button type="button" class="button-danger" disabled="@_isSaving" @onclick="() => RevokeShareAsync(share)">Remove</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+
+                        <div class="share-add">
+                            <input type="text" placeholder="Share with... (name, or exact email)" value="@_shareQuery" @oninput="OnShareQueryChangedAsync"
+                                   aria-label="Find someone to share with" />
+                            <select @bind="_newShareType" aria-label="Access for the person you add">
+                                <option value="ReadOnly">Read-only</option>
+                                <option value="Editor">Editor</option>
+                            </select>
+                        </div>
+                        @if (ShareCandidates.Count > 0)
+                        {
+                            <ul class="share-results">
+                                @foreach (var candidate in ShareCandidates)
+                                {
+                                    <li>
+                                        <button type="button" class="context-menu-item" disabled="@_isSaving" @onclick="() => ShareWithAsync(candidate)">
+                                            @candidate.DisplayName
+                                            <span class="share-results-action">Share</span>
+                                        </button>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else if (_shareSearched && _shareQuery.Trim().Length >= 2)
+                        {
+                            <p class="playlist-share-empty">No one found. Try their display name or exact email.</p>
+                        }
+                    </div>
+                }
+
+                <div class="playlist-editor-grid">
+                    <div class="playlist-editor-column">
+                        <h3>Add Tracks</h3>
+                        <TrackList MediaItems="_mediaItems" Editable="CanEdit" @bind-SelectedIds="_selectedTrackIds" OnItemUpdated="HandleItemUpdated" OnAddedToPlaylist="HandleAddedToPlaylistAsync" />
+                        @if (CanEdit)
+                        {
+                            <button type="button" class="button" disabled="@(_selectedTrackIds.Count == 0 || _isSaving)" @onclick="AddSelectedTracksAsync">
+                                Add @(_selectedTrackIds.Count) Selected Track@(_selectedTrackIds.Count == 1 ? "" : "s") to Playlist
+                            </button>
+                        }
+                    </div>
+
+                    <div class="playlist-editor-column">
+                        <h3>Playlist Tracks (@_selectedPlaylist.Items.Count())</h3>
+                        <PlaylistTrackList Items="_selectedPlaylist.Items.ToList()" CanEdit="CanEdit" OnReorder="MoveItemAsync" OnRemove="RemoveItemAsync" OnItemUpdated="HandlePlaylistItemTagsUpdatedAsync" OnAddedToPlaylist="HandleAddedToPlaylistAsync" />
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<ConfirmDialog IsOpen="_showDeleteConfirm"
+               Title="Delete Playlist"
+               Message="@($"Delete \"{_selectedPlaylist?.Name}\"? This cannot be undone.")"
+               ConfirmText="Delete"
+               OnConfirm="DeletePlaylistAsync"
+               OnCancel="() => _showDeleteConfirm = false" />
+
+<ConfirmDialog IsOpen="_showLeaveConfirm"
+               Title="Leave Playlist"
+               Message="@($"Remove \"{_selectedPlaylist?.Name}\" from your playlists? You'll need {_selectedPlaylist?.OwnerDisplayName ?? "the owner"} to share it again to get it back.")"
+               ConfirmText="Leave"
+               OnConfirm="LeavePlaylistAsync"
+               OnCancel="() => _showLeaveConfirm = false" />
+
+@code {
+    private List<PlaylistDto> _playlists = [];
+    private List<MediaItemDto> _mediaItems = [];
+    private PlaylistDetailDto? _selectedPlaylist;
+    private Guid? _selectedPlaylistId;
+    private IReadOnlyList<Guid> _selectedTrackIds = [];
+    private string _newPlaylistName = "";
+    private string _editName = "";
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private bool _showDeleteConfirm;
+    private bool _showLeaveConfirm;
+
+    private static readonly TimeSpan ShareSearchDelay = TimeSpan.FromMilliseconds(300);
+    private string _shareQuery = "";
+    private string _newShareType = "ReadOnly";
+    private List<UserSummaryDto> _shareResults = [];
+    private bool _shareSearched;
+    private CancellationTokenSource? _shareSearchDelay;
+    private string? _errorMessage;
+    private string? _playlistErrorMessage;
+
+    private bool CanEdit => _selectedPlaylist is not null &&
+        (_selectedPlaylist.AccessLevel == "Owner" || _selectedPlaylist.AccessLevel == "Editor");
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _playlists = (await ApiClient.GetPlaylistsAsync()).ToList();
+            _mediaItems = (await ApiClient.GetMediaItemsAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error loading playlists: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnPlaylistSelectedAsync(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        if (string.IsNullOrEmpty(value) || !Guid.TryParse(value, out var id))
+        {
+            _selectedPlaylistId = null;
+            _selectedPlaylist = null;
+            return;
+        }
+
+        await LoadPlaylistAsync(id);
+    }
+
+    private async Task LoadPlaylistAsync(Guid id)
+    {
+        _playlistErrorMessage = null;
+        _selectedTrackIds = [];
+        try
+        {
+            _selectedPlaylist = await ApiClient.GetPlaylistAsync(id);
+            _selectedPlaylistId = _selectedPlaylist?.Id;
+            _editName = _selectedPlaylist?.Name ?? "";
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error loading playlist: {ex.Message}";
+        }
+    }
+
+    private async Task CreatePlaylistAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newPlaylistName))
+        {
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            var created = await ApiClient.CreatePlaylistAsync(_newPlaylistName.Trim());
+            _playlists.Add(created);
+            _newPlaylistName = "";
+            await LoadPlaylistAsync(created.Id);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error creating playlist: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task RenameAsync()
+    {
+        if (_selectedPlaylist is null || !CanEdit || string.IsNullOrWhiteSpace(_editName) || _editName == _selectedPlaylist.Name)
+        {
+            return;
+        }
+
+        try
+        {
+            var updated = await ApiClient.UpdatePlaylistAsync(_selectedPlaylist.Id, _editName.Trim());
+            var index = _playlists.FindIndex(p => p.Id == updated.Id);
+            if (index >= 0)
+            {
+                _playlists[index] = updated;
+            }
+            await LoadPlaylistAsync(updated.Id);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error renaming playlist: {ex.Message}";
+        }
+    }
+
+    private async Task DeletePlaylistAsync()
+    {
+        _showDeleteConfirm = false;
+
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        var deletedId = _selectedPlaylist.Id;
+        try
+        {
+            await ApiClient.DeletePlaylistAsync(deletedId);
+            _playlists.RemoveAll(p => p.Id == deletedId);
+            _selectedPlaylist = null;
+            _selectedPlaylistId = null;
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error deleting playlist: {ex.Message}";
+        }
+    }
+
+    private async Task AddSelectedTracksAsync()
+    {
+        if (_selectedPlaylist is null || _selectedTrackIds.Count == 0)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            _selectedPlaylist = await ApiClient.AddPlaylistItemsAsync(_selectedPlaylist.Id, _selectedTrackIds);
+            _selectedTrackIds = [];
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error adding tracks: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task RemoveItemAsync(Guid itemId)
+    {
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await ApiClient.RemovePlaylistItemAsync(_selectedPlaylist.Id, itemId);
+            await LoadPlaylistAsync(_selectedPlaylist.Id);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error removing track: {ex.Message}";
+        }
+    }
+
+    private async Task MoveItemAsync((Guid ItemId, Guid? AfterItemId) move)
+    {
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _selectedPlaylist = await ApiClient.MovePlaylistItemAsync(_selectedPlaylist.Id, move.ItemId, move.AfterItemId);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error reordering track: {ex.Message}";
+        }
+    }
+
+    private void HandleItemUpdated(MediaItemDto updated)
+    {
+        var index = _mediaItems.FindIndex(m => m.Id == updated.Id);
+        if (index >= 0)
+        {
+            _mediaItems[index] = updated;
+        }
+    }
+
+    // Search results minus people the playlist is already shared with.
+    private List<UserSummaryDto> ShareCandidates => _selectedPlaylist is null
+        ? []
+        : _shareResults.Where(u => _selectedPlaylist.Shares.All(s => s.UserId != u.UserId)).ToList();
+
+    private async Task OnShareQueryChangedAsync(ChangeEventArgs e)
+    {
+        _shareQuery = e.Value?.ToString() ?? "";
+        _shareSearched = false;
+
+        _shareSearchDelay?.Cancel();
+        _shareSearchDelay = new CancellationTokenSource();
+        var token = _shareSearchDelay.Token;
+        try
+        {
+            await Task.Delay(ShareSearchDelay, token);
+            var results = await ApiClient.SearchUsersAsync(_shareQuery);
+            if (!token.IsCancellationRequested)
+            {
+                _shareResults = results.ToList();
+                _shareSearched = true;
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // Superseded by a later keystroke.
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error searching users: {ex.Message}";
+        }
+    }
+
+    private async Task ShareWithAsync(UserSummaryDto person)
+    {
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            await ApiClient.SharePlaylistAsync(_selectedPlaylist.Id, person.UserId, _newShareType);
+            Toasts.Show($"Shared \"{_selectedPlaylist.Name}\" with {person.DisplayName}");
+            _shareQuery = "";
+            _shareResults = [];
+            _shareSearched = false;
+            await LoadPlaylistAsync(_selectedPlaylist.Id);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error sharing playlist: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task LeavePlaylistAsync()
+    {
+        _showLeaveConfirm = false;
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        var left = _selectedPlaylist;
+        _isSaving = true;
+        try
+        {
+            await ApiClient.LeavePlaylistAsync(left.Id);
+            _playlists.RemoveAll(p => p.Id == left.Id);
+            _selectedPlaylist = null;
+            _selectedPlaylistId = null;
+            Toasts.Show($"Left \"{left.Name}\"");
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error leaving playlist: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _shareSearchDelay?.Cancel();
+        _shareSearchDelay?.Dispose();
+    }
+
+    private Task HandlePlaylistItemTagsUpdatedAsync() =>
+        _selectedPlaylist is null ? Task.CompletedTask : LoadPlaylistAsync(_selectedPlaylist.Id);
+
+    // Tracks added via the right-click menu may target the playlist being shown.
+    private Task HandleAddedToPlaylistAsync(Guid playlistId) =>
+        _selectedPlaylist?.Id == playlistId ? LoadPlaylistAsync(playlistId) : Task.CompletedTask;
+
+    private async Task ChangeShareTypeAsync(PlaylistShareDto share, ChangeEventArgs e)
+    {
+        var shareType = e.Value?.ToString();
+        if (_selectedPlaylist is null || string.IsNullOrEmpty(shareType) || shareType == share.ShareType)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            await ApiClient.SharePlaylistAsync(_selectedPlaylist.Id, share.UserId, shareType);
+            await LoadPlaylistAsync(_selectedPlaylist.Id);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error changing access: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task RevokeShareAsync(PlaylistShareDto share)
+    {
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            await ApiClient.RevokePlaylistShareAsync(_selectedPlaylist.Id, share.UserId);
+            await LoadPlaylistAsync(_selectedPlaylist.Id);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error removing share: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}

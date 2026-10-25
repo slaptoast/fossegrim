@@ -1,0 +1,53 @@
+@implements IDisposable
+@inject ToastService ToastService
+
+@if (_messages.Count > 0)
+{
+    <div class="toasts" role="status" aria-live="polite">
+        @foreach (var message in _messages)
+        {
+            <div class="toast">@message.Text</div>
+        }
+    </div>
+}
+
+@code {
+    private static readonly TimeSpan DisplayTime = TimeSpan.FromSeconds(3);
+    private const int MaxVisible = 3;
+
+    private readonly List<ToastMessage> _messages = [];
+
+    protected override void OnInitialized()
+    {
+        ToastService.Shown += OnShown;
+    }
+
+    private void OnShown(string text)
+    {
+        var message = new ToastMessage(text);
+        _ = InvokeAsync(async () =>
+        {
+            _messages.Add(message);
+            if (_messages.Count > MaxVisible)
+            {
+                _messages.RemoveAt(0);
+            }
+            StateHasChanged();
+
+            await Task.Delay(DisplayTime);
+            _messages.Remove(message);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        ToastService.Shown -= OnShown;
+    }
+
+    // A class, not a string, so two identical messages are removed separately.
+    private sealed class ToastMessage(string text)
+    {
+        public string Text { get; } = text;
+    }
+}

@@ -1,7 +1,9 @@
 using System.Linq.Expressions;
 using System.Security.Claims;
+using Fossegrim.Api.Services;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
+using Fossegrim.Lib.Enums;
 using Fossegrim.Lib.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -29,7 +31,9 @@ public static class Plays
             RecordPlayRequest request,
             ClaimsPrincipal principal,
             UserManager<ApplicationUser> userManager,
-            FossegrimDbContext db) =>
+            FossegrimDbContext db,
+            Scrobbler scrobbler,
+            ScrobbleSignal scrobbleSignal) =>
         {
             var user = await userManager.GetUserAsync(principal);
             if (user is null)
@@ -60,8 +64,15 @@ public static class Plays
                 RecordedAt = now
             };
 
+            await scrobbler.MarkForScrobblingAsync(playEvent, mediaItem, user);
+
             db.PlayEvents.Add(playEvent);
             await db.SaveChangesAsync();
+
+            if (playEvent.ScrobbleStatus == ScrobbleStatus.Pending)
+            {
+                scrobbleSignal.Notify();
+            }
 
             return Results.Created($"/api/plays/{playEvent.Id}", ToPlayEventDto(playEvent));
         })
@@ -193,6 +204,8 @@ public static class Plays
         playEvent.Id,
         playEvent.PlayedAt,
         playEvent.ListenedFor,
+        playEvent.ScrobbleStatus?.ToString(),
+        playEvent.ScrobbleError,
         new PlayedTrackDto(
             playEvent.MediaItemId,
             playEvent.MediaItem?.Title,

@@ -335,11 +335,24 @@ namespace fossegrim.lib.Migrations
                     b.Property<Guid>("MediaItemId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("NextScrobbleAttemptAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("PlayedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("RecordedAt")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("ScrobbleAttempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ScrobbleError")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ScrobbleStatus")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime?>("ScrobbledAt")
                         .HasColumnType("TEXT");
@@ -351,6 +364,8 @@ namespace fossegrim.lib.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("MediaItemId");
+
+                    b.HasIndex("ScrobbleStatus", "NextScrobbleAttemptAt");
 
                     b.HasIndex("UserId", "PlayedAt");
 

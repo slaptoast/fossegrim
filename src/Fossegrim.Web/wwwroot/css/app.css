@@ -469,6 +469,9 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
 .listens-table .played-cell { width: 150px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .listens-table .year-cell { width: 64px; font-variant-numeric: tabular-nums; }
 .listens-table .listened-cell { width: 80px; text-align: right; font-variant-numeric: tabular-nums; }
+.listens-table .scrobble-cell { width: 72px; text-align: center; color: var(--text-muted); }
+.listens-table .scrobble-scrobbled { color: var(--success-fg); }
+.listens-table .scrobble-ignored, .listens-table .scrobble-failed { color: var(--error-fg); }
 
 /* ---- Pager: a footer row inside the module ---- */
 .pager {

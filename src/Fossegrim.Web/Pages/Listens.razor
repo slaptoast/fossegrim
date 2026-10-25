@@ -45,6 +45,10 @@
                         <th>Genre</th>
                         <th class="year-cell">Year</th>
                         <th class="listened-cell">Listened</th>
+                        @if (_showScrobbleColumn)
+                        {
+                            <th class="scrobble-cell">Last.fm</th>
+                        }
                     </tr>
                 </thead>
                 <tbody>
@@ -58,6 +62,10 @@
                             <td>@play.MediaItem.Genre</td>
                             <td class="year-cell">@play.MediaItem.Year</td>
                             <td class="listened-cell">@FormatDuration(play.ListenedFor)</td>
+                            @if (_showScrobbleColumn)
+                            {
+                                <td class="scrobble-cell scrobble-@(play.ScrobbleStatus?.ToLowerInvariant())" title="@ScrobbleTooltip(play)">@ScrobbleIcon(play.ScrobbleStatus)</td>
+                            }
                         </tr>
                     }
                 </tbody>
@@ -79,6 +87,9 @@
     private CancellationTokenSource? _searchDelay;
     // Responses can arrive out of order while typing; only the latest one is shown.
     private int _requestVersion;
+
+    // Only shown once some listen on the page is going to Last.fm.
+    private bool _showScrobbleColumn => _history?.Items.Any(p => p.ScrobbleStatus is not null) ?? false;
 
     private int TotalPages => _history is null ? 1 : Math.Max(1, (int)Math.Ceiling(_history.TotalCount / (double)PageSize));
 
@@ -141,6 +152,22 @@
             ? local.ToString("MMM d, h:mm tt")
             : local.ToString("MMM d yyyy, h:mm tt");
     }
+
+    private static string ScrobbleIcon(string? status) => status switch
+    {
+        "Scrobbled" => "✓",
+        "Pending" => "…",
+        "Ignored" or "Failed" => "✕",
+        _ => ""
+    };
+
+    private static string? ScrobbleTooltip(PlayEventDto play) => play.ScrobbleStatus switch
+    {
+        null => null,
+        "Scrobbled" => "Scrobbled to Last.fm",
+        "Pending" => play.ScrobbleError is null ? "Sending to Last.fm" : $"Will retry: {play.ScrobbleError}",
+        _ => $"{play.ScrobbleStatus}: {play.ScrobbleError}"
+    };
 
     private static string FormatDuration(TimeSpan? duration) => duration is { } d
         ? $"{(int)d.TotalMinutes}:{d.Seconds:00}"

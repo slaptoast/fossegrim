@@ -528,6 +528,8 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
 .tag-edit-table td { padding: var(--space-2) var(--space-4); max-width: none; }
 .tag-edit-table input { min-width: 90px; }
 .tag-edit-table input[type="number"] { min-width: 64px; }
+.tag-edit-apply-row { background: var(--surface-muted); border-bottom: 1px solid var(--border-strong); }
+.tag-edit-apply-row button { white-space: nowrap; }
 .tag-edit-actions { display: flex; justify-content: flex-end; gap: var(--space-8); padding: var(--space-8) var(--space-12); border-top: 1px solid var(--border); }
 
 /* ---- Page-specific pieces ---- */

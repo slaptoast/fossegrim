@@ -294,6 +294,81 @@ body {
 .toasts { position: fixed; left: 50%; bottom: 72px; transform: translateX(-50%); display: flex; flex-direction: column; gap: var(--space-6); align-items: center; z-index: 700; pointer-events: none; }
 .toast { background: var(--chrome-bg); color: var(--chrome-fg); border: 1px solid var(--border); padding: var(--space-8) var(--space-16); border-radius: var(--radius-md); font-size: 0.8125rem; box-shadow: var(--shadow-menu); max-width: calc(100vw - 2 * var(--space-16)); }
 
+/* ---- Visualizer module: MilkDrop presets rendered with WebGL by js/visualizer.js ---- */
+.visualizer-module {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    min-height: 280px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    min-width: 0;
+}
+.visualizer-header {
+    min-height: 36px;
+    padding: var(--space-4) var(--space-12);
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    background: var(--surface-muted);
+    border-bottom: 1px solid var(--border);
+}
+.visualizer-header h2 { font-size: 0.875rem; font-weight: 600; color: var(--ink); margin: 0 auto 0 0; }
+.visualizer-header .button-secondary[aria-pressed="true"] { background: var(--selection-bg); color: var(--selection-fg); border-color: var(--selection-fg); }
+/* Black in every theme: the presets are drawn for a dark backdrop (and --ink turns light in dark themes). */
+.visualizer-stage { position: relative; flex: 1; min-height: 0; background: #000; }
+.visualizer-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.visualizer-message {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-12);
+    padding: var(--space-16);
+    color: var(--text-faint);
+    text-align: center;
+    font-size: 0.8125rem;
+}
+.visualizer-message p { max-width: 36ch; }
+.visualizer-footer {
+    min-height: 36px;
+    padding: var(--space-4) var(--space-12);
+    display: flex;
+    align-items: center;
+    border-top: 1px solid var(--border);
+}
+.visualizer-preset { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.75rem; color: var(--text-muted); }
+
+/* Fullscreen: the stage fills the screen and the bars float over it, hiding when idle. */
+.visualizer-module.is-fullscreen { border: none; border-radius: 0; background: #000; }
+.visualizer-module.is-fullscreen .visualizer-stage { position: fixed; inset: 0; }
+.visualizer-module.is-fullscreen .visualizer-header,
+.visualizer-module.is-fullscreen .visualizer-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 1;
+    background: var(--overlay);
+    border: none;
+    transition: opacity 0.2s;
+}
+.visualizer-module.is-fullscreen .visualizer-header { top: 0; }
+.visualizer-module.is-fullscreen .visualizer-footer { bottom: 0; }
+.visualizer-module.is-fullscreen .visualizer-header h2 { color: var(--on-brand); }
+.visualizer-module.is-fullscreen .visualizer-preset { color: var(--text-faint); }
+.visualizer-module.is-fullscreen.is-idle { cursor: none; }
+.visualizer-module.is-fullscreen.is-idle .visualizer-header,
+.visualizer-module.is-fullscreen.is-idle .visualizer-footer { opacity: 0; }
+.visualizer-module.is-fullscreen .visualizer-header:focus-within { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+    .visualizer-module.is-fullscreen .visualizer-header,
+    .visualizer-module.is-fullscreen .visualizer-footer { transition: none; }
+}
+
 .app-footer { text-align: right; padding: var(--space-4) var(--space-8); font-size: 0.75rem; color: var(--text-muted); }
 
 /* ---- Modules: the unit of layout ---- */
@@ -584,7 +659,9 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
 /* Each module fills its panel; its list scrolls inside instead of the page growing. */
 .layout-module > .artist-list-component,
 .layout-module > .album-list-component,
-.layout-module > .track-list-component { height: 100%; display: flex; flex-direction: column; }
+.layout-module > .track-list-component,
+.layout-module > .visualizer-module { height: 100%; display: flex; flex-direction: column; }
+.layout-module > .visualizer-module { min-height: 0; }
 .layout-module .artist-list-container,
 .layout-module .album-list-container { max-height: none; flex: 1; min-height: 0; }
 .layout-module .track-list-component > .content { flex: 1; min-height: 0; overflow-y: auto; }

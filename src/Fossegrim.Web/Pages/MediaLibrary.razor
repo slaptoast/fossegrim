@@ -43,7 +43,8 @@
         _modules =
         [
             new("artists", "Artists", new LayoutItem { Id = "artists", X = 0, Y = 0, W = 8, H = 10 }, ArtistsModule),
-            new("albums", "Albums", new LayoutItem { Id = "albums", X = 8, Y = 0, W = 16, H = 10 }, AlbumsModule),
+            new("albums", "Albums", new LayoutItem { Id = "albums", X = 8, Y = 0, W = 8, H = 10 }, AlbumsModule),
+            new("visualizer", "Visualizer", new LayoutItem { Id = "visualizer", X = 16, Y = 0, W = 8, H = 10 }, VisualizerPanel, MinW: 6, MinH: 6),
             new("tracks", "Tracks", new LayoutItem { Id = "tracks", X = 0, Y = 10, W = 24, H = 14 }, TracksModule, MinW: 8, MinH: 5),
             new("upnext", "Up next", new LayoutItem { Id = "upnext", X = 16, Y = 24, W = 8, H = 10, Hidden = true }, UpNextModule),
         ];
@@ -52,6 +53,8 @@
     private RenderFragment ArtistsModule => @<ArtistList Artists="_artists" />;
 
     private RenderFragment AlbumsModule => @<AlbumList Albums="_albums" AllMediaItems="_mediaItems" />;
+
+    private RenderFragment VisualizerPanel => @<VisualizerModule />;
 
     private RenderFragment TracksModule => @<text>
         @if (_isLoading)

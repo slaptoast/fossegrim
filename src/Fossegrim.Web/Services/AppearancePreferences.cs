@@ -5,8 +5,8 @@ using System.Text.RegularExpressions;
 namespace Fossegrim.Web.Services;
 
 /// <summary>
-/// A user's appearance settings: theme, custom themes, page layouts and the
-/// player bar position. Saved to the server as one JSON document (see
+/// A user's appearance settings: theme, custom themes, page layouts, the
+/// player bar position and the visualizer. Saved to the server as one JSON document (see
 /// /api/me/preferences) and used as-is for export/import, so the same file
 /// works on any Fossegrim server.
 /// </summary>
@@ -21,6 +21,7 @@ public sealed class AppearancePreferences
     public Dictionary<string, List<LayoutItem>> Layouts { get; set; } = [];
 
     public PlayerSettings Player { get; set; } = new();
+    public VisualizerSettings Visualizer { get; set; } = new();
 }
 
 public sealed class ThemeSettings
@@ -60,6 +61,15 @@ public sealed class PlayerSettings
 {
     // "bottom" or "top"
     public string Position { get; set; } = "bottom";
+}
+
+public sealed class VisualizerSettings
+{
+    // The viewer has seen the flashing-lights notice and chosen to start it.
+    public bool FlashingNoticeAccepted { get; set; }
+
+    // A new preset every 20 seconds.
+    public bool AutoCycle { get; set; } = true;
 }
 
 public static class ThemeChoices
@@ -214,6 +224,11 @@ public static partial class AppearancePreferencesFile
             Player = new PlayerSettings
             {
                 Position = preferences.Player?.Position == "top" ? "top" : "bottom",
+            },
+            Visualizer = new VisualizerSettings
+            {
+                FlashingNoticeAccepted = preferences.Visualizer?.FlashingNoticeAccepted ?? false,
+                AutoCycle = preferences.Visualizer?.AutoCycle ?? true,
             },
         };
     }

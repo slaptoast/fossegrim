@@ -111,6 +111,19 @@ public class AppearancePreferencesFileTests
         Assert.Equal("top", imported.Player.Position);
     }
 
+    [Fact]
+    public void VisualizerSettings_RoundTrip_AndDefaultWhenMissing()
+    {
+        var original = new AppearancePreferences { Visualizer = new VisualizerSettings { FlashingNoticeAccepted = true, AutoCycle = false } };
+
+        var imported = AppearancePreferencesFile.Parse(AppearancePreferencesFile.Serialize(original))!;
+        var older = AppearancePreferencesFile.Parse("""{"theme":{"choice":"dark","custom":[]}}""")!;
+
+        Assert.Equal((true, false), (imported.Visualizer.FlashingNoticeAccepted, imported.Visualizer.AutoCycle));
+        // Documents saved before the visualizer existed: the notice is shown and cycling is on.
+        Assert.Equal((false, true), (older.Visualizer.FlashingNoticeAccepted, older.Visualizer.AutoCycle));
+    }
+
     [Theory]
     [InlineData("url(https://example.com/track.png)")] // would make the browser fetch
     [InlineData("red; background: url(x)")]

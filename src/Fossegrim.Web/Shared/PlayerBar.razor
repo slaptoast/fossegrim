@@ -32,7 +32,9 @@
         }
         else if (PlayerState.StreamUrl is not null)
         {
-            <audio @ref="_audio" controls autoplay="@PlayerState.AutoPlay" preload="metadata" src="@PlayerState.StreamUrl" class="player-audio" @onplay="OnPlay" @onended="OnTrackEnded">
+            @* crossorigin lets the visualizer read samples when the API is on another origin (local dev);
+               without it Web Audio would see a tainted source and output silence. *@
+            <audio @ref="_audio" controls autoplay="@PlayerState.AutoPlay" preload="metadata" crossorigin="anonymous" src="@PlayerState.StreamUrl" class="player-audio" @onplay="OnPlay" @onended="OnTrackEnded">
                 Your browser does not support the audio element.
             </audio>
         }
@@ -50,9 +52,10 @@
     private bool _showQueue;
     private IJSObjectReference? _playerModule;
     // The <audio> element is recreated when the track changes, so the
-    // listen tracker is attached to each new one (identified by its Id).
+    // listen tracker and visualizer are given each new one (identified by its Id).
     private string? _trackedAudioId;
     private IJSObjectReference? _listenTracker;
+    private IJSObjectReference? _visualizer;
     private DotNetObjectReference<PlayerBar>? _selfReference;
 
     protected override void OnInitialized()
@@ -71,6 +74,17 @@
         _listenTracker ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/listenTracker.js");
         _selfReference ??= DotNetObjectReference.Create(this);
         await _listenTracker.InvokeVoidAsync("attach", _audio, _selfReference);
+
+        try
+        {
+            // The visualizer module (Library page) draws from whichever <audio> is registered.
+            _visualizer ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/visualizer.js");
+            await _visualizer.InvokeVoidAsync("registerAudio", _audio);
+        }
+        catch (JSException)
+        {
+            // The visualizer is decoration; never let it break playback.
+        }
     }
 
     // Called by listenTracker.js once enough of the current track has been heard.
@@ -110,7 +124,7 @@
     {
         PlayerState.Changed -= OnChanged;
         _selfReference?.Dispose();
-        foreach (var module in new[] { _listenTracker, _playerModule })
+        foreach (var module in new[] { _listenTracker, _playerModule, _visualizer })
         {
             if (module is null)
             {

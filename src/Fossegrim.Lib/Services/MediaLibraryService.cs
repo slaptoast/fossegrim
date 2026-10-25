@@ -178,13 +178,20 @@ public class MediaLibraryService
     /// <summary>
     /// Writes ID3 tags to disk for each requested media item and mirrors the
     /// change into the database, re-resolving the Artist/Album associations
-    /// the same way a fresh scan would. Items that fail (missing file, unreadable
-    /// tag data, etc.) are reported as errors and don't affect the others.
+    /// the same way a fresh scan would. Only fields that differ from what's
+    /// stored are written, so untouched tags in the file (including ones the
+    /// database never read, or extra artists and genres) are left alone.
+    /// Artists and albums an edit leaves with no tracks are removed. Items
+    /// that fail (missing file, unreadable tag data, etc.) are reported as
+    /// errors and don't affect the others.
     /// </summary>
     public async Task<UpdateMediaItemTagsResponse> UpdateTagsAsync(IEnumerable<MediaItemTagUpdate> updates)
     {
         var errors = new List<MediaItemTagUpdateError>();
         var updatedItems = new List<MediaItem>();
+        // Artists/albums unlinked by an edit; removed at the end if now empty.
+        var unlinkedArtistIds = new HashSet<Guid>();
+        var unlinkedAlbumIds = new HashSet<Guid>();
 
         var artistsByName = await _db.Artists.ToDictionaryAsync(a => a.Name, StringComparer.OrdinalIgnoreCase);
         // Artists must be loaded up front: the album-artist link is only added
@@ -249,20 +256,54 @@ public class MediaLibraryService
                 continue;
             }
 
-            var title = string.IsNullOrWhiteSpace(update.Title) ? null : update.Title.Trim();
-            var artistName = string.IsNullOrWhiteSpace(update.ArtistName) ? null : update.ArtistName.Trim();
-            var albumName = string.IsNullOrWhiteSpace(update.Album) ? null : update.Album.Trim();
-            var genre = string.IsNullOrWhiteSpace(update.Genre) ? null : update.Genre.Trim();
+            var title = Normalize(update.Title);
+            var artistName = Normalize(update.ArtistName);
+            var albumName = Normalize(update.Album);
+            var genre = Normalize(update.Genre);
+            var track = update.Track is > 0 ? update.Track : null;
+            var year = update.Year is > 0 ? update.Year : null;
+
+            var titleChanged = title != Normalize(item.Title);
+            var artistChanged = !string.Equals(artistName, Normalize(item.ArtistName), StringComparison.Ordinal);
+            var albumChanged = !string.Equals(albumName, Normalize(item.Album), StringComparison.Ordinal);
+            var genreChanged = genre != Normalize(item.Genre);
+            var trackChanged = track != item.Track;
+            var yearChanged = year != item.Year;
+
+            if (!(titleChanged || artistChanged || albumChanged || genreChanged || trackChanged || yearChanged))
+            {
+                // Nothing to do; don't rewrite the file.
+                updatedItems.Add(item);
+                continue;
+            }
 
             try
             {
                 using var tagFile = TagLib.File.Create(item.FileLocation);
-                tagFile.Tag.Title = title;
-                tagFile.Tag.Performers = artistName is null ? [] : [artistName];
-                tagFile.Tag.Album = albumName;
-                tagFile.Tag.Genres = genre is null ? [] : [genre];
-                tagFile.Tag.Track = (uint)Math.Max(0, update.Track ?? 0);
-                tagFile.Tag.Year = (uint)Math.Max(0, update.Year ?? 0);
+                if (titleChanged)
+                {
+                    tagFile.Tag.Title = title;
+                }
+                if (artistChanged)
+                {
+                    tagFile.Tag.Performers = artistName is null ? [] : [artistName];
+                }
+                if (albumChanged)
+                {
+                    tagFile.Tag.Album = albumName;
+                }
+                if (genreChanged)
+                {
+                    tagFile.Tag.Genres = genre is null ? [] : [genre];
+                }
+                if (trackChanged)
+                {
+                    tagFile.Tag.Track = (uint)(track ?? 0);
+                }
+                if (yearChanged)
+                {
+                    tagFile.Tag.Year = (uint)(year ?? 0);
+                }
                 tagFile.Save();
             }
             catch (Exception ex)
@@ -271,38 +312,52 @@ public class MediaLibraryService
                 continue;
             }
 
-            var artist = ResolveArtist(artistName);
-            var album = ResolveAlbum(albumName);
-
-            if (album is not null && artist is not null && !album.Artists.Contains(artist))
-            {
-                album.Artists.Add(artist);
-            }
-
             item.Title = title;
             item.ArtistName = artistName;
             item.Album = albumName;
-            item.Track = update.Track;
-            item.Year = update.Year;
+            item.Track = track;
+            item.Year = year;
             item.Genre = genre;
             item.LastModified = DateTime.UtcNow;
 
-            item.Artists.Clear();
-            if (artist is not null)
+            // Re-link only when the artist or album changed, so links a scan
+            // made are kept for an edit that didn't touch them.
+            if (artistChanged || albumChanged)
             {
-                item.Artists.Add(artist);
-            }
+                var artist = ResolveArtist(artistName);
+                var album = ResolveAlbum(albumName);
 
-            item.Albums.Clear();
-            if (album is not null)
-            {
-                item.Albums.Add(album);
+                if (album is not null && artist is not null && !album.Artists.Contains(artist))
+                {
+                    album.Artists.Add(artist);
+                }
+
+                if (artistChanged)
+                {
+                    unlinkedArtistIds.UnionWith(item.Artists.Select(a => a.Id));
+                    item.Artists.Clear();
+                    if (artist is not null)
+                    {
+                        item.Artists.Add(artist);
+                    }
+                }
+
+                if (albumChanged)
+                {
+                    unlinkedAlbumIds.UnionWith(item.Albums.Select(a => a.Id));
+                    item.Albums.Clear();
+                    if (album is not null)
+                    {
+                        item.Albums.Add(album);
+                    }
+                }
             }
 
             updatedItems.Add(item);
         }
 
         await _db.SaveChangesAsync();
+        await RemoveEmptyArtistsAndAlbumsAsync(unlinkedArtistIds, unlinkedAlbumIds);
 
         var updatedDtos = updatedItems.Select(m => new MediaItemDto(
             m.Id,
@@ -320,6 +375,31 @@ public class MediaLibraryService
             m.Albums.Select(a => new AlbumSummaryDto(a.Id, a.Name, a.Year))));
 
         return new UpdateMediaItemTagsResponse(updatedDtos, errors);
+    }
+
+    // Blank or whitespace-only means "no value", stored as null.
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    // Called after an edit; only checks the artists/albums that edit unlinked,
+    // so it never sweeps the whole library.
+    private async Task RemoveEmptyArtistsAndAlbumsAsync(IReadOnlyCollection<Guid> artistIds, IReadOnlyCollection<Guid> albumIds)
+    {
+        if (artistIds.Count == 0 && albumIds.Count == 0)
+        {
+            return;
+        }
+
+        var emptyAlbums = await _db.Albums
+            .Where(a => albumIds.Contains(a.Id) && !a.MediaItems.Any())
+            .ToListAsync();
+        var emptyArtists = await _db.Artists
+            .Where(a => artistIds.Contains(a.Id) && !a.MediaItems.Any())
+            .ToListAsync();
+
+        _db.Albums.RemoveRange(emptyAlbums);
+        _db.Artists.RemoveRange(emptyArtists);
+        await _db.SaveChangesAsync();
     }
 
     /// <summary>

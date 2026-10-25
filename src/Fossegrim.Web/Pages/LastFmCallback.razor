@@ -1,0 +1,50 @@
+@page "/profile/lastfm"
+@attribute [Authorize]
+@inject FossegrimApiClient ApiClient
+@inject NavigationManager Navigation
+
+@* Last.fm redirects here with ?token=... after the user grants access. *@
+<div class="container medium">
+    <div class="header small">
+        <h1>Last.fm</h1>
+    </div>
+
+    <div class="content">
+        @if (_errorMessage is null)
+        {
+            <div class="loading"><h2>Linking your Last.fm account</h2></div>
+        }
+        else
+        {
+            <div class="error-message">@_errorMessage</div>
+            <a href="profile" class="button-secondary">Back to Profile</a>
+        }
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "token")]
+    public string? Token { get; set; }
+
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Token))
+        {
+            _errorMessage = "Last.fm didn't send back a token. Try connecting again from your Profile.";
+            return;
+        }
+
+        try
+        {
+            await ApiClient.LinkLastFmAsync(Token);
+            // replace: so Back doesn't return here and reuse the spent token.
+            Navigation.NavigateTo("profile", replace: true);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+}

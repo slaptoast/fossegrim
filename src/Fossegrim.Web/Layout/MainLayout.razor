@@ -1,0 +1,22 @@
+@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <header class="topbar">
+        <span class="topbar-title">🎵 Fossegrim</span>
+        <nav class="topbar-nav">
+            <NavLink href="/" Match="NavLinkMatch.All">Library</NavLink>
+            <NavLink href="/playlists">Playlists</NavLink>
+            <NavLink href="/listens">Listens</NavLink>
+        </nav>
+        <LibraryStats />
+        <UserMenu />
+    </header>
+
+    <main class="app-content">
+        @Body
+        <AppFooter />
+    </main>
+
+    <PlayerBar />
+    <Toasts />
+</div>

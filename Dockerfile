@@ -11,7 +11,7 @@ WORKDIR /src
 
 COPY src/Fossegrim.Api/Fossegrim.Api.csproj src/Fossegrim.Api/
 COPY src/Fossegrim.Web/Fossegrim.Web.csproj src/Fossegrim.Web/
-COPY src/Fossegrim.Lib/fossegrim.lib.csproj src/Fossegrim.Lib/
+COPY src/Fossegrim.Lib/Fossegrim.Lib.csproj src/Fossegrim.Lib/
 COPY src/Fossegrim.Contracts/Fossegrim.Contracts.csproj src/Fossegrim.Contracts/
 RUN dotnet restore src/Fossegrim.Api/Fossegrim.Api.csproj
 
@@ -39,6 +39,8 @@ COPY --from=build /app .
 
 ENV ASPNETCORE_URLS=http://+:8080 \
     ConnectionStrings__DefaultConnection="Data Source=/data/fossegrim.db" \
+    Jwt__KeyFile=/data/jwt.key \
+    DataProtection__KeysDirectory=/data/dataprotection-keys \
     APP_VERSION=$VERSION
 
 EXPOSE 8080

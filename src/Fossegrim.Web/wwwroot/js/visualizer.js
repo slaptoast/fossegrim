@@ -63,6 +63,11 @@ export function registerAudio(audio) {
  *   "load-failed"    the library files didn't load
  */
 export function mount(host, canvas, presetLabel, dotnet, force, cycling) {
+    // Elements Blazor has already removed arrive as null (or detached); mounting
+    // them would also stop the visualizer that's actually on the page.
+    if (!host?.isConnected || !canvas?.isConnected) {
+        return;
+    }
     unmount();
     view = {
         host, canvas, presetLabel, dotnet, force,
@@ -192,8 +197,8 @@ async function onPlay(audio) {
             setStatus(v, "load-failed");
             return;
         }
-        if (view !== v) {
-            return; // unmounted while loading
+        if (view !== v || !v.canvas.isConnected) {
+            return; // unmounted (or its module removed) while loading
         }
         if (!libs.isSupported()) {
             setStatus(v, "unsupported");

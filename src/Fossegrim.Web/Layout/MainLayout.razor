@@ -1,6 +1,8 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject AppearanceService Appearance
 
-<div class="app-shell">
+<div class="app-shell @(PlayerOnTop ? "player-top" : null)">
     <header class="topbar">
         <span class="topbar-title">🎵 Fossegrim</span>
         <nav class="topbar-nav">
@@ -12,11 +14,36 @@
         <UserMenu />
     </header>
 
+    @if (PlayerOnTop)
+    {
+        <PlayerBar />
+    }
+
     <main class="app-content">
         @Body
         <AppFooter />
     </main>
 
-    <PlayerBar />
+    @if (!PlayerOnTop)
+    {
+        <PlayerBar />
+    }
     <Toasts />
 </div>
+
+@code {
+    private bool PlayerOnTop => Appearance.Current.Player.Position == "top";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Appearance.Changed += OnAppearanceChanged;
+        await Appearance.EnsureLoadedAsync();
+    }
+
+    private void OnAppearanceChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Appearance.Changed -= OnAppearanceChanged;
+    }
+}

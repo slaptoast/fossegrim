@@ -52,6 +52,10 @@
     // The layout the grid is showing, so outside changes (an import, another
     // page's reset) can be spotted and the grid rebuilt to match.
     private string _shownLayout = "";
+    // The modules the grid was created with. GridStack only manages the
+    // elements present when it starts, so a different set means a rebuild.
+    private string _createdModules = "";
+    private bool _creating;
     private bool _editingApplied;
     private IJSObjectReference? _module;
     private IJSObjectReference? _grid;
@@ -102,22 +106,57 @@
         StateHasChanged();
     });
 
+    protected override void OnParametersSet()
+    {
+        if (_createdVersion == _gridVersion && VisibleModules() != _createdModules)
+        {
+            _gridVersion++;
+        }
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_creating)
+        {
+            return; // the running creation re-renders if it's out of date
+        }
+
         if (_createdVersion != _gridVersion)
         {
-            if (_grid is not null)
+            _creating = true;
+            var version = _gridVersion;
+            var modules = VisibleModules(); // what was just rendered
+            try
             {
-                await _grid.InvokeVoidAsync("destroy");
-                await _grid.DisposeAsync();
+                if (_grid is not null)
+                {
+                    await _grid.InvokeVoidAsync("destroy");
+                    await _grid.DisposeAsync();
+                    _grid = null;
+                }
+
+                _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/layoutGrid.js");
+                _self ??= DotNetObjectReference.Create(this);
+                // If it re-rendered with a new grid element meanwhile, skip
+                // this one; the check below renders again to create that.
+                if (version == _gridVersion)
+                {
+                    _grid = await _module.InvokeAsync<IJSObjectReference>("create", _element, _self, Editing);
+                    _createdVersion = version;
+                    _createdModules = modules;
+                    _shownLayout = Signature(Layout);
+                    _editingApplied = Editing;
+                }
+            }
+            finally
+            {
+                _creating = false;
             }
 
-            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/layoutGrid.js");
-            _self ??= DotNetObjectReference.Create(this);
-            _grid = await _module.InvokeAsync<IJSObjectReference>("create", _element, _self, Editing);
-            _createdVersion = _gridVersion;
-            _shownLayout = Signature(Layout);
-            _editingApplied = Editing;
+            if (_createdVersion != _gridVersion || _editingApplied != Editing)
+            {
+                StateHasChanged();
+            }
         }
         else if (_grid is not null && _editingApplied != Editing)
         {
@@ -143,6 +182,8 @@
         _shownLayout = Signature(layout);
         return Appearance.UpdateAsync(p => p.Layouts[PageId] = layout);
     }
+
+    private string VisibleModules() => string.Join(";", Layout.Where(i => !i.Hidden).Select(i => i.Id));
 
     private static string Signature(IEnumerable<LayoutItem> layout) =>
         string.Join(";", layout.Select(i => $"{i.Id}:{i.X},{i.Y},{i.W},{i.H},{i.Hidden}"));

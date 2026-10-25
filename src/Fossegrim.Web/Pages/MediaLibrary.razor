@@ -35,8 +35,10 @@
     private bool _isLoading = true;
     private string? _errorMessage;
 
-    protected override void OnParametersSet()
+    protected override void OnInitialized()
     {
+        // Set before OnInitializedAsync's first await, which renders the page:
+        // OnParametersSet would only run once the library had loaded.
         // Default layout on the 24-column grid; rows are 40px. Up next starts hidden.
         _modules =
         [

@@ -227,10 +227,11 @@ function onStop(audio) {
 
 function create(v, libs) {
     v.pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+    // Sizes are in device pixels with pixelRatio 1 (see resize).
     v.visualizer = libs.butterchurn.createVisualizer(audioContext, v.canvas, {
-        width: v.canvas.clientWidth || 400,
-        height: v.canvas.clientHeight || 300,
-        pixelRatio: v.pixelRatio
+        width: Math.round((v.canvas.clientWidth || 400) * v.pixelRatio),
+        height: Math.round((v.canvas.clientHeight || 300) * v.pixelRatio),
+        pixelRatio: 1
     });
     v.presets = libs.presets.getPresets();
     v.names = shuffle(Object.keys(v.presets));
@@ -318,15 +319,18 @@ function scheduleCycle(v) {
 }
 
 // Keeps the drawing buffer matched to the canvas's CSS size (module or fullscreen).
+// Butterchurn draws its final image at exactly the width and height it's given,
+// without applying pixelRatio, so it gets the buffer's device-pixel size and a
+// ratio of 1; passing CSS pixels filled only the bottom-left quarter on HiDPI screens.
 function resize(v) {
-    const width = v.canvas.clientWidth;
-    const height = v.canvas.clientHeight;
+    const width = Math.round(v.canvas.clientWidth * v.pixelRatio);
+    const height = Math.round(v.canvas.clientHeight * v.pixelRatio);
     if (!width || !height) {
         return;
     }
-    v.canvas.width = Math.round(width * v.pixelRatio);
-    v.canvas.height = Math.round(height * v.pixelRatio);
-    v.visualizer.setRendererSize(width, height, { pixelRatio: v.pixelRatio });
+    v.canvas.width = width;
+    v.canvas.height = height;
+    v.visualizer.setRendererSize(width, height, { pixelRatio: 1 });
 }
 
 // Keyboard shortcuts only apply while the visualizer is fullscreen, so they

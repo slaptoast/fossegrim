@@ -3,8 +3,10 @@ using System.Net.Http.Json;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
+using Fossegrim.Lib.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Fossegrim.Api.Tests;
@@ -26,10 +28,22 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:DefaultConnection", $"Data Source={Path.Combine(_directory, "fossegrim.db")}");
         builder.UseSetting("Jwt:Key", "test-signing-key-that-is-long-enough-for-hmac-sha256");
         builder.UseSetting("DataProtection:KeysDirectory", Path.Combine(_directory, "dataprotection-keys"));
+        // Tests drive Scrobbler directly, with a controlled clock.
+        builder.UseSetting("Scrobbling:Enabled", "false");
+
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddHttpClient<LastFmClient>().ConfigurePrimaryHttpMessageHandler(() => LastFm);
+        });
     }
 
+    /// <summary>Stands in for ws.audioscrobbler.com; every Last.fm call goes here.</summary>
+    public FakeLastFmHandler LastFm { get; } = new();
+
     /// <summary>Registers a brand-new user and returns a client signed in as them.</summary>
-    public async Task<HttpClient> CreateUserClientAsync()
+    public async Task<HttpClient> CreateUserClientAsync() => (await CreateUserAsync()).Client;
+
+    public async Task<TestUser> CreateUserAsync()
     {
         var client = CreateClient();
         var email = $"user-{Guid.NewGuid():N}@example.com";
@@ -37,7 +51,7 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         response.EnsureSuccessStatusCode();
         var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
-        return client;
+        return new TestUser(client, login.UserId);
     }
 
     public async Task<MediaItem> AddMediaItemAsync(
@@ -100,3 +114,5 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         }
     }
 }
+
+public record TestUser(HttpClient Client, string UserId);

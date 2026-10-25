@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Fossegrim.Lib.Enums;
 
 namespace Fossegrim.Lib.Models;
 
@@ -28,7 +29,19 @@ public class PlayEvent
     // Stamped by the server (UTC) when the play is recorded.
     public DateTime RecordedAt { get; set; }
 
-    // When this play was sent to Last.fm; null until then, and stays null
-    // for users who haven't linked Last.fm.
+    // Last.fm scrobbling state; null when this play isn't going to Last.fm
+    // (user not linked, or it didn't meet the scrobble rule when recorded).
+    public ScrobbleStatus? ScrobbleStatus { get; set; }
+
+    // When Last.fm accepted (or ignored) this play.
     public DateTime? ScrobbledAt { get; set; }
+
+    public int ScrobbleAttempts { get; set; }
+
+    // When a Pending play is next due to be sent.
+    public DateTime? NextScrobbleAttemptAt { get; set; }
+
+    // Why the last attempt failed or was ignored, for the Listens page.
+    [MaxLength(500)]
+    public string? ScrobbleError { get; set; }
 }

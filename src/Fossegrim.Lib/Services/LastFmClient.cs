@@ -17,7 +17,10 @@ public record LastFmTrack(
     int? TrackNumber = null,
     TimeSpan? Duration = null);
 
-public record LastFmResult(bool Success, int? ErrorCode = null, string? ErrorMessage = null);
+// IgnoredCode is set when Last.fm accepted the request but didn't count the
+// scrobble: 1 artist ignored, 2 track ignored, 3 timestamp too old, 4
+// timestamp too new, 5 daily scrobble limit exceeded.
+public record LastFmResult(bool Success, int? ErrorCode = null, string? ErrorMessage = null, int? IgnoredCode = null);
 
 public record LastFmSessionResult(bool Success, string? SessionKey = null, string? UserName = null, int? ErrorCode = null, string? ErrorMessage = null);
 
@@ -94,28 +97,49 @@ public class LastFmClient
 
     // startedAt is when the track started playing; Last.fm expects it as a
     // Unix timestamp.
-    public Task<LastFmResult> ScrobbleAsync(string sessionKey, LastFmTrack track, DateTimeOffset startedAt, CancellationToken cancellationToken = default)
+    public async Task<LastFmResult> ScrobbleAsync(string sessionKey, LastFmTrack track, DateTimeOffset startedAt, CancellationToken cancellationToken = default)
     {
         var parameters = TrackParameters(track);
         parameters["timestamp"] = startedAt.ToUnixTimeSeconds().ToString();
-        return PostTrackAsync("track.scrobble", sessionKey, parameters, cancellationToken);
-    }
-
-    /// <summary>
-    /// Last.fm's documented scrobble rule: the track must be longer than 30
-    /// seconds and have been played for at least half its duration or for
-    /// 4 minutes, whichever comes first.
-    /// </summary>
-    public static bool IsScrobbleEligible(TimeSpan trackDuration, TimeSpan playedFor)
-    {
-        if (trackDuration <= TimeSpan.FromSeconds(30))
+        var (result, root) = await PostSignedAsync("track.scrobble", sessionKey, parameters, cancellationToken);
+        if (!result.Success || root is not { } json)
         {
-            return false;
+            return result;
         }
 
-        var threshold = TimeSpan.FromTicks(Math.Min(trackDuration.Ticks / 2, TimeSpan.FromMinutes(4).Ticks));
-        return playedFor >= threshold;
+        // {"scrobbles": {"@attr": {"ignored": 1, ...}, "scrobble": {"ignoredMessage": {"code": "3", "#text": "..."}}}}
+        if (json.TryGetProperty("scrobbles", out var scrobbles) &&
+            scrobbles.TryGetProperty("@attr", out var attr) &&
+            attr.TryGetProperty("ignored", out var ignored) &&
+            ReadInt(ignored) > 0)
+        {
+            var scrobble = scrobbles.TryGetProperty("scrobble", out var s) ? s : default;
+            if (scrobble.ValueKind == JsonValueKind.Array && scrobble.GetArrayLength() > 0)
+            {
+                scrobble = scrobble[0];
+            }
+
+            int? code = null;
+            string? message = null;
+            if (scrobble.ValueKind == JsonValueKind.Object && scrobble.TryGetProperty("ignoredMessage", out var ignoredMessage))
+            {
+                code = ignoredMessage.TryGetProperty("code", out var c) ? ReadInt(c) : null;
+                message = ignoredMessage.TryGetProperty("#text", out var t) ? t.GetString() : null;
+            }
+
+            return new LastFmResult(true, ErrorMessage: string.IsNullOrEmpty(message) ? "Ignored by Last.fm." : message, IgnoredCode: code ?? 0);
+        }
+
+        return result;
     }
+
+    // Last.fm's JSON is converted from XML, so numbers often arrive as strings.
+    private static int? ReadInt(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Number when element.TryGetInt32(out var n) => n,
+        JsonValueKind.String when int.TryParse(element.GetString(), out var n) => n,
+        _ => null
+    };
 
     private static Dictionary<string, string> TrackParameters(LastFmTrack track)
     {

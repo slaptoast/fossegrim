@@ -193,6 +193,9 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(e => new { e.UserId, e.PlayedAt });
             entity.HasIndex(e => e.MediaItemId);
 
+            // The scrobble worker's query: Pending plays that are due
+            entity.HasIndex(e => new { e.ScrobbleStatus, e.NextScrobbleAttemptAt });
+
             entity.HasOne(pe => pe.User)
                   .WithMany()
                   .HasForeignKey(pe => pe.UserId)

@@ -16,10 +16,14 @@ public record PlayedTrackDto(
     string? Genre,
     TimeSpan? Duration);
 
+// ScrobbleStatus is null when the play isn't going to Last.fm, otherwise
+// "Pending", "Scrobbled", "Ignored" or "Failed" (ScrobbleError says why).
 public record PlayEventDto(
     Guid Id,
     DateTime PlayedAt,
     TimeSpan? ListenedFor,
+    string? ScrobbleStatus,
+    string? ScrobbleError,
     PlayedTrackDto MediaItem);
 
 public record PlayHistoryPageDto(

@@ -87,6 +87,13 @@ builder.Services.AddSingleton<LastFmCredentialsHolder>();
 builder.Services.AddHttpClient<LastFmClient>();
 builder.Services.AddScoped<LastFmAccountStore>();
 builder.Services.AddScoped<LastFmSettingsStore>();
+builder.Services.AddScoped<Scrobbler>();
+builder.Services.AddSingleton<ScrobbleSignal>();
+// Tests turn the worker off and drive Scrobbler directly.
+if (builder.Configuration.GetValue("Scrobbling:Enabled", true))
+{
+    builder.Services.AddHostedService<ScrobbleWorker>();
+}
 
 // Data Protection encrypts stored secrets (Last.fm session keys). Its keys
 // must outlive the container or those secrets become unreadable, so Docker

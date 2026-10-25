@@ -323,6 +323,40 @@ namespace fossegrim.lib.Migrations
                     b.ToTable("MediaItems");
                 });
 
+            modelBuilder.Entity("Fossegrim.Lib.Models.PlayEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<TimeSpan?>("ListenedFor")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MediaItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("PlayedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ScrobbledAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MediaItemId");
+
+                    b.HasIndex("UserId", "PlayedAt");
+
+                    b.ToTable("PlayEvents");
+                });
+
             modelBuilder.Entity("Fossegrim.Lib.Models.Playlist", b =>
                 {
                     b.Property<Guid>("Id")
@@ -607,6 +641,25 @@ namespace fossegrim.lib.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("MediaFolder");
+                });
+
+            modelBuilder.Entity("Fossegrim.Lib.Models.PlayEvent", b =>
+                {
+                    b.HasOne("Fossegrim.Lib.Models.MediaItem", "MediaItem")
+                        .WithMany()
+                        .HasForeignKey("MediaItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fossegrim.Lib.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MediaItem");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Fossegrim.Lib.Models.Playlist", b =>

@@ -160,6 +160,25 @@ public class PlayerState
         }
     }
 
+    // Records a play in the user's listening history once the player has
+    // heard enough of the current track (see wwwroot/js/listenTracker.js).
+    public async Task RecordListenAsync(DateTimeOffset startedAt, TimeSpan listenedFor)
+    {
+        if (CurrentTrack is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _apiClient.RecordPlayAsync(CurrentTrack.Id, startedAt, listenedFor);
+        }
+        catch
+        {
+            // Best-effort, like now-playing: a lost listen shouldn't disrupt playback.
+        }
+    }
+
     public void Stop()
     {
         _queue.Clear();

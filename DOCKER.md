@@ -17,7 +17,7 @@ two separate `dotnet watch` processes on separate ports; see
 
 ```bash
 cp .env.example .env
-# edit .env: set JWT_KEY, and MUSIC_LIBRARY_PATH to your music folder
+# edit .env: set MUSIC_LIBRARY_PATH to your music folder
 
 docker compose up --build
 ```
@@ -25,7 +25,7 @@ docker compose up --build
 - App: http://localhost:8080 (API and Web UI, same origin)
 - Log in with `admin@fossegrim.local` / `Admin123!` and change the password
   immediately -- that's a hardcoded seed account, not something Docker
-  changes for you (`src/Fossegrim.Lib/services/RoleSeeder.cs`).
+  changes for you (`src/Fossegrim.Lib/Services/RoleSeeder.cs`).
 
 ## Cutting a release
 
@@ -89,10 +89,102 @@ into the image for a given deployment.
 
 | Variable | Purpose |
 |---|---|
-| `JWT_KEY` | Secret signing key for auth tokens. **Required**, no default -- generate with `openssl rand -base64 48`. |
+| `JWT_KEY` | Secret signing key for auth tokens. Optional -- generated automatically if unset. See [Auth signing key](#auth-signing-key). |
 | `JWT_ISSUER` / `JWT_AUDIENCE` / `JWT_EXPIRY_MINUTES` | JWT claims/expiry. Defaults match dev settings. |
 | `MUSIC_LIBRARY_PATH` | Host path to your music library; mounted **read-write** at `/music` in the container. After startup, register `/music` (or a subfolder) as a media folder from the admin UI. |
 | `PORT` | Host-side port to publish. |
+| `LASTFM_API_KEY` / `LASTFM_API_SECRET` | Last.fm API application credentials. Optional -- usually entered on the admin Settings page instead; when set, these override it. See [Last.fm](#lastfm). |
+
+### Auth signing key
+
+Fossegrim signs login tokens with a secret key. Anyone who has that key can
+forge a token for any user, admins included, so keep it private. You don't
+have to set it up -- the container picks a key in this order:
+
+1. **`JWT_KEY` / `Jwt__Key`**, if set to a non-empty value. Use this to
+   manage the key yourself, e.g. from a secrets manager or so several
+   instances share one key.
+2. **The key file `/data/jwt.key`**, if it exists. If it doesn't, a random
+   512-bit key is generated and written there on first start (readable
+   only by the container user). This is the default for a normal install.
+
+You'll see one of these lines in the startup logs:
+
+```
+Generated new JWT signing key at /data/jwt.key
+Loaded JWT signing key from /data/jwt.key
+```
+
+(Neither line appears when `JWT_KEY` is set.)
+
+**Keep `/data` on a persistent volume.** The compose file uses the
+`fossegrim-data` named volume. With plain `docker run`, mount one yourself
+(`-v fossegrim-data:/data`). Otherwise a recreated container gets an empty
+`/data`, makes a new key, and everyone is signed out (and the database is
+lost too).
+
+**Supplying your own key.** Generate one and put it in `.env`:
+
+```bash
+openssl rand -base64 48
+```
+
+```
+JWT_KEY=<paste output here>
+```
+
+Use at least 32 characters. Once `JWT_KEY` is set, `/data/jwt.key` is
+ignored (not deleted).
+
+**Rotating the key** (e.g. if you think it leaked, or to force everyone to
+sign in again):
+
+- Auto-generated key: delete the file and restart.
+  ```bash
+  docker compose exec fossegrim rm /data/jwt.key
+  docker compose restart fossegrim
+  ```
+- Your own key: set `JWT_KEY` to a new value and run `docker compose up -d`.
+
+Either way, every existing session ends and users have to sign in again.
+Nothing else is affected: accounts, passwords, and the library are stored
+separately.
+
+**Moving the key file.** `Jwt__KeyFile` controls where the generated key
+lives (default `/data/jwt.key`). To keep it outside the data volume, e.g. on
+a separate secrets mount, set this in the compose `environment:` section.
+
+**Backups.** A backup of the `fossegrim-data` volume includes `jwt.key`, so
+store backups as securely as the key itself. Restoring without the key file
+is fine: a new one is generated and users just sign in again.
+
+### Last.fm
+
+Each user can link their own Last.fm account from their Profile page, after
+which Fossegrim shows what they're playing on Last.fm ("now playing") and
+scrobbles each track once they've heard 90% of it. If Last.fm is unreachable, scrobbles are retried in the background
+for up to 14 days, the longest Last.fm accepts; the Listens page shows each
+listen's Last.fm status. The server needs one Last.fm
+API application for this (it belongs to whoever runs the server, not to any
+user; everyone links their own account to it):
+
+1. Create one at https://www.last.fm/api/account/create. The callback URL
+   field can be left blank; Fossegrim supplies it on every link.
+2. As an admin, enter the API key and shared secret under Settings ->
+   Last.fm. They're checked with Last.fm before saving and take effect
+   immediately.
+
+Alternatively, set `LASTFM_API_KEY` and `LASTFM_API_SECRET` in `.env` and
+`docker compose up -d`. When both are set they take precedence, and the
+Settings page shows Last.fm as managed by the environment.
+
+The saved shared secret and users' Last.fm session keys are stored
+encrypted in the database. The encryption keys live in
+`/data/dataprotection-keys` (set by `DataProtection__KeysDirectory`), so
+keep that on the persistent volume along with everything else. If they're
+lost, nothing breaks, but the secret has to be re-entered and every user
+has to link Last.fm again. Like `jwt.key`, treat backups of `/data` as
+sensitive.
 
 ### Music folder must be writable
 
@@ -112,7 +204,9 @@ operator to set permissions accordingly; the container doesn't attempt to
 adjust its own permissions or the folder's ownership for you.
 
 The API's SQLite database persists in the `fossegrim-data` named volume
-(`/data/fossegrim.db` inside the container), independent of the image.
+(`/data/fossegrim.db` inside the container), independent of the image,
+alongside the generated JWT signing key (`/data/jwt.key`). Treat that
+volume as secret: anyone who can read `jwt.key` can mint login tokens.
 
 Because the API serves the SPA itself, there's no separate public URL to
 configure for the frontend and no CORS setup needed for this deployment --

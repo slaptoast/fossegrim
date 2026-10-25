@@ -63,6 +63,8 @@ public sealed class ScrobblingTests : IDisposable
     public static TheoryData<int?> UnheardListens => new()
     {
         20,   // 20s of a 3-minute track: a skip
+        90,   // half: Last.fm's own minimum, but under our 90%
+        150,  // 83%
         null, // a client that didn't say how long it played
     };
 
@@ -266,9 +268,9 @@ public sealed class ScrobblingTests : IDisposable
         await accounts.SetAsync((await userManager.FindByIdAsync(user.UserId))!, sessionKey, "lastfm-user");
     }
 
-    // A 3-minute track (from AddMediaItemAsync) heard for 2 minutes: enough to scrobble.
+    // A 3-minute track (from AddMediaItemAsync) heard for 2:45, over 90%: enough to scrobble.
     private static Task<PlayEventDto> RecordPlayAsync(TestUser user, MediaItem track, DateTimeOffset? startedAt = null) =>
-        RecordPlayAsync(user, track, startedAt, TimeSpan.FromMinutes(2));
+        RecordPlayAsync(user, track, startedAt, TimeSpan.FromSeconds(165));
 
     private static async Task<PlayEventDto> RecordPlayAsync(TestUser user, MediaItem track, DateTimeOffset? startedAt, TimeSpan? listenedFor)
     {

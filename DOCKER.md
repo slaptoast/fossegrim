@@ -162,8 +162,7 @@ is fine: a new one is generated and users just sign in again.
 
 Each user can link their own Last.fm account from their Profile page, after
 which Fossegrim shows what they're playing on Last.fm ("now playing") and
-scrobbles each track once they've heard more than half of it (or 4
-minutes). If Last.fm is unreachable, scrobbles are retried in the background
+scrobbles each track once they've heard 90% of it. If Last.fm is unreachable, scrobbles are retried in the background
 for up to 14 days, the longest Last.fm accepts; the Listens page shows each
 listen's Last.fm status. The server needs one Last.fm
 API application for this (it belongs to whoever runs the server, not to any

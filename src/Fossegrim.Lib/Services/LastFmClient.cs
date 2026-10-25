@@ -141,22 +141,6 @@ public class LastFmClient
         _ => null
     };
 
-    /// <summary>
-    /// Last.fm's documented scrobble rule: the track must be longer than 30
-    /// seconds and have been played for at least half its duration or for
-    /// 4 minutes, whichever comes first.
-    /// </summary>
-    public static bool IsScrobbleEligible(TimeSpan trackDuration, TimeSpan playedFor)
-    {
-        if (trackDuration <= TimeSpan.FromSeconds(30))
-        {
-            return false;
-        }
-
-        var threshold = TimeSpan.FromTicks(Math.Min(trackDuration.Ticks / 2, TimeSpan.FromMinutes(4).Ticks));
-        return playedFor >= threshold;
-    }
-
     private static Dictionary<string, string> TrackParameters(LastFmTrack track)
     {
         var parameters = new Dictionary<string, string>

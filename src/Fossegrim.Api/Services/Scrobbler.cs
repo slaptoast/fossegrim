@@ -38,7 +38,6 @@ public class Scrobbler
     private static readonly HashSet<int> RetryableErrors = [8, 10, 11, 13, 16, 26, 29];
     private const int InvalidSessionKeyError = 9;
     private const int DailyLimitIgnoredCode = 5;
-    private const int MinTrackSeconds = 30;
 
     private readonly FossegrimDbContext _db;
     private readonly LastFmClient _lastFm;
@@ -208,8 +207,8 @@ public class Scrobbler
         play.ScrobbleError = Truncate(error);
     }
 
-    // The browser only reports a play once the rule is met; this re-checks it
-    // so other clients can't scrobble skipped tracks. Without a known track
+    // The browser only reports a play once ListenRule is met; this re-checks
+    // it so other clients can't scrobble skipped tracks. Without a known track
     // length, it settles for the 30-second minimum.
     private static bool MeetsScrobbleRule(PlayEvent play, MediaItem track)
     {
@@ -219,8 +218,8 @@ public class Scrobbler
         }
 
         return track.Duration is { } duration && duration > TimeSpan.Zero
-            ? LastFmClient.IsScrobbleEligible(duration, listened)
-            : listened > TimeSpan.FromSeconds(MinTrackSeconds);
+            ? ListenRule.IsListen(duration, listened)
+            : listened > ListenRule.MinTrackLength;
     }
 
     public static LastFmTrack? ToLastFmTrack(MediaItem item)

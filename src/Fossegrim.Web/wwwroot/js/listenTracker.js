@@ -1,12 +1,12 @@
 // Counts how long the current track has actually been heard on an <audio>
-// element and reports a "listen" once, as soon as Last.fm's rule is met: the
-// track is longer than 30 seconds and has played for half its length or 4
-// minutes, whichever comes first. Only normal playback counts, so seeking
-// ahead can't fake a listen and skipping a track never reaches the threshold.
+// element and reports a "listen" once, as soon as the track (if longer than
+// 30 seconds) has played for 90% of its length. Must match ListenRule.cs on
+// the server. Only normal playback counts, so seeking ahead can't fake a
+// listen and skipping a track never reaches the threshold.
 // Calls dotnet.invokeMethodAsync('OnListened', startedAtIso, listenedSeconds).
 
 const MIN_TRACK_SECONDS = 30;
-const MAX_THRESHOLD_SECONDS = 240;
+const REQUIRED_FRACTION = 0.9;
 // timeupdate fires every ~250ms; a bigger jump between two of them is a seek.
 const MAX_STEP_SECONDS = 2;
 
@@ -49,7 +49,7 @@ export function attach(audio, dotnet) {
 
         const duration = audio.duration;
         if (!reported && Number.isFinite(duration) && duration > MIN_TRACK_SECONDS &&
-            listened >= Math.min(duration / 2, MAX_THRESHOLD_SECONDS)) {
+            listened >= duration * REQUIRED_FRACTION) {
             reported = true;
             dotnet.invokeMethodAsync('OnListened', startedAt.toISOString(), listened);
         }

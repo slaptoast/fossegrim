@@ -193,6 +193,17 @@ body {
 .player-button:hover:not(:disabled), .player-button.active { background: var(--chip-hover); }
 .player-button:disabled { opacity: 0.4; cursor: default; }
 
+/* ---- Playlist sharing and picker ---- */
+.share-add { display: flex; gap: var(--space-6); margin-top: var(--space-8); }
+.share-add input { flex: 1; }
+.share-add select { width: auto; }
+.share-results { list-style: none; margin: var(--space-4) 0 0; padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-md); max-width: 420px; }
+.share-results li + li { border-top: 1px solid var(--border); }
+.share-results .context-menu-item { display: flex; align-items: center; gap: var(--space-8); }
+.share-results-action { margin-left: auto; color: var(--selection-fg); font-size: 0.75rem; font-weight: 600; }
+.playlist-picker-new { margin-top: var(--space-8); }
+.playlist-picker-new input { flex: 1; }
+
 /* ---- Up next: the queue, opened from the player bar ---- */
 .up-next-panel {
     position: fixed;

@@ -1,4 +1,5 @@
 @inject FossegrimApiClient ApiClient
+@inject ToastService Toasts
 
 @if (IsOpen)
 {
@@ -17,12 +18,12 @@
                 {
                     <p>Loading playlists...</p>
                 }
-                else if (_playlists.Count == 0)
-                {
-                    <p>You have no playlists you can edit. Create one on the Playlists page.</p>
-                }
                 else
                 {
+                    @if (_playlists.Count == 0)
+                    {
+                        <p>You don't have any playlists you can edit yet. Create one:</p>
+                    }
                     <div class="playlist-picker-list">
                         @foreach (var playlist in _playlists)
                         {
@@ -31,6 +32,13 @@
                                 <span class="playlist-picker-count">@playlist.TrackCount</span>
                             </button>
                         }
+                    </div>
+
+                    <div class="new-playlist-box playlist-picker-new">
+                        <input type="text" placeholder="New playlist name..." @bind="_newPlaylistName" @bind:event="oninput"
+                               @onkeydown="OnNewPlaylistKeyDownAsync" aria-label="New playlist name" />
+                        <button type="button" class="button-secondary" disabled="@(string.IsNullOrWhiteSpace(_newPlaylistName) || _isSaving)"
+                                @onclick="CreateAndAddAsync">+ New playlist</button>
                     </div>
                 }
             </div>
@@ -61,6 +69,7 @@
     private bool _isSaving;
     private bool _wasOpen;
     private string? _errorMessage;
+    private string _newPlaylistName = "";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -68,6 +77,7 @@
         if (IsOpen && !_wasOpen)
         {
             _wasOpen = true;
+            _newPlaylistName = "";
             await LoadPlaylistsAsync();
         }
         else if (!IsOpen)
@@ -110,6 +120,7 @@
         try
         {
             await ApiClient.AddPlaylistItemsAsync(playlist.Id, MediaItemIds);
+            Toasts.Show(AddedMessage(playlist.Name));
             await OnClose.InvokeAsync();
             await OnAdded.InvokeAsync(playlist.Id);
         }
@@ -122,6 +133,45 @@
             _isSaving = false;
         }
     }
+
+    // Creates a playlist and adds the tracks to it in one go.
+    private async Task CreateAndAddAsync()
+    {
+        var name = _newPlaylistName.Trim();
+        if (name.Length == 0 || _isSaving)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+        PlaylistDto created;
+        try
+        {
+            created = await ApiClient.CreatePlaylistAsync(name);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error creating \"{name}\": {ex.Message}";
+            _isSaving = false;
+            return;
+        }
+
+        _isSaving = false;
+        await AddAsync(created);
+    }
+
+    private async Task OnNewPlaylistKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await CreateAndAddAsync();
+        }
+    }
+
+    private string AddedMessage(string playlistName) => MediaItemIds.Count == 1
+        ? $"Added 1 track to \"{playlistName}\""
+        : $"Added {MediaItemIds.Count} tracks to \"{playlistName}\"";
 
     private Task Cancel() => OnClose.InvokeAsync();
 }

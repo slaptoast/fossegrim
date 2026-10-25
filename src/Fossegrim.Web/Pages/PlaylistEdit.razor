@@ -1,6 +1,8 @@
 @page "/playlists"
 @attribute [Authorize]
+@implements IDisposable
 @inject FossegrimApiClient ApiClient
+@inject ToastService Toasts
 
 <div class="container wide">
     <div class="header">
@@ -45,6 +47,8 @@
                     @if (_selectedPlaylist.AccessLevel != "Owner")
                     {
                         <span class="playlist-owner">Shared by @(_selectedPlaylist.OwnerDisplayName ?? "another user")</span>
+                        <button type="button" class="button-secondary" disabled="@_isSaving" @onclick="() => _showLeaveConfirm = true"
+                                title="Remove this playlist from your list. It isn't deleted for anyone else.">Leave Playlist</button>
                     }
                     @if (_selectedPlaylist.AccessLevel == "Owner")
                     {
@@ -94,6 +98,33 @@
                                 </tbody>
                             </table>
                         }
+
+                        <div class="share-add">
+                            <input type="text" placeholder="Share with... (name, or exact email)" value="@_shareQuery" @oninput="OnShareQueryChangedAsync"
+                                   aria-label="Find someone to share with" />
+                            <select @bind="_newShareType" aria-label="Access for the person you add">
+                                <option value="ReadOnly">Read-only</option>
+                                <option value="Editor">Editor</option>
+                            </select>
+                        </div>
+                        @if (ShareCandidates.Count > 0)
+                        {
+                            <ul class="share-results">
+                                @foreach (var candidate in ShareCandidates)
+                                {
+                                    <li>
+                                        <button type="button" class="context-menu-item" disabled="@_isSaving" @onclick="() => ShareWithAsync(candidate)">
+                                            @candidate.DisplayName
+                                            <span class="share-results-action">Share</span>
+                                        </button>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else if (_shareSearched && _shareQuery.Trim().Length >= 2)
+                        {
+                            <p class="playlist-share-empty">No one found. Try their display name or exact email.</p>
+                        }
                     </div>
                 }
 
@@ -126,6 +157,13 @@
                OnConfirm="DeletePlaylistAsync"
                OnCancel="() => _showDeleteConfirm = false" />
 
+<ConfirmDialog IsOpen="_showLeaveConfirm"
+               Title="Leave Playlist"
+               Message="@($"Remove \"{_selectedPlaylist?.Name}\" from your playlists? You'll need {_selectedPlaylist?.OwnerDisplayName ?? "the owner"} to share it again to get it back.")"
+               ConfirmText="Leave"
+               OnConfirm="LeavePlaylistAsync"
+               OnCancel="() => _showLeaveConfirm = false" />
+
 @code {
     private List<PlaylistDto> _playlists = [];
     private List<MediaItemDto> _mediaItems = [];
@@ -137,6 +175,14 @@
     private bool _isLoading = true;
     private bool _isSaving;
     private bool _showDeleteConfirm;
+    private bool _showLeaveConfirm;
+
+    private static readonly TimeSpan ShareSearchDelay = TimeSpan.FromMilliseconds(300);
+    private string _shareQuery = "";
+    private string _newShareType = "ReadOnly";
+    private List<UserSummaryDto> _shareResults = [];
+    private bool _shareSearched;
+    private CancellationTokenSource? _shareSearchDelay;
     private string? _errorMessage;
     private string? _playlistErrorMessage;
 
@@ -325,6 +371,100 @@
         {
             _mediaItems[index] = updated;
         }
+    }
+
+    // Search results minus people the playlist is already shared with.
+    private List<UserSummaryDto> ShareCandidates => _selectedPlaylist is null
+        ? []
+        : _shareResults.Where(u => _selectedPlaylist.Shares.All(s => s.UserId != u.UserId)).ToList();
+
+    private async Task OnShareQueryChangedAsync(ChangeEventArgs e)
+    {
+        _shareQuery = e.Value?.ToString() ?? "";
+        _shareSearched = false;
+
+        _shareSearchDelay?.Cancel();
+        _shareSearchDelay = new CancellationTokenSource();
+        var token = _shareSearchDelay.Token;
+        try
+        {
+            await Task.Delay(ShareSearchDelay, token);
+            var results = await ApiClient.SearchUsersAsync(_shareQuery);
+            if (!token.IsCancellationRequested)
+            {
+                _shareResults = results.ToList();
+                _shareSearched = true;
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // Superseded by a later keystroke.
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error searching users: {ex.Message}";
+        }
+    }
+
+    private async Task ShareWithAsync(UserSummaryDto person)
+    {
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            await ApiClient.SharePlaylistAsync(_selectedPlaylist.Id, person.UserId, _newShareType);
+            Toasts.Show($"Shared \"{_selectedPlaylist.Name}\" with {person.DisplayName}");
+            _shareQuery = "";
+            _shareResults = [];
+            _shareSearched = false;
+            await LoadPlaylistAsync(_selectedPlaylist.Id);
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error sharing playlist: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task LeavePlaylistAsync()
+    {
+        _showLeaveConfirm = false;
+        if (_selectedPlaylist is null)
+        {
+            return;
+        }
+
+        var left = _selectedPlaylist;
+        _isSaving = true;
+        try
+        {
+            await ApiClient.LeavePlaylistAsync(left.Id);
+            _playlists.RemoveAll(p => p.Id == left.Id);
+            _selectedPlaylist = null;
+            _selectedPlaylistId = null;
+            Toasts.Show($"Left \"{left.Name}\"");
+        }
+        catch (Exception ex)
+        {
+            _playlistErrorMessage = $"Error leaving playlist: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _shareSearchDelay?.Cancel();
+        _shareSearchDelay?.Dispose();
     }
 
     private Task HandlePlaylistItemTagsUpdatedAsync() =>

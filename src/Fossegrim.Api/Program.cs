@@ -163,6 +163,7 @@ app.MapStreamingEndpoints();
 app.MapCoverEndpoints();
 app.MapVersionEndpoints();
 app.MapLastFmEndpoints();
+app.MapUserEndpoints();
 
 app.MapFallbackToFile("index.html");
 

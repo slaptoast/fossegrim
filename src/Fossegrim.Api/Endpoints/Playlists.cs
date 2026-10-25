@@ -592,6 +592,35 @@ public static class Playlists
         })
         .WithName("RevokePlaylistShare")
         .WithOpenApi();
+
+        // Lets someone a playlist was shared with remove it from their own
+        // list. Only their access goes; the playlist and other shares stay.
+        playlistGroup.MapPost("/{id:guid}/leave", async (
+            Guid id,
+            ClaimsPrincipal principal,
+            UserManager<ApplicationUser> userManager,
+            FossegrimDbContext db) =>
+        {
+            var user = await userManager.GetUserAsync(principal);
+            if (user is null)
+            {
+                return Results.Unauthorized();
+            }
+
+            var share = await db.PlaylistShares.FirstOrDefaultAsync(s => s.PlaylistId == id && s.UserId == user.Id);
+            if (share is null)
+            {
+                // Owners can't leave their own playlist (they delete it instead).
+                return Results.NotFound();
+            }
+
+            db.PlaylistShares.Remove(share);
+            await db.SaveChangesAsync();
+
+            return Results.NoContent();
+        })
+        .WithName("LeavePlaylist")
+        .WithOpenApi();
     }
 
     // Gap between fractional positions. Leaves room to insert between any two

@@ -2,6 +2,7 @@
 @inject NavigationManager Navigation
 @inject JwtAuthenticationStateProvider AuthStateProvider
 @inject TokenStore TokenStore
+@inject ThemeService ThemeService
 
 <div class="user-menu">
     <button type="button" class="user-menu-toggle" @onclick="ToggleOpen">@_displayName ▾</button>
@@ -16,6 +17,18 @@
                 <a href="/settings" @onclick="Close">Settings</a>
                 <a href="/admin" @onclick="Close">Admin Panel</a>
             }
+            <div class="user-menu-theme" role="group" aria-label="Theme">
+                <span class="user-menu-theme-label">Theme</span>
+                <div class="theme-switch">
+                    @foreach (var choice in Enum.GetValues<ThemeChoice>())
+                    {
+                        <button type="button"
+                                class="@(choice == _theme ? "active" : null)"
+                                aria-pressed="@(choice == _theme ? "true" : "false")"
+                                @onclick="() => SetThemeAsync(choice)">@choice</button>
+                    }
+                </div>
+            </div>
             <button type="button" class="user-menu-logout" @onclick="LogoutAsync">Log out</button>
         </div>
     }
@@ -25,11 +38,13 @@
     private bool _isOpen;
     private bool _isAdmin;
     private string _displayName = "Account";
+    private ThemeChoice _theme;
 
     protected override async Task OnInitializedAsync()
     {
         AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
         await LoadStateAsync();
+        _theme = await ThemeService.GetChoiceAsync();
     }
 
     private async void OnAuthStateChanged(Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState> task)
@@ -49,6 +64,13 @@
     private void ToggleOpen() => _isOpen = !_isOpen;
 
     private void Close() => _isOpen = false;
+
+    // Leaves the menu open so each option can be compared in place.
+    private async Task SetThemeAsync(ThemeChoice choice)
+    {
+        _theme = choice;
+        await ThemeService.SetChoiceAsync(choice);
+    }
 
     private async Task LogoutAsync()
     {

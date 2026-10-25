@@ -28,6 +28,7 @@ builder.Services.AddSingleton<JwtAuthenticationStateProvider>();
 builder.Services.AddSingleton<AuthenticationStateProvider>(sp => sp.GetRequiredService<JwtAuthenticationStateProvider>());
 builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<PlayerState>();
+builder.Services.AddSingleton<ThemeService>();
 
 builder.Services.AddTransient<AuthorizedHttpMessageHandler>();
 builder.Services.AddHttpClient<FossegrimApiClient>(client =>

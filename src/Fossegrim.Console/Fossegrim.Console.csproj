@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\fossegrim.lib\fossegrim.lib.csproj" />
+    <ProjectReference Include="..\Fossegrim.Lib\Fossegrim.Lib.csproj" />
   </ItemGroup>
 
   <ItemGroup>

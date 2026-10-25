@@ -1,0 +1,82 @@
+@implements IAsyncDisposable
+@inject PlayerState PlayerState
+@inject IJSRuntime JS
+
+@if (PlayerState.CurrentTrack is not null)
+{
+    <div class="player-bar">
+        <div class="player-track-info">
+            <span class="player-title">@(PlayerState.CurrentTrack.Title ?? "Unknown")</span>
+            <span class="player-artist">@(PlayerState.CurrentTrack.ArtistName ?? "Unknown Artist")</span>
+        </div>
+
+        @if (PlayerState.ErrorMessage is not null)
+        {
+            <span class="player-error">@PlayerState.ErrorMessage</span>
+        }
+        else if (PlayerState.StreamUrl is not null)
+        {
+            <audio @ref="_audio" controls autoplay="@PlayerState.AutoPlay" preload="metadata" src="@PlayerState.StreamUrl" class="player-audio" @onplay="OnPlay" @onended="OnTrackEnded">
+                Your browser does not support the audio element.
+            </audio>
+        }
+    </div>
+}
+
+@code {
+    private ElementReference _audio;
+    // The <audio> element is recreated when the track changes, so the
+    // listen tracker is attached to each new one (identified by its Id).
+    private string? _trackedAudioId;
+    private IJSObjectReference? _listenTracker;
+    private DotNetObjectReference<PlayerBar>? _selfReference;
+
+    protected override void OnInitialized()
+    {
+        PlayerState.Changed += OnChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (PlayerState.StreamUrl is null || _audio.Id is null || _audio.Id == _trackedAudioId)
+        {
+            return;
+        }
+
+        _trackedAudioId = _audio.Id;
+        _listenTracker ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/listenTracker.js");
+        _selfReference ??= DotNetObjectReference.Create(this);
+        await _listenTracker.InvokeVoidAsync("attach", _audio, _selfReference);
+    }
+
+    // Called by listenTracker.js once enough of the current track has been heard.
+    [JSInvokable]
+    public Task OnListened(string startedAt, double listenedSeconds) =>
+        PlayerState.RecordListenAsync(DateTimeOffset.Parse(startedAt, System.Globalization.CultureInfo.InvariantCulture), TimeSpan.FromSeconds(listenedSeconds));
+
+    private void OnChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private Task OnPlay() => PlayerState.ReportNowPlayingAsync();
+
+    private Task OnTrackEnded() => PlayerState.PlayNextAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        PlayerState.Changed -= OnChanged;
+        _selfReference?.Dispose();
+        if (_listenTracker is not null)
+        {
+            try
+            {
+                await _listenTracker.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The page is going away; nothing to clean up.
+            }
+        }
+    }
+}

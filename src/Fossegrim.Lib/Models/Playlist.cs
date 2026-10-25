@@ -22,10 +22,12 @@ public class Playlist
     public DateTime? DateAdded { get; set; }
     public DateTime? LastModified { get; set; }
 
-    // The track currently "now playing" for this playlist. Only meaningful
+    // The entry currently "now playing" for this playlist. Only meaningful
     // for a Queue playlist, which tracks playback position across devices.
-    public Guid? CurrentMediaItemId { get; set; }
-    public MediaItem? CurrentMediaItem { get; set; }
+    // It points at a PlaylistItem rather than a track so a track queued
+    // twice still has a well-defined position.
+    public Guid? CurrentItemId { get; set; }
+    public PlaylistItem? CurrentItem { get; set; }
 
     // Ordered tracks (by MediaItem reference) that make up this playlist
     public ICollection<PlaylistItem> Items { get; set; } = [];

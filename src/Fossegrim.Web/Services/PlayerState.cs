@@ -2,145 +2,154 @@ using Fossegrim.Contracts.Dtos;
 
 namespace Fossegrim.Web.Services;
 
+// One entry in the queue. ItemId is the server's queue entry id, so a track
+// queued twice is still two distinct entries; it's Guid.Empty only briefly,
+// while a newly started queue is being saved.
+public record QueueEntry(Guid ItemId, MediaItemDto Track);
+
 /// <summary>
-/// Holds the currently-playing track so a persistent player bar in MainLayout
-/// keeps playing across navigation, instead of a dedicated per-track page.
-/// Backed by the user's server-side Queue playlist, so what's queued and
-/// which track is "now playing" survives a reload or a switch to another client.
+/// Holds the queue and the currently-playing entry so a persistent player bar
+/// in MainLayout keeps playing across navigation. Backed by the user's
+/// server-side Queue playlist, so what's queued and what's "now playing"
+/// survive a reload or a switch to another client.
+///
+/// Every change to the queue runs one at a time (see <see cref="_lock"/>), so
+/// e.g. "play this album" followed straight away by "add to queue" can't
+/// interleave and lose one of them.
 /// </summary>
 public class PlayerState
 {
     private readonly FossegrimApiClient _apiClient;
-    private readonly List<MediaItemDto> _queue = [];
-    private int _queueIndex = -1;
+    private readonly ToastService _toasts;
+    private readonly SemaphoreSlim _lock = new(1, 1);
+    private List<QueueEntry> _queue = [];
+    private int _index = -1;
+    private Guid? _queueId;
 
-    public PlayerState(FossegrimApiClient apiClient)
+    public PlayerState(FossegrimApiClient apiClient, ToastService toasts)
     {
         _apiClient = apiClient;
-        _ = HydrateFromServerAsync();
+        _toasts = toasts;
+        Initialized = HydrateFromServerAsync();
     }
+
+    // Completes once the queue saved on the server has been restored.
+    public Task Initialized { get; }
+
+    public IReadOnlyList<QueueEntry> Queue => _queue;
+    public int CurrentIndex => _index;
+    public QueueEntry? CurrentEntry => _index >= 0 && _index < _queue.Count ? _queue[_index] : null;
+    public bool HasNext => _index + 1 < _queue.Count;
+    public bool HasPrevious => _index > 0;
 
     public MediaItemDto? CurrentTrack { get; private set; }
     public string? StreamUrl { get; private set; }
     public string? ErrorMessage { get; private set; }
 
-    // False only for the track restored from the server on startup, so
-    // reloading the page doesn't unexpectedly start audio playing.
+    // False for a track that's only been loaded (restored after a reload, or
+    // the first track added to an empty queue), so audio doesn't start by surprise.
     public bool AutoPlay { get; private set; }
 
     public event Action? Changed;
 
     public Task PlayAsync(MediaItemDto track) => PlayQueueAsync([track]);
 
-    public Task PlayQueueAsync(IReadOnlyList<MediaItemDto> tracks)
+    // Replaces the queue with these tracks and starts playing the first.
+    public Task PlayQueueAsync(IReadOnlyList<MediaItemDto> tracks) => WithLockAsync(async () =>
     {
-        _queue.Clear();
-        _queue.AddRange(tracks);
-        return PlayAtAsync(0, persistWholeQueue: true);
-    }
-
-    public Task PlayNextAsync() => _queueIndex + 1 < _queue.Count
-        ? PlayAtAsync(_queueIndex + 1, persistWholeQueue: false)
-        : Task.CompletedTask;
-
-    // Inserts the given tracks immediately after the currently-playing item
-    // (or at the very start, if nothing is currently playing).
-    public async Task AddToQueueNextAsync(IEnumerable<Guid> mediaItemIds)
-    {
-        var ids = mediaItemIds.ToList();
-        if (ids.Count == 0)
+        if (tracks.Count == 0)
         {
             return;
         }
 
-        try
-        {
-            var queue = await _apiClient.GetQueueAsync();
-            var afterAdd = await _apiClient.AddPlaylistItemsAsync(queue.Id, ids);
-
-            var ordered = afterAdd.Items.OrderBy(i => i.Position).ToList();
-            var newItems = ordered.TakeLast(ids.Count).ToList();
-            var afterId = ordered.FirstOrDefault(i => i.MediaItem.Id == queue.CurrentMediaItemId)?.Id;
-
-            var latest = afterAdd;
-            foreach (var newItem in newItems)
-            {
-                latest = await _apiClient.MovePlaylistItemAsync(queue.Id, newItem.Id, afterId);
-                afterId = newItem.Id;
-            }
-
-            SyncQueueList(latest, out _, out _);
-            await EnsureCurrentTrackAsync();
-            Changed?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Could not add to queue: {ex.Message}";
-            Changed?.Invoke();
-        }
-    }
-
-    public async Task AddToQueueEndAsync(IEnumerable<Guid> mediaItemIds)
-    {
-        var ids = mediaItemIds.ToList();
-        if (ids.Count == 0)
-        {
-            return;
-        }
+        // Start the audio straight away; the queue entries get their ids once saved.
+        _queue = tracks.Select(t => new QueueEntry(Guid.Empty, t)).ToList();
+        _index = 0;
+        await LoadCurrentAsync(autoPlay: true);
 
         try
         {
-            var queue = await _apiClient.GetQueueAsync();
-            var updated = await _apiClient.AddPlaylistItemsAsync(queue.Id, ids);
-            SyncQueueList(updated, out _, out _);
-            await EnsureCurrentTrackAsync();
+            Adopt(await _apiClient.SetQueueAsync(tracks.Select(t => t.Id), currentIndex: 0));
             Changed?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Could not add to queue: {ex.Message}";
-            Changed?.Invoke();
-        }
-    }
-
-    private async Task PlayAtAsync(int index, bool persistWholeQueue)
-    {
-        _queueIndex = index;
-        var track = _queue[index];
-
-        CurrentTrack = track;
-        AutoPlay = true;
-        ErrorMessage = null;
-        StreamUrl = null;
-        Changed?.Invoke();
-
-        try
-        {
-            StreamUrl = await _apiClient.GetStreamUrlAsync(track.Id);
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Could not play track: {ex.Message}";
-        }
-
-        Changed?.Invoke();
-
-        try
-        {
-            if (persistWholeQueue)
-            {
-                await _apiClient.SetQueueAsync(_queue.Select(t => t.Id), track.Id);
-            }
-            else
-            {
-                await _apiClient.SetQueueCurrentTrackAsync(track.Id);
-            }
         }
         catch
         {
             // Best-effort: losing sync with the server shouldn't block local playback.
         }
-    }
+    });
+
+    public Task PlayNextAsync() => WithLockAsync(() => HasNext ? MoveToAsync(_index + 1) : Task.CompletedTask);
+
+    public Task PlayPreviousAsync() => WithLockAsync(() => HasPrevious ? MoveToAsync(_index - 1) : Task.CompletedTask);
+
+    public Task JumpToAsync(Guid itemId) => WithLockAsync(() =>
+    {
+        var index = _queue.FindIndex(e => e.ItemId == itemId);
+        return index >= 0 ? MoveToAsync(index) : Task.CompletedTask;
+    });
+
+    // Removes an entry other than the one playing (the Up next panel doesn't offer that).
+    public Task RemoveAsync(Guid itemId) => WithLockAsync(async () =>
+    {
+        if (_queueId is not { } queueId || CurrentEntry?.ItemId == itemId)
+        {
+            return;
+        }
+
+        try
+        {
+            await _apiClient.RemovePlaylistItemAsync(queueId, itemId);
+            Adopt(await _apiClient.GetQueueAsync());
+        }
+        catch (Exception ex)
+        {
+            _toasts.Show($"Couldn't remove from queue: {ex.Message}");
+        }
+
+        Changed?.Invoke();
+    });
+
+    // Inserts the tracks right after the playing entry (or at the start when
+    // nothing is playing).
+    public Task AddToQueueNextAsync(IEnumerable<Guid> mediaItemIds) => AddToQueueAsync(mediaItemIds.ToList(), playNext: true);
+
+    public Task AddToQueueEndAsync(IEnumerable<Guid> mediaItemIds) => AddToQueueAsync(mediaItemIds.ToList(), playNext: false);
+
+    private Task AddToQueueAsync(List<Guid> ids, bool playNext) => WithLockAsync(async () =>
+    {
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var queue = await _apiClient.GetQueueAsync();
+            var latest = await _apiClient.AddPlaylistItemsAsync(queue.Id, ids);
+
+            if (playNext)
+            {
+                // New entries are appended; move each one after the playing entry (and its predecessor).
+                var newItems = latest.Items.OrderBy(i => i.Position).TakeLast(ids.Count).ToList();
+                var afterId = queue.CurrentItemId;
+                foreach (var newItem in newItems)
+                {
+                    latest = await _apiClient.MovePlaylistItemAsync(queue.Id, newItem.Id, afterId);
+                    afterId = newItem.Id;
+                }
+            }
+
+            Adopt(latest);
+            await LoadFirstIfNothingPlayingAsync();
+            _toasts.Show(AddedMessage(ids, playNext));
+        }
+        catch (Exception ex)
+        {
+            _toasts.Show($"Couldn't add to queue: {ex.Message}");
+        }
+
+        Changed?.Invoke();
+    });
 
     // Called when the <audio> element actually starts or resumes playing (not
     // when a track is merely loaded, e.g. restored without autoplay). The
@@ -183,8 +192,8 @@ public class PlayerState
 
     public void Stop()
     {
-        _queue.Clear();
-        _queueIndex = -1;
+        _queue = [];
+        _index = -1;
         CurrentTrack = null;
         StreamUrl = null;
         ErrorMessage = null;
@@ -192,57 +201,56 @@ public class PlayerState
         Changed?.Invoke();
     }
 
-    // Replaces the local queue snapshot with the server's authoritative order/position,
-    // so PlayNextAsync keeps advancing correctly after out-of-band edits (e.g. right-click add).
-    private void SyncQueueList(PlaylistDetailDto queue, out List<MediaItemDto> tracks, out int currentIndex)
+    private async Task WithLockAsync(Func<Task> action)
     {
-        var items = queue.Items.OrderBy(i => i.Position).ToList();
-        tracks = items.Select(i => PlaylistTrackMapper.ToMediaItemDto(i.MediaItem)).ToList();
-        currentIndex = queue.CurrentMediaItemId is null
-            ? -1
-            : items.FindIndex(i => i.MediaItem.Id == queue.CurrentMediaItemId);
-
-        _queue.Clear();
-        _queue.AddRange(tracks);
-        _queueIndex = currentIndex;
+        await _lock.WaitAsync();
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
-    // When nothing is "now playing" (e.g. the first right-click add into an empty queue),
-    // surface the first queued track in the player bar, paused, so the queue is visible and
-    // playable instead of filling up out of sight. PlayNextAsync then advances through it.
-    private async Task EnsureCurrentTrackAsync()
+    private async Task MoveToAsync(int index)
     {
-        if (_queueIndex >= 0 || _queue.Count == 0)
+        _index = index;
+        await LoadCurrentAsync(autoPlay: true);
+        await SaveCurrentAsync();
+    }
+
+    private async Task LoadCurrentAsync(bool autoPlay)
+    {
+        CurrentTrack = _queue[_index].Track;
+        AutoPlay = autoPlay;
+        ErrorMessage = null;
+        StreamUrl = null;
+        Changed?.Invoke();
+
+        try
+        {
+            StreamUrl = await _apiClient.GetStreamUrlAsync(CurrentTrack.Id);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Could not play track: {ex.Message}";
+        }
+
+        Changed?.Invoke();
+    }
+
+    private async Task SaveCurrentAsync()
+    {
+        if (CurrentEntry is not { ItemId: var itemId } || itemId == Guid.Empty)
         {
             return;
         }
 
-        var existingIndex = CurrentTrack is null ? -1 : _queue.FindIndex(t => t.Id == CurrentTrack.Id);
-        if (existingIndex >= 0)
-        {
-            _queueIndex = existingIndex;
-        }
-        else
-        {
-            _queueIndex = 0;
-            CurrentTrack = _queue[0];
-            AutoPlay = false;
-            ErrorMessage = null;
-            StreamUrl = null;
-
-            try
-            {
-                StreamUrl = await _apiClient.GetStreamUrlAsync(CurrentTrack.Id);
-            }
-            catch (Exception ex)
-            {
-                ErrorMessage = $"Could not load track: {ex.Message}";
-            }
-        }
-
         try
         {
-            await _apiClient.SetQueueCurrentTrackAsync(CurrentTrack!.Id);
+            await _apiClient.SetQueueCurrentItemAsync(itemId);
         }
         catch
         {
@@ -250,51 +258,61 @@ public class PlayerState
         }
     }
 
-    private async Task HydrateFromServerAsync()
+    // When nothing is "now playing" (e.g. the first add into an empty queue),
+    // load the first entry, paused, so the queue is visible and playable.
+    private async Task LoadFirstIfNothingPlayingAsync()
+    {
+        if (_index >= 0 || _queue.Count == 0)
+        {
+            return;
+        }
+
+        _index = 0;
+        await LoadCurrentAsync(autoPlay: false);
+        await SaveCurrentAsync();
+    }
+
+    // Replaces the local queue with the server's order and "now playing" entry.
+    private void Adopt(PlaylistDetailDto queue)
+    {
+        var items = queue.Items.OrderBy(i => i.Position).ToList();
+        _queueId = queue.Id;
+        _queue = items.Select(i => new QueueEntry(i.Id, PlaylistTrackMapper.ToMediaItemDto(i.MediaItem))).ToList();
+        _index = queue.CurrentItemId is { } currentId ? items.FindIndex(i => i.Id == currentId) : -1;
+    }
+
+    private string AddedMessage(List<Guid> ids, bool playNext)
+    {
+        var what = ids.Count == 1
+            ? $"\"{_queue.LastOrDefault(e => e.Track.Id == ids[0])?.Track.Title ?? "Track"}\""
+            : $"{ids.Count} tracks";
+        return playNext ? $"{what} will play next" : $"Added {what} to the queue";
+    }
+
+    private Task HydrateFromServerAsync() => WithLockAsync(async () =>
     {
         try
         {
-            var queue = await _apiClient.GetQueueAsync();
-            SyncQueueList(queue, out var tracks, out var currentIndex);
-            if (tracks.Count == 0)
-            {
-                return;
-            }
-
-            if (currentIndex < 0)
-            {
-                currentIndex = 0;
-                _queueIndex = 0;
-
-                // Persist the default so a later "Add to next in queue" lands after this
-                // track rather than in front of it.
-                try
-                {
-                    await _apiClient.SetQueueCurrentTrackAsync(tracks[0].Id);
-                }
-                catch
-                {
-                    // Best-effort, as in PlayAtAsync.
-                }
-            }
-
-            CurrentTrack = tracks[currentIndex];
-            AutoPlay = false;
-
-            try
-            {
-                StreamUrl = await _apiClient.GetStreamUrlAsync(CurrentTrack.Id);
-            }
-            catch (Exception ex)
-            {
-                ErrorMessage = $"Could not restore playback: {ex.Message}";
-            }
-
-            Changed?.Invoke();
+            Adopt(await _apiClient.GetQueueAsync());
         }
         catch
         {
-            // No persisted queue yet, or the user isn't authenticated - nothing to restore.
+            // No saved queue yet, or the user isn't signed in: nothing to restore.
+            return;
         }
-    }
+
+        if (_queue.Count == 0)
+        {
+            return;
+        }
+
+        if (_index < 0)
+        {
+            // Save the default so a later "Add to next" lands after this entry, not before it.
+            _index = 0;
+            await SaveCurrentAsync();
+        }
+
+        await LoadCurrentAsync(autoPlay: false);
+    });
 }

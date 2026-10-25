@@ -20,7 +20,8 @@ public record PlaylistDetailDto(
     string AccessLevel,
     DateTime? DateAdded,
     DateTime? LastModified,
-    Guid? CurrentMediaItemId,
+    // The "now playing" entry (a PlaylistItemDto.Id, not a track id). Queue only.
+    Guid? CurrentItemId,
     IEnumerable<PlaylistItemDto> Items,
     IEnumerable<PlaylistShareDto> Shares);
 
@@ -54,7 +55,9 @@ public record MovePlaylistItemRequest(Guid? AfterItemId);
 public record SharePlaylistRequest(string UserId, string ShareType);
 
 // Replaces the caller's entire queue contents in one shot (e.g. "play this album now").
-public record SetQueueRequest(IEnumerable<Guid> MediaItemIds, Guid? CurrentMediaItemId);
+// CurrentIndex is the position in MediaItemIds that's now playing, since the
+// queue entries don't have ids until they're created.
+public record SetQueueRequest(IEnumerable<Guid> MediaItemIds, int? CurrentIndex);
 
-// Updates only the "now playing" pointer, without touching the queue's track list.
-public record SetQueueCurrentTrackRequest(Guid? MediaItemId);
+// Updates only the "now playing" pointer (a queue entry id), without touching the track list.
+public record SetQueueCurrentItemRequest(Guid? ItemId);

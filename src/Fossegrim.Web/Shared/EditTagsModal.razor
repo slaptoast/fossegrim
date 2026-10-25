@@ -37,6 +37,18 @@
 
     private bool _isSaving;
     private string? _errorMessage;
+    private MediaItemTagEditModel? _lastModel;
+
+    protected override void OnParametersSet()
+    {
+        // The modal instance is reused for every track, so drop any error
+        // left over from a previous track when a new one is opened.
+        if (!ReferenceEquals(Model, _lastModel))
+        {
+            _lastModel = Model;
+            _errorMessage = null;
+        }
+    }
 
     private Task Cancel() => OnCancel.InvokeAsync();
 

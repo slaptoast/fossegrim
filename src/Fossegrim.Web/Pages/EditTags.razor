@@ -46,6 +46,21 @@
                         </tr>
                     </thead>
                     <tbody>
+                        @if (_models.Count > 1)
+                        {
+                            @* Filled-in values here are copied to every track; blanks leave tracks as they are. *@
+                            <tr class="tag-edit-apply-row">
+                                <td>
+                                    <button type="button" class="button-secondary" disabled="@(!_applyAll.HasAnyValue)" @onclick="ApplyToAll"
+                                            title="Copy the values in this row to every track below">Apply to all</button>
+                                </td>
+                                <td><input type="text" @bind="_applyAll.ArtistName" @bind:event="oninput" placeholder="Artist for all" /></td>
+                                <td><input type="text" @bind="_applyAll.Album" @bind:event="oninput" placeholder="Album for all" /></td>
+                                <td></td>
+                                <td><input type="number" @bind="_applyAll.Year" @bind:event="oninput" placeholder="Year" /></td>
+                                <td><input type="text" @bind="_applyAll.Genre" @bind:event="oninput" placeholder="Genre for all" /></td>
+                            </tr>
+                        }
                         @foreach (var model in _models)
                         {
                             <tr>
@@ -74,6 +89,7 @@
     private bool _isSaving;
     private string? _errorMessage;
     private List<string> _saveErrors = [];
+    private readonly ApplyToAllInput _applyAll = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -117,6 +133,53 @@
 
     private void Cancel() => Navigation.NavigateTo("/");
 
+    // Copies the Apply-to-all row's filled-in fields onto every track. Nothing
+    // is saved until Save All, so the result can still be reviewed per row.
+    private void ApplyToAll()
+    {
+        foreach (var model in _models)
+        {
+            if (!string.IsNullOrWhiteSpace(_applyAll.ArtistName))
+            {
+                model.ArtistName = _applyAll.ArtistName.Trim();
+            }
+            if (!string.IsNullOrWhiteSpace(_applyAll.Album))
+            {
+                model.Album = _applyAll.Album.Trim();
+            }
+            if (_applyAll.Year is > 0)
+            {
+                model.Year = _applyAll.Year;
+            }
+            if (!string.IsNullOrWhiteSpace(_applyAll.Genre))
+            {
+                model.Genre = _applyAll.Genre.Trim();
+            }
+        }
+
+        _applyAll.Clear();
+    }
+
+    private class ApplyToAllInput
+    {
+        public string? ArtistName { get; set; }
+        public string? Album { get; set; }
+        public int? Year { get; set; }
+        public string? Genre { get; set; }
+
+        public bool HasAnyValue =>
+            !string.IsNullOrWhiteSpace(ArtistName) || !string.IsNullOrWhiteSpace(Album) ||
+            Year is > 0 || !string.IsNullOrWhiteSpace(Genre);
+
+        public void Clear()
+        {
+            ArtistName = null;
+            Album = null;
+            Year = null;
+            Genre = null;
+        }
+    }
+
     private async Task SaveAllAsync()
     {
         _isSaving = true;
@@ -127,7 +190,11 @@
             var errors = result.Errors.ToList();
             if (errors.Count > 0)
             {
-                _saveErrors = errors.Select(e => e.Error).ToList();
+                // Errors only carry an id, so name the track they belong to.
+                var titles = _models.ToDictionary(m => m.Id, m => m.Title);
+                _saveErrors = errors
+                    .Select(e => $"{(titles.TryGetValue(e.Id, out var t) && !string.IsNullOrWhiteSpace(t) ? t : e.Id.ToString())}: {e.Error}")
+                    .ToList();
             }
             else
             {

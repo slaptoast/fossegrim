@@ -238,7 +238,7 @@ body {
 .player-controls { display: flex; gap: var(--space-4); }
 .player-button {
     background: var(--chip);
-    color: var(--on-brand);
+    color: var(--chrome-fg);
     border: none;
     border-radius: var(--radius-md);
     min-width: 32px;
@@ -250,17 +250,6 @@ body {
 }
 .player-button:hover:not(:disabled), .player-button.active { background: var(--chip-hover); }
 .player-button:disabled { opacity: 0.4; cursor: default; }
-
-/* ---- Playlist sharing and picker ---- */
-.share-add { display: flex; gap: var(--space-6); margin-top: var(--space-8); }
-.share-add input { flex: 1; }
-.share-add select { width: auto; }
-.share-results { list-style: none; margin: var(--space-4) 0 0; padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-md); max-width: 420px; }
-.share-results li + li { border-top: 1px solid var(--border); }
-.share-results .context-menu-item { display: flex; align-items: center; gap: var(--space-8); }
-.share-results-action { margin-left: auto; color: var(--selection-fg); font-size: 0.75rem; font-weight: 600; }
-.playlist-picker-new { margin-top: var(--space-8); }
-.playlist-picker-new input { flex: 1; }
 
 /* ---- Up next: the queue, opened from the player bar ---- */
 .up-next-panel {
@@ -274,11 +263,11 @@ body {
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--shadow-modal);
     z-index: 600;
     overflow: hidden;
 }
-.up-next-header { display: flex; justify-content: space-between; align-items: center; padding: var(--space-6) var(--space-12); background: var(--ink); color: var(--on-brand); font-weight: 600; }
+.up-next-header { display: flex; justify-content: space-between; align-items: center; padding: var(--space-6) var(--space-12); background: var(--chrome-bg); color: var(--chrome-fg); font-weight: 600; }
 .up-next-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
 .up-next-list li { display: flex; align-items: center; gap: var(--space-8); padding-right: var(--space-8); border-bottom: 1px solid var(--border); }
 .up-next-list li.current { background: var(--selection-bg); box-shadow: inset 2px 0 0 var(--brand-indigo); }
@@ -291,11 +280,11 @@ body {
 .up-next-artist { font-size: 0.75rem; color: var(--text-muted); }
 .up-next-now { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--selection-fg); white-space: nowrap; }
 .up-next-remove { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: var(--space-4); border-radius: var(--radius-md); }
-.up-next-remove:hover { color: var(--danger); background: var(--surface-muted); }
+.up-next-remove:hover { color: var(--danger-fg); background: var(--surface-muted); }
 
 /* ---- Toasts ---- */
 .toasts { position: fixed; left: 50%; bottom: 72px; transform: translateX(-50%); display: flex; flex-direction: column; gap: var(--space-6); align-items: center; z-index: 700; pointer-events: none; }
-.toast { background: var(--ink); color: var(--on-brand); padding: var(--space-8) var(--space-16); border-radius: var(--radius-md); font-size: 0.8125rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); max-width: calc(100vw - 2 * var(--space-16)); }
+.toast { background: var(--chrome-bg); color: var(--chrome-fg); border: 1px solid var(--border); padding: var(--space-8) var(--space-16); border-radius: var(--radius-md); font-size: 0.8125rem; box-shadow: var(--shadow-menu); max-width: calc(100vw - 2 * var(--space-16)); }
 
 .app-footer { text-align: right; padding: var(--space-4) var(--space-8); font-size: 0.75rem; color: var(--text-muted); }
 
@@ -368,6 +357,8 @@ body {
 .search-box input,
 .filter-group select,
 .new-playlist-box input[type="text"],
+.share-add input,
+.share-add select,
 .tag-edit-table input {
     width: 100%;
     height: 28px;
@@ -383,7 +374,21 @@ body {
 .form-group textarea:focus,
 .search-box input:focus,
 .filter-group select:focus,
+.new-playlist-box input[type="text"]:focus,
+.share-add input:focus,
+.share-add select:focus,
 .tag-edit-table input:focus { outline: none; border-color: var(--brand-indigo); box-shadow: var(--shadow-focus); }
+
+/* ---- Playlist sharing and picker ---- */
+.share-add { display: flex; gap: var(--space-6); margin-top: var(--space-8); }
+.share-add input { flex: 1; }
+.share-add select { width: auto; }
+.share-results { list-style: none; margin: var(--space-4) 0 0; padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-md); max-width: 420px; }
+.share-results li + li { border-top: 1px solid var(--border); }
+.share-results .context-menu-item { display: flex; align-items: center; gap: var(--space-8); }
+.share-results-action { margin-left: auto; color: var(--selection-fg); font-size: 0.75rem; font-weight: 600; }
+.playlist-picker-new { margin-top: var(--space-8); }
+.playlist-picker-new input { flex: 1; }
 
 /* ---- Buttons: 28px, solid, no lift ---- */
 .button,

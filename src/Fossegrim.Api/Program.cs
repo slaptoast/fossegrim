@@ -79,6 +79,15 @@ builder.Services.AddAuthorization();
 // Register application services
 builder.Services.AddScoped<MediaLibraryService>();
 
+// Album cover search (MusicBrainz + Cover Art Archive, Deezer) and downloads.
+// The limits are shared by the whole server, as the providers count them.
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<CoverSearchLimits>();
+builder.Services.AddHttpClient<CoverSearchService>(client => client.Timeout = TimeSpan.FromSeconds(10));
+// Redirects are followed by CoverDownloader itself, checking each hop's host.
+builder.Services.AddHttpClient<CoverDownloader>(client => client.Timeout = TimeSpan.FromSeconds(20))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+
 // Last.fm client is always registered but stays inert (IsConfigured == false)
 // until an admin saves API credentials on the Settings page, or
 // LastFm:ApiKey and LastFm:ApiSecret are set (which take precedence).
@@ -165,6 +174,7 @@ app.MapVersionEndpoints();
 app.MapLastFmEndpoints();
 app.MapUserEndpoints();
 app.MapPreferenceEndpoints();
+app.MapAlbumCoverEndpoints();
 
 app.MapFallbackToFile("index.html");
 

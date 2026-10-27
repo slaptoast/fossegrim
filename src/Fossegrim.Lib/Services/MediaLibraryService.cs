@@ -427,7 +427,9 @@ public class MediaLibraryService
             try
             {
                 using var tagFile = TagLib.File.Create(fileLocation);
-                var picture = tagFile.Tag.Pictures.FirstOrDefault();
+                // Files can hold several pictures (back cover, artist...); the front cover is the album's.
+                var picture = tagFile.Tag.Pictures.FirstOrDefault(p => p.Type == TagLib.PictureType.FrontCover)
+                    ?? tagFile.Tag.Pictures.FirstOrDefault();
                 if (picture is not null)
                 {
                     var contentType = string.IsNullOrWhiteSpace(picture.MimeType) ? "image/jpeg" : picture.MimeType;
@@ -460,6 +462,66 @@ public class MediaLibraryService
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Writes <paramref name="data"/> as the front cover of every track in the
+    /// album, replacing any front cover and keeping the files' other pictures.
+    /// Returns null when the album doesn't exist. Tracks that fail (missing
+    /// file, unwritable tags) are reported and don't stop the others.
+    /// </summary>
+    public async Task<SetAlbumCoverResponse?> SetAlbumCoverAsync(Guid albumId, byte[] data, string mimeType)
+    {
+        var album = await _db.Albums
+            .Include(a => a.MediaItems)
+            .FirstOrDefaultAsync(a => a.Id == albumId);
+        if (album is null)
+        {
+            return null;
+        }
+
+        var errors = new List<MediaItemTagUpdateError>();
+        var updated = 0;
+        foreach (var item in album.MediaItems)
+        {
+            if (string.IsNullOrWhiteSpace(item.FileLocation) || !File.Exists(item.FileLocation))
+            {
+                errors.Add(new MediaItemTagUpdateError(item.Id, "File not found on disk."));
+                continue;
+            }
+
+            try
+            {
+                using var tagFile = TagLib.File.Create(item.FileLocation);
+                var cover = new TagLib.Picture(new TagLib.ByteVector(data))
+                {
+                    Type = TagLib.PictureType.FrontCover,
+                    MimeType = mimeType,
+                    Description = "Front cover",
+                };
+                tagFile.Tag.Pictures = tagFile.Tag.Pictures
+                    .Where(p => p.Type != TagLib.PictureType.FrontCover)
+                    .Prepend(cover)
+                    .ToArray();
+                tagFile.Save();
+            }
+            catch (Exception ex)
+            {
+                errors.Add(new MediaItemTagUpdateError(item.Id, $"Failed to write the cover to the file: {ex.Message}"));
+                continue;
+            }
+
+            item.LastModified = DateTime.UtcNow;
+            updated++;
+        }
+
+        if (updated > 0)
+        {
+            album.LastModified = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
+        return new SetAlbumCoverResponse(updated, errors);
     }
 
     private static bool IsCoverFileName(string filePath)

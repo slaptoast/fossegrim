@@ -5,6 +5,7 @@ using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,11 +35,16 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         builder.ConfigureTestServices(services =>
         {
             services.AddHttpClient<LastFmClient>().ConfigurePrimaryHttpMessageHandler(() => LastFm);
+            services.AddHttpClient<CoverSearchService>().ConfigurePrimaryHttpMessageHandler(() => Covers);
+            services.AddHttpClient<CoverDownloader>().ConfigurePrimaryHttpMessageHandler(() => Covers);
         });
     }
 
     /// <summary>Stands in for ws.audioscrobbler.com; every Last.fm call goes here.</summary>
     public FakeLastFmHandler LastFm { get; } = new();
+
+    /// <summary>Stands in for the cover search providers and their image hosts.</summary>
+    public FakeCoverProvidersHandler Covers { get; } = new();
 
     /// <summary>Registers a brand-new user and returns a client signed in as them.</summary>
     public async Task<HttpClient> CreateUserClientAsync() => (await CreateUserAsync()).Client;
@@ -52,6 +58,30 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
         return new TestUser(client, login.UserId);
+    }
+
+    /// <summary>A new user in the Admin role, signed in after the role was added so their token carries it.</summary>
+    public async Task<TestUser> CreateAdminAsync()
+    {
+        var client = CreateClient();
+        var email = $"admin-{Guid.NewGuid():N}@example.com";
+        const string password = "Passw0rd!x";
+        (await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, "Test Admin", password))).EnsureSuccessStatusCode();
+
+        string userId;
+        using (var scope = Services.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = await users.FindByEmailAsync(email);
+            await users.AddToRoleAsync(user!, "Admin");
+            userId = user!.Id;
+        }
+
+        var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
+        response.EnsureSuccessStatusCode();
+        var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
+        return new TestUser(client, userId);
     }
 
     public async Task<MediaItem> AddMediaItemAsync(

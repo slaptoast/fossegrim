@@ -1,6 +1,10 @@
 @page "/"
 @attribute [Authorize]
 @inject FossegrimApiClient ApiClient
+@inject AuthenticationStateProvider AuthStateProvider
+@inject AlbumArtEditorState AlbumArtEditor
+@inject AppearanceService Appearance
+@implements IDisposable
 
 <div class="layout-toolbar">
     @if (_editing)
@@ -22,11 +26,22 @@
     }
 </div>
 
+@* Opened from a right-click, the album art editor sits across the top until
+   closed, unless it's been added to the layout as a module (then it's there). *@
+@if (AlbumArtEditor.Target is not null && _isAdmin && !AlbumArtModuleShown)
+{
+    <div class="album-art-panel">
+        <AlbumArtEditor Temporary="true" />
+    </div>
+}
+
 <ModuleGrid @ref="_grid" PageId="library" Modules="_modules" Editing="_editing" />
 
 @code {
     private ModuleGrid? _grid;
     private bool _editing;
+    private bool _isAdmin;
+    private bool _albumArtShown;
     private IReadOnlyList<ModuleGrid.ModuleDefinition> _modules = [];
 
     private List<MediaItemDto> _mediaItems = [];
@@ -39,8 +54,15 @@
     {
         // Set before OnInitializedAsync's first await, which renders the page:
         // OnParametersSet would only run once the library had loaded.
-        // Default layout on the 24-column grid; rows are 40px. Up next starts hidden.
-        _modules =
+        _modules = BuildModules(includeAlbumArt: false);
+        AlbumArtEditor.Changed += OnEditorChanged;
+        Appearance.Changed += OnAppearanceChanged;
+    }
+
+    // Default layout on the 24-column grid; rows are 40px. Up next and album art start hidden.
+    private IReadOnlyList<ModuleGrid.ModuleDefinition> BuildModules(bool includeAlbumArt)
+    {
+        List<ModuleGrid.ModuleDefinition> modules =
         [
             new("artists", "Artists", new LayoutItem { Id = "artists", X = 0, Y = 0, W = 8, H = 10 }, ArtistsModule),
             new("albums", "Albums", new LayoutItem { Id = "albums", X = 8, Y = 0, W = 8, H = 10 }, AlbumsModule),
@@ -48,6 +70,41 @@
             new("tracks", "Tracks", new LayoutItem { Id = "tracks", X = 0, Y = 10, W = 24, H = 14 }, TracksModule, MinW: 8, MinH: 5),
             new("upnext", "Up next", new LayoutItem { Id = "upnext", X = 16, Y = 24, W = 8, H = 10, Hidden = true }, UpNextModule),
         ];
+        if (includeAlbumArt)
+        {
+            modules.Add(new("albumart", "Album art", new LayoutItem { Id = "albumart", X = 0, Y = 34, W = 24, H = 12, Hidden = true }, AlbumArtModule, MinW: 10, MinH: 8));
+        }
+        return modules;
+    }
+
+    private bool AlbumArtModuleShown => _grid?.ModuleVisibility.Any(m => m.Module.Id == "albumart" && !m.Hidden) ?? false;
+
+    private void OnEditorChanged() => InvokeAsync(StateHasChanged);
+
+    // Hiding the album art module while it's editing closes the editor,
+    // rather than moving it to the top of the page.
+    private void OnAppearanceChanged() => InvokeAsync(() =>
+    {
+        var shown = AlbumArtModuleShown;
+        if (_albumArtShown && !shown)
+        {
+            AlbumArtEditor.Close();
+        }
+        _albumArtShown = shown;
+        StateHasChanged();
+    });
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        _albumArtShown = AlbumArtModuleShown;
+    }
+
+    public void Dispose()
+    {
+        AlbumArtEditor.Changed -= OnEditorChanged;
+        Appearance.Changed -= OnAppearanceChanged;
+        AlbumArtEditor.IsAvailable = false;
+        AlbumArtEditor.Close();
     }
 
     private RenderFragment ArtistsModule => @<ArtistList Artists="_artists" />;
@@ -55,6 +112,8 @@
     private RenderFragment AlbumsModule => @<AlbumList Albums="_albums" AllMediaItems="_mediaItems" />;
 
     private RenderFragment VisualizerPanel => @<VisualizerModule />;
+
+    private RenderFragment AlbumArtModule => @<AlbumArtEditor />;
 
     private RenderFragment TracksModule => @<text>
         @if (_isLoading)
@@ -78,6 +137,15 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Album art can only be changed by admins, so only they get the editor.
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        _isAdmin = state.User.IsInRole("Admin");
+        if (_isAdmin)
+        {
+            _modules = BuildModules(includeAlbumArt: true);
+            AlbumArtEditor.IsAvailable = true;
+        }
+
         try
         {
             _mediaItems = (await ApiClient.GetMediaItemsAsync()).ToList();

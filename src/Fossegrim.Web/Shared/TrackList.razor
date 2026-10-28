@@ -1,5 +1,6 @@
 @inject PlayerState PlayerState
 @inject AuthenticationStateProvider AuthStateProvider
+@inject AlbumArtEditorState AlbumArtEditor
 
 <div class="track-list-component">
     <div class="controls">
@@ -213,6 +214,14 @@
                 OpenEditModal(item);
                 return Task.CompletedTask;
             }));
+            if (AlbumArtEditor.IsAvailable && item.Albums.FirstOrDefault() is { } album)
+            {
+                actions.Add(new ContextMenuAction("Edit album art", () =>
+                {
+                    AlbumArtEditor.Open(new AlbumArtTarget(album.Id, album.Name, item.ArtistName));
+                    return Task.CompletedTask;
+                }));
+            }
         }
 
         _contextMenuActions = actions;

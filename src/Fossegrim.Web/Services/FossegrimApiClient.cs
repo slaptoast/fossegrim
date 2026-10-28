@@ -63,6 +63,54 @@ public class FossegrimApiClient
         return $"{_httpClient.BaseAddress}cover/{albumId}?access_token={Uri.EscapeDataString(token)}";
     }
 
+    public async Task<IReadOnlyList<CoverProviderStatusDto>> GetCoverProvidersAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/covers/providers");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<CoverProviderStatusDto>>() ?? [];
+    }
+
+    public async Task<CoverSearchResponse> SearchCoversAsync(string album, string? artist)
+    {
+        var response = await _httpClient.GetAsync(
+            $"/api/covers/search?album={Uri.EscapeDataString(album)}&artist={Uri.EscapeDataString(artist ?? "")}");
+        return await ReadOrThrowAsync<CoverSearchResponse>(response, "Search");
+    }
+
+    // The body is the image itself; the server checks it's a JPEG or PNG.
+    public async Task<SetAlbumCoverResponse> UploadAlbumCoverAsync(Guid albumId, byte[] image)
+    {
+        var response = await _httpClient.PutAsync($"/api/covers/albums/{albumId}", new ByteArrayContent(image));
+        return await ReadOrThrowAsync<SetAlbumCoverResponse>(response, "Saving the cover");
+    }
+
+    public async Task<SetAlbumCoverResponse> SetAlbumCoverFromSearchAsync(Guid albumId, string imageUrl)
+    {
+        var response = await _httpClient.PostAsJsonAsync($"/api/covers/albums/{albumId}/from-search", new SetCoverFromSearchRequest(imageUrl));
+        return await ReadOrThrowAsync<SetAlbumCoverResponse>(response, "Saving the cover");
+    }
+
+    // Throws an ApiException with the server's message (from an ApiErrorResponse) on failure.
+    private static async Task<T> ReadOrThrowAsync<T>(HttpResponseMessage response, string action)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            string? message = null;
+            try
+            {
+                message = (await response.Content.ReadFromJsonAsync<ApiErrorResponse>())?.Error;
+            }
+            catch (Exception)
+            {
+                // Not an ApiErrorResponse; use the generic message.
+            }
+            throw new ApiException(message ?? $"{action} failed with status {(int)response.StatusCode}.");
+        }
+
+        return await response.Content.ReadFromJsonAsync<T>()
+            ?? throw new ApiException($"{action} succeeded but returned no result.");
+    }
+
     public async Task<IReadOnlyList<MediaItemDto>> GetMediaItemsAsync()
     {
         var response = await _httpClient.GetAsync("/api/mediaitems");

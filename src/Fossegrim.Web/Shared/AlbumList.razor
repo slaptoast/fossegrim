@@ -2,6 +2,8 @@
 @inject PlayerState PlayerState
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
+@inject AlbumArtEditorState AlbumArtEditor
+@implements IDisposable
 
 <div class="album-list-component">
     <div class="album-list-header">
@@ -22,7 +24,7 @@
                             <span class="album-art-placeholder">💿</span>
                             @if (_coverUrls.TryGetValue(album.Id, out var coverUrl))
                             {
-                                <img src="@coverUrl" alt="@album.Name" onerror="this.style.visibility='hidden'" />
+                                <img src="@coverUrl" alt="@album.Name" onerror="this.style.visibility='hidden'" onload="this.style.visibility=''" />
                             }
                             <div class="album-play-overlay">▶</div>
                         </div>
@@ -71,6 +73,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        AlbumArtEditor.CoverChanged += OnCoverChanged;
         var state = await AuthStateProvider.GetAuthenticationStateAsync();
         _isAdmin = state.User.IsInRole("Admin");
     }
@@ -139,6 +142,14 @@
                 NavigateToEditTags(trackIds);
                 return Task.CompletedTask;
             }));
+            if (AlbumArtEditor.IsAvailable)
+            {
+                actions.Add(new ContextMenuAction("Edit album art", () =>
+                {
+                    AlbumArtEditor.Open(new AlbumArtTarget(album.Id, album.Name, album.Artists.FirstOrDefault()?.Name));
+                    return Task.CompletedTask;
+                }));
+            }
         }
 
         _contextMenuActions = actions;
@@ -151,6 +162,18 @@
     {
         _addToPlaylistIds = mediaItemIds;
         _showAddToPlaylist = true;
+    }
+
+    // A saved cover keeps its URL, so add a version to make the browser load it again.
+    private void OnCoverChanged(Guid albumId) => InvokeAsync(async () =>
+    {
+        _coverUrls[albumId] = await ApiClient.GetAlbumCoverUrl(albumId) + $"&v={AlbumArtEditor.CoverVersion(albumId)}";
+        StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        AlbumArtEditor.CoverChanged -= OnCoverChanged;
     }
 
     private void NavigateToEditTags(IEnumerable<Guid> trackIds)

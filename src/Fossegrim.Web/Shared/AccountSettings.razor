@@ -1,0 +1,152 @@
+@inject FossegrimApiClient ApiClient
+
+@* Whether people can sign themselves up, and adding accounts by hand.
+   Used on the Settings page and in the setup wizard. *@
+
+@if (_message is not null)
+{
+    <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+}
+
+@if (_status is not null)
+{
+    <div class="folder-item">
+        <label class="checkbox-row">
+            <input type="checkbox" checked="@_status.RegistrationOpen" disabled="@_busy" @onchange="SetRegistrationAsync" />
+            Allow anyone who can reach this server to create an account
+        </label>
+        <p class="backup-hint">
+            When this is off, the sign-in page has no "Create account" link and only admins can add accounts, using the form below.
+        </p>
+    </div>
+}
+
+@if (_errors.Count > 0)
+{
+    <div class="validation-summary">
+        <ul>
+            @foreach (var error in _errors)
+            {
+                <li>@error</li>
+            }
+        </ul>
+    </div>
+}
+
+<EditForm Model="_input" OnValidSubmit="AddUserAsync">
+    <DataAnnotationsValidator />
+
+    <div class="folder-item">
+        <div class="backup-grid">
+            <div class="form-group">
+                <label for="newUserEmail">Email</label>
+                <InputText id="newUserEmail" type="email" @bind-Value="_input.Email" autocomplete="off" />
+                <ValidationMessage For="() => _input.Email" />
+            </div>
+            <div class="form-group">
+                <label for="newUserName">Display Name</label>
+                <InputText id="newUserName" @bind-Value="_input.DisplayName" autocomplete="off" />
+                <ValidationMessage For="() => _input.DisplayName" />
+            </div>
+            <div class="form-group">
+                <label for="newUserPassword">Password</label>
+                <InputText id="newUserPassword" type="password" @bind-Value="_input.Password" autocomplete="new-password" />
+                <ValidationMessage For="() => _input.Password" />
+            </div>
+        </div>
+
+        <label class="checkbox-row">
+            <InputCheckbox @bind-Value="_input.IsAdmin" />
+            Make this person an admin
+        </label>
+
+        <button type="submit" class="button-secondary" disabled="@_busy">+ Add Account</button>
+    </div>
+</EditForm>
+
+@code {
+    // Raised after registration is opened or closed, or an account is added.
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private SetupStatusDto? _status;
+    private NewUserInput _input = new();
+    private List<string> _errors = [];
+    private string? _message;
+    private bool _success;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _status = await ApiClient.GetSetupStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = ($"Failed to load account settings: {ex.Message}", false);
+        }
+    }
+
+    private async Task SetRegistrationAsync(ChangeEventArgs e)
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            _status = await ApiClient.SetRegistrationOpenAsync(e.Value is true);
+            (_message, _success) = (_status.RegistrationOpen ? "Anyone can now create an account." : "Only admins can add accounts now.", true);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = ($"Failed to save: {ex.Message}", false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddUserAsync()
+    {
+        _busy = true;
+        _message = null;
+        _errors = [];
+        try
+        {
+            _errors = (await ApiClient.CreateUserAsync(_input.Email, _input.DisplayName, _input.Password, _input.IsAdmin)).ToList();
+            if (_errors.Count == 0)
+            {
+                (_message, _success) = ($"Added {_input.DisplayName} ({_input.Email}){(_input.IsAdmin ? " as an admin" : "")}.", true);
+                _input = new NewUserInput();
+                await OnChanged.InvokeAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private class NewUserInput
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(100, MinimumLength = 3)]
+        public string DisplayName { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(100, MinimumLength = 6)]
+        public string Password { get; set; } = string.Empty;
+
+        public bool IsAdmin { get; set; }
+    }
+}

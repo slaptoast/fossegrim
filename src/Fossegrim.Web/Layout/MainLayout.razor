@@ -1,6 +1,9 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject AppearanceService Appearance
+@inject FossegrimApiClient ApiClient
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
 
 <div class="app-shell @(PlayerOnTop ? "player-top" : null)">
     <header class="topbar">
@@ -37,7 +40,31 @@
     protected override async Task OnInitializedAsync()
     {
         Appearance.Changed += OnAppearanceChanged;
+        await ResumeSetupAsync();
         await Appearance.EnsureLoadedAsync();
+    }
+
+    // An admin who created the first account but left the wizard before
+    // finishing it is sent back to it until they do (every step can be skipped).
+    private async Task ResumeSetupAsync()
+    {
+        var user = (await AuthStateProvider.GetAuthenticationStateAsync()).User;
+        if (!user.IsInRole("Admin"))
+        {
+            return;
+        }
+
+        try
+        {
+            if (!(await ApiClient.GetSetupStatusAsync()).SetupComplete)
+            {
+                Navigation.NavigateTo("/setup", replace: true);
+            }
+        }
+        catch
+        {
+            // Never block the app on this.
+        }
     }
 
     private void OnAppearanceChanged() => InvokeAsync(StateHasChanged);

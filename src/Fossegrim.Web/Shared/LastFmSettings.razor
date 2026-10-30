@@ -1,0 +1,141 @@
+@inject FossegrimApiClient ApiClient
+@inject IJSRuntime JSRuntime
+
+@* The server's Last.fm API application. Used on the Settings page and in
+   the setup wizard. *@
+
+@if (_lastFm is null)
+{
+    <div class="loading"><h2>Loading Last.fm settings</h2></div>
+}
+else if (_lastFm.SetByEnvironment)
+{
+    <p>Last.fm is configured by the <code>LASTFM_API_KEY</code> and <code>LASTFM_API_SECRET</code> environment variables. Unset them to manage it here.</p>
+}
+else
+{
+    <p>
+        Lets each user link their own Last.fm account from their Profile.
+        Create an API application at
+        <a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener">last.fm/api/account/create</a>
+        (the callback URL can be left blank) and enter its key and shared secret.
+        Changing to a different application unlinks everyone's accounts.
+    </p>
+
+    @if (_lastFmMessage is not null)
+    {
+        <div class="@(_lastFmSuccess ? "success-message" : "error-message")">@_lastFmMessage</div>
+    }
+
+    <EditForm Model="_lastFmInput" OnValidSubmit="SaveLastFmAsync">
+        <DataAnnotationsValidator />
+
+        <div class="folder-item">
+            <div class="form-group">
+                <label for="lastFmApiKey">API Key</label>
+                <InputText id="lastFmApiKey" @bind-Value="_lastFmInput.ApiKey" autocomplete="off" />
+                <ValidationMessage For="() => _lastFmInput.ApiKey" />
+            </div>
+
+            <div class="form-group">
+                <label for="lastFmApiSecret">Shared Secret</label>
+                <InputText id="lastFmApiSecret" type="password" @bind-Value="_lastFmInput.ApiSecret" autocomplete="new-password"
+                           placeholder="@(_lastFm.HasSecret ? "Saved; leave blank to keep it" : "")" />
+            </div>
+
+            <button type="submit" class="button-secondary" disabled="@_lastFmBusy">Save</button>
+            @if (_lastFm.Configured)
+            {
+                <button type="button" class="button-danger" disabled="@_lastFmBusy" @onclick="ClearLastFmAsync">Turn Off Last.fm</button>
+            }
+        </div>
+    </EditForm>
+}
+
+@code {
+    // Raised after the credentials are saved or removed.
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private LastFmSettingsDto? _lastFm;
+    private readonly LastFmSettingsInput _lastFmInput = new();
+    private string? _lastFmMessage;
+    private bool _lastFmSuccess;
+    private bool _lastFmBusy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            SetLastFm(await ApiClient.GetLastFmSettingsAsync());
+        }
+        catch (Exception ex)
+        {
+            _lastFmMessage = $"Failed to load Last.fm settings: {ex.Message}";
+            _lastFmSuccess = false;
+        }
+    }
+
+    private async Task SaveLastFmAsync()
+    {
+        _lastFmBusy = true;
+        try
+        {
+            SetLastFm(await ApiClient.UpdateLastFmSettingsAsync(_lastFmInput.ApiKey, _lastFmInput.ApiSecret));
+            _lastFmMessage = "Last.fm settings saved. Users can now link their accounts from their Profile.";
+            _lastFmSuccess = true;
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _lastFmMessage = ex.Message;
+            _lastFmSuccess = false;
+        }
+        finally
+        {
+            _lastFmBusy = false;
+        }
+    }
+
+    private async Task ClearLastFmAsync()
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Turn off Last.fm? Users' linked accounts stop updating until it's set up again.");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _lastFmBusy = true;
+        try
+        {
+            SetLastFm(await ApiClient.ClearLastFmSettingsAsync());
+            _lastFmMessage = "Last.fm turned off.";
+            _lastFmSuccess = true;
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _lastFmMessage = $"Failed to turn off Last.fm: {ex.Message}";
+            _lastFmSuccess = false;
+        }
+        finally
+        {
+            _lastFmBusy = false;
+        }
+    }
+
+    private void SetLastFm(LastFmSettingsDto settings)
+    {
+        _lastFm = settings;
+        _lastFmInput.ApiKey = settings.ApiKey ?? "";
+        _lastFmInput.ApiSecret = null;
+    }
+
+    private class LastFmSettingsInput
+    {
+        [Required(ErrorMessage = "API key is required.")]
+        public string ApiKey { get; set; } = string.Empty;
+
+        public string? ApiSecret { get; set; }
+    }
+}

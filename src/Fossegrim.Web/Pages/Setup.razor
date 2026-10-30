@@ -1,0 +1,328 @@
+@page "/setup"
+@layout LoginLayout
+@inject FossegrimApiClient ApiClient
+@inject TokenStore TokenStore
+@inject JwtAuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+@* First-run setup, and a walkthrough of every server setting when an admin
+   re-runs it from the Admin page. Only the first step (creating the admin
+   account on a fresh install) is required; anonymous visitors can reach
+   this page only while there are no accounts at all. *@
+
+<div class="container setup-wizard">
+    <div class="header">
+        <h1>🎵 Set up Fossegrim</h1>
+        <p>@(_steps.Contains(Step.Account) ? "Welcome! Let's get your server ready." : "Walk through your server's settings. Every step is optional.")</p>
+    </div>
+
+    @if (_status is not null)
+    {
+        <ol class="setup-steps">
+            @for (var i = 0; i < _steps.Count; i++)
+            {
+                var step = _steps[i];
+                <li class="@(i == _index ? "current" : i < _index ? "done" : null)">@Titles[step]</li>
+            }
+        </ol>
+
+        <div class="content">
+            @switch (Current)
+            {
+                case Step.Account:
+                    <h2 class="setup-title">Create your admin account</h2>
+                    <p>This is the account you'll manage the server with. It's the only step you can't skip.</p>
+
+                    @if (_errors.Count > 0)
+                    {
+                        <div class="validation-summary">
+                            <ul>
+                                @foreach (var error in _errors)
+                                {
+                                    <li>@error</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    <EditForm Model="_account" OnValidSubmit="CreateAccountAsync">
+                        <DataAnnotationsValidator />
+
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <InputText id="email" type="email" @bind-Value="_account.Email" autocomplete="username" />
+                            <ValidationMessage For="() => _account.Email" />
+                        </div>
+                        <div class="form-group">
+                            <label for="displayName">Display Name</label>
+                            <InputText id="displayName" @bind-Value="_account.DisplayName" />
+                            <ValidationMessage For="() => _account.DisplayName" />
+                        </div>
+                        <div class="info-text">Password must be at least 6 characters and include uppercase, lowercase, a digit and a symbol.</div>
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <InputText id="password" type="password" @bind-Value="_account.Password" autocomplete="new-password" />
+                            <ValidationMessage For="() => _account.Password" />
+                        </div>
+                        <div class="form-group">
+                            <label for="confirmPassword">Confirm Password</label>
+                            <InputText id="confirmPassword" type="password" @bind-Value="_account.ConfirmPassword" autocomplete="new-password" />
+                            <ValidationMessage For="() => _account.ConfirmPassword" />
+                        </div>
+
+                        <button type="submit" class="button" disabled="@_busy">@(_busy ? "Creating..." : "Create Account and Continue")</button>
+                    </EditForm>
+                    break;
+
+                case Step.Library:
+                    <h2 class="setup-title">Media folders</h2>
+                    <p>
+                        Add the folders Fossegrim should read music from, then scan them to fill your library.
+                        In Docker, your music is mounted at <code>/music</code>.
+                    </p>
+                    <MediaFolderSettings OnChanged="() => MarkChanged(Step.Library)" />
+                    break;
+
+                case Step.LastFm:
+                    <h2 class="setup-title">Last.fm</h2>
+                    <LastFmSettings OnChanged="() => MarkChanged(Step.LastFm)" />
+                    break;
+
+                case Step.Accounts:
+                    <h2 class="setup-title">Accounts</h2>
+                    <p>Choose whether people can sign themselves up, and add accounts for anyone you're sharing the server with.</p>
+                    <AccountSettings OnChanged="() => MarkChanged(Step.Accounts)" />
+                    break;
+
+                case Step.Backups:
+                    <h2 class="setup-title">Backups</h2>
+                    <BackupSettings OnChanged="() => MarkChanged(Step.Backups)" />
+                    break;
+
+                case Step.Updates:
+                    <h2 class="setup-title">Updates</h2>
+                    <p>Fossegrim can check Docker Hub once a day for a newer release and let admins know in the footer and on the Admin page.</p>
+                    <UpdateCheckSettings OnChanged="() => MarkChanged(Step.Updates)" />
+                    break;
+
+                case Step.Done:
+                    <h2 class="setup-title">All set</h2>
+                    @if (_summary is null)
+                    {
+                        <div class="loading"><h2>Checking your settings</h2></div>
+                    }
+                    else
+                    {
+                        <ul class="setup-summary">
+                            @foreach (var (label, value, ok) in _summary)
+                            {
+                                <li class="@(ok ? "ok" : null)"><span>@(ok ? "✓" : "–")</span> <strong>@label:</strong> @value</li>
+                            }
+                        </ul>
+                    }
+                    <p>You can change any of this later from Settings and the Admin page, or run this wizard again from the Admin page.</p>
+                    break;
+            }
+
+            @if (Current != Step.Account)
+            {
+                <div class="setup-nav">
+                    @if (_index > 0)
+                    {
+                        <button type="button" class="button-secondary" @onclick="Back">Back</button>
+                    }
+                    @if (Current == Step.Done)
+                    {
+                        <button type="button" class="button" disabled="@_busy" @onclick="FinishAsync">Finish</button>
+                    }
+                    else
+                    {
+                        <a class="setup-skip-all" href="" @onclick="SkipToEndAsync" @onclick:preventDefault>Skip to the end</a>
+                        <button type="button" class="@(_changed.Contains(Current) ? "button" : "button-secondary")" @onclick="NextAsync">
+                            @(_changed.Contains(Current) ? "Next" : "Skip")
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private enum Step { Account, Library, LastFm, Accounts, Backups, Updates, Done }
+
+    private static readonly Dictionary<Step, string> Titles = new()
+    {
+        [Step.Account] = "Admin account",
+        [Step.Library] = "Media folders",
+        [Step.LastFm] = "Last.fm",
+        [Step.Accounts] = "Accounts",
+        [Step.Backups] = "Backups",
+        [Step.Updates] = "Updates",
+        [Step.Done] = "Done",
+    };
+
+    private static readonly Step[] SettingSteps = [Step.Library, Step.LastFm, Step.Accounts, Step.Backups, Step.Updates, Step.Done];
+
+    private SetupStatusDto? _status;
+    private List<Step> _steps = [];
+    private int _index;
+    private readonly HashSet<Step> _changed = [];
+    private readonly AccountInput _account = new();
+    private List<string> _errors = [];
+    private List<(string Label, string Value, bool Ok)>? _summary;
+    private bool _busy;
+
+    private Step Current => _steps[_index];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _status = await ApiClient.GetSetupStatusAsync();
+        var user = (await AuthStateProvider.GetAuthenticationStateAsync()).User;
+
+        if (_status.SetupRequired)
+        {
+            _steps = [Step.Account, .. SettingSteps];
+        }
+        else if (user.IsInRole("Admin"))
+        {
+            _steps = [.. SettingSteps];
+        }
+        else
+        {
+            // Setup is done, and only admins may change server settings.
+            _status = null;
+            Navigation.NavigateTo(user.Identity?.IsAuthenticated == true ? "/" : "/login?returnUrl=%2Fsetup", replace: true);
+        }
+    }
+
+    private async Task CreateAccountAsync()
+    {
+        _busy = true;
+        _errors = [];
+        try
+        {
+            var result = await ApiClient.CreateFirstAdminAsync(_account.Email, _account.DisplayName, _account.Password);
+            if (!result.Success)
+            {
+                _errors = result.Errors.ToList();
+                return;
+            }
+
+            await TokenStore.SetTokenAsync(result.Response!.Token);
+            AuthStateProvider.MarkUserAsAuthenticated(result.Response);
+            // The account can't be created twice, so there's no going back to this step.
+            _steps = [.. SettingSteps];
+            _index = 0;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void MarkChanged(Step step) => _changed.Add(step);
+
+    private void Back() => _index = Math.Max(0, _index - 1);
+
+    private async Task NextAsync()
+    {
+        _index = Math.Min(_steps.Count - 1, _index + 1);
+        if (Current == Step.Done)
+        {
+            await LoadSummaryAsync();
+        }
+    }
+
+    private async Task SkipToEndAsync()
+    {
+        _index = _steps.Count - 1;
+        await LoadSummaryAsync();
+    }
+
+    private async Task FinishAsync()
+    {
+        _busy = true;
+        try
+        {
+            await ApiClient.CompleteSetupAsync();
+            Navigation.NavigateTo("/");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task LoadSummaryAsync()
+    {
+        _summary = null;
+        var summary = new List<(string, string, bool)>();
+
+        // Each line is best-effort: one failing call shouldn't hide the rest.
+        async Task AddAsync(string label, Func<Task<(string, bool)>> describe)
+        {
+            try
+            {
+                var (value, ok) = await describe();
+                summary.Add((label, value, ok));
+            }
+            catch (Exception ex)
+            {
+                summary.Add((label, $"couldn't check ({ex.Message})", false));
+            }
+        }
+
+        await AddAsync("Media folders", async () =>
+        {
+            var folders = await ApiClient.GetMediaFoldersAsync();
+            return folders.Count == 0
+                ? ("none yet", false)
+                : (string.Join(", ", folders.Select(f => f.Location)), true);
+        });
+        await AddAsync("Last.fm", async () =>
+        {
+            var lastFm = await ApiClient.GetLastFmSettingsAsync();
+            return lastFm.Configured ? ("on", true) : ("off", false);
+        });
+        await AddAsync("Sign-ups", async () =>
+        {
+            var status = await ApiClient.GetSetupStatusAsync();
+            return status.RegistrationOpen ? ("anyone can create an account", true) : ("admins add accounts", true);
+        });
+        await AddAsync("Backups", async () =>
+        {
+            var backups = await ApiClient.GetBackupStatusAsync();
+            return backups.NextRunAt is { } next
+                ? ($"automatic, next {DateTime.SpecifyKind(next, DateTimeKind.Utc).ToLocalTime():g}", true)
+                : ("manual only", false);
+        });
+        await AddAsync("Update checks", async () =>
+        {
+            var updates = await ApiClient.GetUpdateStatusAsync();
+            return !updates.CanCheck ? ("development build", false)
+                : updates.Enabled ? ("daily", true)
+                : ("off", false);
+        });
+
+        _summary = summary;
+    }
+
+    private class AccountInput
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(100, MinimumLength = 3)]
+        public string DisplayName { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(100, MinimumLength = 6)]
+        public string Password { get; set; } = string.Empty;
+
+        [Compare(nameof(Password), ErrorMessage = "The password and confirmation password do not match.")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}

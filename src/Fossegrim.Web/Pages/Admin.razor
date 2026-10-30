@@ -63,61 +63,11 @@
         }
 
         <h2 class="section-header">Updates</h2>
+        <UpdateCheckSettings />
 
-        @if (_updateMessage is not null)
-        {
-            <div class="error-message">@_updateMessage</div>
-        }
-
-        @if (_updates is not null)
-        {
-            <div class="folder-item update-status">
-                <p><strong>Running:</strong> @DisplayVersion(_updates.CurrentVersion)</p>
-
-                @if (!_updates.CanCheck)
-                {
-                    <p>This is a development build, so there's no release version to compare against Docker Hub.</p>
-                }
-                else
-                {
-                    <p>
-                        <strong>Latest release:</strong>
-                        @(_updates.LatestVersion is null ? "not checked yet" : DisplayVersion(_updates.LatestVersion))
-                        @if (_updates.CheckedAt is { } checkedAt)
-                        {
-                            <span class="update-checked-at">(checked @checkedAt.ToLocalTime().ToString("g"))</span>
-                        }
-                    </p>
-
-                    @if (_updates.UpdateAvailable)
-                    {
-                        <div class="info-text">
-                            Version @_updates.LatestVersion is available.
-                            Pull the new image and recreate the container (<code>docker compose pull &amp;&amp; docker compose up -d</code>).
-                            <a href="@_updates.ReleaseUrl" target="_blank" rel="noopener">View on Docker Hub</a>
-                        </div>
-                    }
-                    else if (_updates.LatestVersion is not null && _updates.Error is null)
-                    {
-                        <div class="success-message">You're up to date.</div>
-                    }
-
-                    @if (_updates.Error is not null)
-                    {
-                        <div class="error-message">@_updates.Error</div>
-                    }
-
-                    <label class="checkbox-row">
-                        <input type="checkbox" checked="@_updates.Enabled" disabled="@_updateBusy" @onchange="SetUpdateCheckEnabledAsync" />
-                        Check for updates automatically (once a day)
-                    </label>
-
-                    <button type="button" class="button-secondary" disabled="@_updateBusy" @onclick="CheckForUpdatesAsync">
-                        @(_updateBusy ? "Checking..." : "Check Now")
-                    </button>
-                }
-            </div>
-        }
+        <h2 class="section-header">Setup Wizard</h2>
+        <p>Walk through every server setting again: media folders, Last.fm, accounts, backups and updates. Each step can be skipped.</p>
+        <a class="button-secondary" href="/setup">Run Setup Wizard</a>
     </div>
 </div>
 
@@ -126,61 +76,6 @@
     private bool _isScanning;
     private ScanResult? _lastScanResult;
     private string? _errorMessage;
-
-    private UpdateStatusDto? _updates;
-    private string? _updateMessage;
-    private bool _updateBusy;
-
-    protected override async Task OnInitializedAsync()
-    {
-        try
-        {
-            _updates = await ApiClient.GetUpdateStatusAsync();
-        }
-        catch (Exception ex)
-        {
-            _updateMessage = $"Failed to load update status: {ex.Message}";
-        }
-    }
-
-    private async Task CheckForUpdatesAsync()
-    {
-        _updateBusy = true;
-        _updateMessage = null;
-        try
-        {
-            _updates = await ApiClient.CheckForUpdatesAsync();
-        }
-        catch (Exception ex)
-        {
-            _updateMessage = ex.Message;
-        }
-        finally
-        {
-            _updateBusy = false;
-        }
-    }
-
-    private async Task SetUpdateCheckEnabledAsync(ChangeEventArgs e)
-    {
-        _updateBusy = true;
-        _updateMessage = null;
-        try
-        {
-            _updates = await ApiClient.SetUpdateCheckEnabledAsync(e.Value is true);
-        }
-        catch (Exception ex)
-        {
-            _updateMessage = $"Failed to save: {ex.Message}";
-        }
-        finally
-        {
-            _updateBusy = false;
-        }
-    }
-
-    // Matches the footer: "v1.2.3" for releases, anything else as-is.
-    private static string DisplayVersion(string version) => char.IsDigit(version[0]) ? $"v{version}" : version;
 
     private async Task ScanAsync()
     {

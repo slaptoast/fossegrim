@@ -105,6 +105,19 @@ public class UpdateCheckTests : IClassFixture<ReleaseApiFactory>
     }
 
     [Fact]
+    public async Task Check_RepositoryNotOnDockerHubYet_MeansNoReleases()
+    {
+        var admin = await _factory.CreateAdminAsync();
+        _factory.DockerHub.FailWith = HttpStatusCode.NotFound;
+
+        var status = await CheckAsync(admin.Client);
+
+        Assert.Null(status.LatestVersion);
+        Assert.False(status.UpdateAvailable);
+        Assert.Equal("No releases found on Docker Hub.", status.Error);
+    }
+
+    [Fact]
     public async Task AutomaticChecks_CanBeTurnedOffAndOn()
     {
         var admin = await _factory.CreateAdminAsync();

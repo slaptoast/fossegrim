@@ -85,7 +85,7 @@
                         @(_updates.LatestVersion is null ? "not checked yet" : DisplayVersion(_updates.LatestVersion))
                         @if (_updates.CheckedAt is { } checkedAt)
                         {
-                            <span class="update-checked-at">(checked @checkedAt.ToLocalTime().ToString("g"))</span>
+                            <span class="update-checked-at">&nbsp;(checked @checkedAt.ToLocalTime().ToString("g"))</span>
                         }
                     </p>
 

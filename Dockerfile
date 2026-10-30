@@ -31,9 +31,11 @@ WORKDIR /app
 # compose up --build`.
 ARG VERSION=dev
 
-RUN addgroup -S fossegrim && adduser -S fossegrim -G fossegrim \
-    && mkdir -p /data /music \
-    && chown -R fossegrim:fossegrim /app /data /music
+# tzdata: backup schedules run at a wall-clock time in a chosen time zone.
+RUN apk add --no-cache tzdata \
+    && addgroup -S fossegrim && adduser -S fossegrim -G fossegrim \
+    && mkdir -p /data /music /backups \
+    && chown -R fossegrim:fossegrim /app /data /music /backups
 
 COPY --from=build /app .
 
@@ -41,10 +43,11 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     ConnectionStrings__DefaultConnection="Data Source=/data/fossegrim.db" \
     Jwt__KeyFile=/data/jwt.key \
     DataProtection__KeysDirectory=/data/dataprotection-keys \
+    Backup__Directory=/backups \
     APP_VERSION=$VERSION
 
 EXPOSE 8080
-VOLUME ["/data", "/music"]
+VOLUME ["/data", "/music", "/backups"]
 USER fossegrim
 
 ENTRYPOINT ["dotnet", "Fossegrim.Api.dll"]

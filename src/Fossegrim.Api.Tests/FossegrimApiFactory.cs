@@ -31,6 +31,9 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("DataProtection:KeysDirectory", Path.Combine(_directory, "dataprotection-keys"));
         // Tests drive Scrobbler directly, with a controlled clock.
         builder.UseSetting("Scrobbling:Enabled", "false");
+        // Tests run backups on demand, into this factory's own folder.
+        builder.UseSetting("Backup:WorkerEnabled", "false");
+        builder.UseSetting("Backup:Directory", BackupDirectory);
 
         builder.ConfigureTestServices(services =>
         {
@@ -39,6 +42,8 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
             services.AddHttpClient<CoverDownloader>().ConfigurePrimaryHttpMessageHandler(() => Covers);
         });
     }
+
+    public string BackupDirectory => Path.Combine(_directory, "backups");
 
     /// <summary>Stands in for ws.audioscrobbler.com; every Last.fm call goes here.</summary>
     public FakeLastFmHandler LastFm { get; } = new();

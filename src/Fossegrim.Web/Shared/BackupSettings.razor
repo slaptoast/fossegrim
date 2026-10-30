@@ -1,0 +1,350 @@
+@inject FossegrimApiClient ApiClient
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+@* Backup schedule, retention, run-now and the list of backups. Used on the
+   Settings page. *@
+
+@if (_message is not null)
+{
+    <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+}
+
+@if (_status is null)
+{
+    <div class="loading"><h2>Loading backups</h2></div>
+}
+else
+{
+    <p>
+        Each backup is a zip of the database plus the keys needed to use it (the sign-in key and the keys that decrypt saved secrets).
+        They're written to <code>@_status.Directory</code>, which in Docker is the folder you mapped with <code>BACKUP_PATH</code>.
+        Backups contain secrets, so keep them somewhere private.
+    </p>
+
+    <EditForm Model="_input" OnValidSubmit="SaveScheduleAsync">
+        <div class="folder-item backup-schedule">
+            <label class="checkbox-row">
+                <InputCheckbox @bind-Value="_input.Enabled" />
+                Back up automatically
+            </label>
+
+            <div class="backup-grid">
+                <div class="form-group">
+                    <label for="backupFrequency">Repeat</label>
+                    <InputSelect id="backupFrequency" @bind-Value="_input.Frequency" disabled="@(!_input.Enabled)">
+                        <option value="@BackupFrequency.Interval">Every few hours</option>
+                        <option value="@BackupFrequency.Daily">Daily</option>
+                        <option value="@BackupFrequency.Weekly">Weekly</option>
+                        <option value="@BackupFrequency.Monthly">Monthly</option>
+                    </InputSelect>
+                </div>
+
+                @if (_input.Frequency == BackupFrequency.Interval)
+                {
+                    <div class="form-group">
+                        <label for="backupInterval">Every (hours)</label>
+                        <InputNumber id="backupInterval" @bind-Value="_input.IntervalHours" min="1" max="720" disabled="@(!_input.Enabled)" />
+                    </div>
+                }
+                else
+                {
+                    @if (_input.Frequency == BackupFrequency.Monthly)
+                    {
+                        <div class="form-group">
+                            <label for="backupDayOfMonth">Day of month</label>
+                            <InputNumber id="backupDayOfMonth" @bind-Value="_input.DayOfMonth" min="1" max="31" disabled="@(!_input.Enabled)" />
+                        </div>
+                    }
+
+                    <div class="form-group">
+                        <label for="backupTime">At</label>
+                        <input id="backupTime" type="time" @bind="_input.TimeOfDay" disabled="@(!_input.Enabled)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="backupTimeZone">Time zone</label>
+                        <InputSelect id="backupTimeZone" @bind-Value="_input.TimeZone" disabled="@(!_input.Enabled)">
+                            <option value="">UTC</option>
+                            @foreach (var zone in _timeZones)
+                            {
+                                <option value="@zone">@zone</option>
+                            }
+                        </InputSelect>
+                    </div>
+                }
+            </div>
+
+            @if (_input.Frequency == BackupFrequency.Weekly)
+            {
+                <div class="backup-days" role="group" aria-label="Days of the week">
+                    @foreach (var day in WeekDays)
+                    {
+                        <label class="checkbox-row">
+                            <input type="checkbox" checked="@_input.DaysOfWeek.Contains(day)" disabled="@(!_input.Enabled)"
+                                   @onchange="e => ToggleDay(day, e)" />
+                            @day.ToString()[..3]
+                        </label>
+                    }
+                </div>
+            }
+
+            @if (_input.Frequency == BackupFrequency.Monthly && _input.DayOfMonth > 28)
+            {
+                <p class="backup-hint">In months without day @_input.DayOfMonth, the backup runs on the last day of the month.</p>
+            }
+
+            <div class="backup-grid">
+                <div class="form-group">
+                    <label for="backupKeepLast">Keep the newest</label>
+                    <InputNumber id="backupKeepLast" @bind-Value="_input.KeepLast" min="1" placeholder="No limit" />
+                </div>
+                <div class="form-group">
+                    <label for="backupMaxAge">Delete backups older than (days)</label>
+                    <InputNumber id="backupMaxAge" @bind-Value="_input.MaxAgeDays" min="1" placeholder="Never" />
+                </div>
+            </div>
+            <p class="backup-hint">Old backups are cleaned up after each successful backup, manual ones included. The newest backup is always kept.</p>
+
+            <button type="submit" class="button-secondary" disabled="@_busy">Save Schedule</button>
+        </div>
+    </EditForm>
+
+    <div class="backup-status">
+        <p>
+            <strong>Next backup:</strong>
+            @(_status.NextRunAt is { } next ? FormatTime(next) : "not scheduled")
+        </p>
+        @if (_status.LastRun is { } last)
+        {
+            <p>
+                <strong>Last backup:</strong>
+                @FormatTime(last.StartedAt) (@last.Trigger) —
+                @if (last.Success)
+                {
+                    <span>@last.FileName, @FormatSize(last.SizeBytes ?? 0)</span>
+                }
+                else
+                {
+                    <span class="text-danger">failed: @last.Error</span>
+                }
+            </p>
+        }
+        <button type="button" class="button" disabled="@(_busy || _status.Running)" @onclick="RunNowAsync">
+            @(_status.Running || _running ? "Backing up..." : "Back Up Now")
+        </button>
+    </div>
+
+    @if (_status.Backups.Count > 0)
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Backup</th>
+                    <th>Created</th>
+                    <th>Size</th>
+                    <th class="actions-cell">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var backup in _status.Backups)
+                {
+                    <tr>
+                        <td class="title-cell"><span class="file-path">@backup.FileName</span></td>
+                        <td>@FormatTime(backup.CreatedAt)</td>
+                        <td>@FormatSize(backup.SizeBytes)</td>
+                        <td class="actions-cell">
+                            <button class="button-secondary" disabled="@_busy" @onclick="() => DownloadAsync(backup)">Download</button>
+                            <button class="button-danger" disabled="@_busy" @onclick="() => DeleteAsync(backup)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="no-results"><p>No backups yet.</p></div>
+    }
+}
+
+@code {
+    private static readonly DayOfWeek[] WeekDays =
+        [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday];
+
+    private BackupStatusDto? _status;
+    private IReadOnlyList<string> _timeZones = [];
+    private readonly ScheduleInput _input = new();
+    private string? _message;
+    private bool _success;
+    private bool _busy;
+    private bool _running;
+    private IJSObjectReference? _files;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _timeZones = await ApiClient.GetBackupTimeZonesAsync();
+            SetStatus(await ApiClient.GetBackupStatusAsync());
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Failed to load backups: {ex.Message}");
+        }
+    }
+
+    private async Task SaveScheduleAsync()
+    {
+        await RunAsync(async () =>
+        {
+            SetStatus(await ApiClient.SaveBackupScheduleAsync(_input.ToDto()));
+            ShowSuccess(_input.Enabled ? "Backup schedule saved." : "Automatic backups are off.");
+        });
+    }
+
+    private async Task RunNowAsync()
+    {
+        _running = true;
+        await RunAsync(async () =>
+        {
+            var status = await ApiClient.RunBackupAsync();
+            _status = status;
+            if (status.LastRun is { Success: false } failed)
+            {
+                ShowError($"Backup failed: {failed.Error}");
+            }
+            else
+            {
+                ShowSuccess($"Backup saved as {status.LastRun?.FileName}.");
+            }
+        });
+        _running = false;
+    }
+
+    private async Task DownloadAsync(BackupFileDto backup)
+    {
+        await RunAsync(async () =>
+        {
+            await using var stream = await ApiClient.DownloadBackupAsync(backup.FileName);
+            using var streamRef = new DotNetStreamReference(stream);
+            _files ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/files.js");
+            await _files.InvokeVoidAsync("downloadStream", backup.FileName, streamRef, "application/zip");
+        });
+    }
+
+    private async Task DeleteAsync(BackupFileDto backup)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Delete {backup.FileName}? This can't be undone."))
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await ApiClient.DeleteBackupAsync(backup.FileName);
+            _status = await ApiClient.GetBackupStatusAsync();
+            ShowSuccess($"Deleted {backup.FileName}.");
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void SetStatus(BackupStatusDto status)
+    {
+        _status = status;
+        _input.Load(status.Schedule);
+
+        // A schedule that's never been saved has no time zone yet; suggest
+        // the browser's own, if the server knows it.
+        if (string.IsNullOrEmpty(_input.TimeZone) && !status.Schedule.Enabled && _timeZones.Contains(TimeZoneInfo.Local.Id))
+        {
+            _input.TimeZone = TimeZoneInfo.Local.Id;
+        }
+    }
+
+    private void ToggleDay(DayOfWeek day, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+        {
+            _input.DaysOfWeek.Add(day);
+        }
+        else
+        {
+            _input.DaysOfWeek.Remove(day);
+        }
+    }
+
+    private void ShowSuccess(string message) => (_message, _success) = (message, true);
+
+    private void ShowError(string message) => (_message, _success) = (message, false);
+
+    private static string FormatTime(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime().ToString("g");
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        >= 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024 * 1024):0.0} GB",
+        >= 1024 * 1024 => $"{bytes / (1024.0 * 1024):0.0} MB",
+        >= 1024 => $"{bytes / 1024.0:0} KB",
+        _ => $"{bytes} B"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_files is not null)
+        {
+            try
+            {
+                await _files.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+
+    private class ScheduleInput
+    {
+        public bool Enabled { get; set; }
+        public BackupFrequency Frequency { get; set; }
+        public int IntervalHours { get; set; }
+        public TimeOnly TimeOfDay { get; set; }
+        public HashSet<DayOfWeek> DaysOfWeek { get; set; } = [];
+        public int DayOfMonth { get; set; }
+        public string TimeZone { get; set; } = "";
+        public int? KeepLast { get; set; }
+        public int? MaxAgeDays { get; set; }
+
+        public void Load(BackupScheduleDto dto)
+        {
+            Enabled = dto.Enabled;
+            Frequency = dto.Frequency;
+            IntervalHours = dto.IntervalHours;
+            TimeOfDay = dto.TimeOfDay;
+            DaysOfWeek = dto.DaysOfWeek.ToHashSet();
+            DayOfMonth = dto.DayOfMonth;
+            TimeZone = dto.TimeZone;
+            KeepLast = dto.KeepLast;
+            MaxAgeDays = dto.MaxAgeDays;
+        }
+
+        public BackupScheduleDto ToDto() =>
+            new(Enabled, Frequency, IntervalHours, TimeOfDay, DaysOfWeek.ToList(), DayOfMonth, TimeZone, KeepLast, MaxAgeDays);
+    }
+}

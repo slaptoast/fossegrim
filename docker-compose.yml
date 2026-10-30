@@ -20,6 +20,9 @@ services:
       # Read-write: the app edits ID3 tags in place and will eventually
       # write fetched album art alongside the audio files.
       - ${MUSIC_LIBRARY_PATH:-./music}:/music
+      # Backup zips (database + keys). Point this somewhere off the data
+      # volume -- ideally another disk -- so a backup survives losing /data.
+      - ${BACKUP_PATH:-./backups}:/backups
 
 volumes:
   fossegrim-data:

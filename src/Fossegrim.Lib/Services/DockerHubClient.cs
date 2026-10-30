@@ -29,7 +29,15 @@ public class DockerHubClient
 
         for (var page = 0; url is not null && page < MaxPages; page++)
         {
-            var response = await _http.GetFromJsonAsync<TagPage>(url, cancellationToken)
+            using var message = await _http.GetAsync(url, cancellationToken);
+            // Docker Hub 404s a repository that has never been pushed to,
+            // i.e. there are no releases yet.
+            if (message.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return tags;
+            }
+            message.EnsureSuccessStatusCode();
+            var response = await message.Content.ReadFromJsonAsync<TagPage>(cancellationToken)
                 ?? throw new HttpRequestException("Docker Hub returned an empty response.");
 
             tags.AddRange(response.Results?.Select(t => t.Name).Where(n => !string.IsNullOrEmpty(n)) ?? []);

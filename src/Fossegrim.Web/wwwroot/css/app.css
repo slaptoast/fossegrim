@@ -372,6 +372,8 @@ body {
 }
 
 .app-footer { text-align: right; padding: var(--space-4) var(--space-8); font-size: 0.75rem; color: var(--text-muted); }
+.app-footer .update-badge { margin-right: var(--space-8); padding: var(--space-2) var(--space-6); border-radius: var(--radius-md); background: var(--info-bg); color: var(--info-fg); text-decoration: none; font-weight: 600; }
+.app-footer .update-badge:hover { text-decoration: underline; }
 
 /* ---- Modules: the unit of layout ---- */
 .module-grid {
@@ -583,6 +585,9 @@ body {
 
 .section-header { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin: var(--space-12) 0 var(--space-6); }
 .folder-item { padding: var(--space-8) var(--space-12); border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: var(--space-4); }
+.checkbox-row { display: flex; align-items: center; gap: var(--space-6); margin: var(--space-8) 0; font-size: 0.8125rem; color: var(--text-secondary); cursor: pointer; }
+.update-status p { margin-bottom: var(--space-6); }
+.update-checked-at { color: var(--text-muted); font-size: 0.75rem; }
 
 .loading, .scanning, .no-results { text-align: center; padding: var(--space-24); color: var(--text-muted); }
 .no-results h2 { font-size: 0.875rem; color: var(--text-secondary); }

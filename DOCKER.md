@@ -214,6 +214,25 @@ everything is same-origin. (`Cors:AllowedOrigins` in `appsettings.json`
 still exists and is only relevant if you ever run Web as a separate process
 against this Api, the way local dev does.)
 
+### Update checks
+
+Release images know their own version (`APP_VERSION`, from the release
+tag). About a minute after startup and then once a day, the server asks
+Docker Hub's public tags API for the newest stable release of
+`slaptoast/fossegrim` and compares the two. Floating tags (`latest`, `1.2`,
+`1`), CI tags (`sha-...`, `pr-...`) and prereleases are ignored. When a
+newer release exists, admins see an "Update available" badge in the footer,
+and the Admin page shows the details. To update, pull the new image and
+recreate the container:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Admins can turn the daily check off on the Admin page. "Check Now" still
+works when it's off. Development builds (`dev`, e.g. `docker compose up
+--build`) have no version to compare and never contact Docker Hub.
+
 ## Building the image by hand
 
 If you're building/pushing outside of GitHub Actions (e.g. from your own

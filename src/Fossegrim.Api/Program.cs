@@ -104,6 +104,22 @@ if (builder.Configuration.GetValue("Scrobbling:Enabled", true))
     builder.Services.AddHostedService<ScrobbleWorker>();
 }
 
+// Update check: compares APP_VERSION with the newest release on Docker Hub.
+// Development builds ("dev") have nothing to compare, so get no worker.
+var appVersion = new AppVersion(builder.Configuration["APP_VERSION"] is { Length: > 0 } v ? v : "dev");
+builder.Services.AddSingleton(appVersion);
+builder.Services.AddSingleton<UpdateCheckState>();
+builder.Services.AddHttpClient<DockerHubClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd($"Fossegrim/{appVersion.Value}");
+});
+builder.Services.AddScoped<UpdateChecker>();
+if (appVersion.Release is not null && builder.Configuration.GetValue("UpdateCheck:WorkerEnabled", true))
+{
+    builder.Services.AddHostedService<UpdateCheckWorker>();
+}
+
 // Data Protection encrypts stored secrets (Last.fm session keys). Its keys
 // must outlive the container or those secrets become unreadable, so Docker
 // points DataProtection:KeysDirectory at the /data volume. Unset, the

@@ -393,6 +393,35 @@ body {
 .setup-summary li.ok span { color: var(--success-fg); }
 a.button, a.button-secondary { text-decoration: none; }
 
+/* ---- Library scans ---- */
+.scan-actions { display: flex; gap: var(--space-8); flex-wrap: wrap; margin-bottom: var(--space-8); }
+.scan-progress { margin: var(--space-8) 0; }
+.scan-progress-label { display: flex; justify-content: space-between; gap: var(--space-8); font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: var(--space-4); }
+.scan-progress-track { height: 6px; border-radius: 3px; background: var(--surface-muted); border: 1px solid var(--border); overflow: hidden; }
+.scan-progress-fill { height: 100%; background: var(--brand-violet); transition: width 0.3s; }
+.scan-progress-fill.indeterminate { opacity: 0.4; animation: scan-pulse 1.2s ease-in-out infinite; }
+@keyframes scan-pulse { 50% { opacity: 0.8; } }
+@media (prefers-reduced-motion: reduce) { .scan-progress-fill { transition: none; } .scan-progress-fill.indeterminate { animation: none; } }
+.scan-queued { font-size: 0.75rem; color: var(--text-muted); margin-bottom: var(--space-4); }
+.scan-result { margin-top: var(--space-8); }
+.scan-result details { margin-top: var(--space-4); }
+.scan-result ul { margin: var(--space-4) 0 0 var(--space-16); }
+.scan-indicator { font-size: 0.75rem; font-weight: 600; color: var(--brand-violet); text-decoration: none; white-space: nowrap; }
+.scan-indicator:hover { text-decoration: underline; }
+
+/* ---- Renaming and library health ---- */
+.rename-table td { vertical-align: top; }
+.rename-sub { font-size: 0.75rem; color: var(--text-muted); }
+.rename-problem td { background: var(--surface-muted); }
+.health-tabs { display: flex; gap: var(--space-4); margin-bottom: var(--space-12); border-bottom: 1px solid var(--border); }
+.health-tabs button { background: none; border: none; border-bottom: 2px solid transparent; padding: var(--space-6) var(--space-8); font: inherit; font-size: 0.8125rem; color: var(--text-secondary); cursor: pointer; }
+.health-tabs button.active { color: var(--ink); border-bottom-color: var(--brand-violet); font-weight: 600; }
+.health-count { display: inline-block; min-width: 1.5em; padding: 0 var(--space-4); border-radius: var(--radius-md); background: var(--surface-muted); font-size: 0.75rem; text-align: center; }
+.checkbox-cell { width: 32px; }
+.api-key-secret code { display: block; margin: var(--space-4) 0; word-break: break-all; }
+.api-key-secret pre { margin: 0; white-space: pre-wrap; word-break: break-all; font-size: 0.75rem; }
+.api-key-new { margin-top: var(--space-8); }
+
 /* ---- Modules: the unit of layout ---- */
 .module-grid {
     display: grid;

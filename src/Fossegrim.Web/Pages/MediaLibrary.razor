@@ -3,6 +3,7 @@
 @inject FossegrimApiClient ApiClient
 @inject AuthenticationStateProvider AuthStateProvider
 @inject AlbumArtEditorState AlbumArtEditor
+@inject ScanStatusService Scans
 @inject AppearanceService Appearance
 @implements IDisposable
 
@@ -57,7 +58,24 @@
         _modules = BuildModules(includeAlbumArt: false);
         AlbumArtEditor.Changed += OnEditorChanged;
         Appearance.Changed += OnAppearanceChanged;
+        Scans.ScanFinished += OnScanFinished;
     }
+
+    // A scan (e.g. a right-click rescan) can add, change or remove anything.
+    private void OnScanFinished(ScanJobDto job) => InvokeAsync(async () =>
+    {
+        try
+        {
+            _mediaItems = (await ApiClient.GetMediaItemsAsync()).ToList();
+            _artists = (await ApiClient.GetArtistsAsync()).OrderBy(a => a.Name).ToList();
+            _albums = (await ApiClient.GetAlbumsAsync()).OrderBy(a => a.Name).ToList();
+            StateHasChanged();
+        }
+        catch
+        {
+            // Best effort; the page still shows what it had.
+        }
+    });
 
     // Default layout on the 24-column grid; rows are 40px. Up next and album art start hidden.
     private IReadOnlyList<ModuleGrid.ModuleDefinition> BuildModules(bool includeAlbumArt)
@@ -103,6 +121,7 @@
     {
         AlbumArtEditor.Changed -= OnEditorChanged;
         Appearance.Changed -= OnAppearanceChanged;
+        Scans.ScanFinished -= OnScanFinished;
         AlbumArtEditor.IsAvailable = false;
         AlbumArtEditor.Close();
     }

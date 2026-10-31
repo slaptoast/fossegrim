@@ -27,6 +27,16 @@ namespace Fossegrim.Lib.Models
         public TimeSpan? Duration { get; set; }
         public int? Bitrate { get; set; }
 
+        // The file's size and last-write time when it was last read, so a
+        // quick scan can skip files that haven't changed.
+        public long? FileSize { get; set; }
+        public DateTime? FileModifiedAt { get; set; }
+
+        // Comma-separated tag fields where the file's ID3v1 and ID3v2 tags
+        // disagree (e.g. "title,year"); null when they agree.
+        [MaxLength(100)]
+        public string? TagVersionMismatch { get; set; }
+
         // Foreign key to the folder this media item was found in
         public Guid? MediaFolderId { get; set; }
         public MediaFolder? MediaFolder { get; set; }

@@ -12,3 +12,6 @@
   - analyse audio with the Web Audio API (BaseAudioContext): https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext
   - render the final visualization with WebGL, not a 2D canvas
 - [x] theming (#5), with custom themes and movable modules (#9)
+- [x] library scanning: background scans with progress, quick (changed files only) and full, right-click rescan of an album or artist, scans started by other apps with an API key
+- [x] renaming files from a template (`{artist}/{album}/{track:00} - {title}`), with a preview
+- [x] library health: ID3v1/ID3v2 disagreements and files not named as the template says

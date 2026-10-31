@@ -1,7 +1,6 @@
 using Fossegrim.Lib.Data;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Models;
-using Fossegrim.Lib.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Fossegrim.Api.Endpoints;
@@ -13,36 +12,6 @@ public static class Admin
         var adminGroup = app.MapGroup("/api/admin")
             .WithTags("Admin")
             .RequireAuthorization(policy => policy.RequireRole("Admin"));
-
-        adminGroup.MapPost("/scan", async (ScanRequest request, MediaLibraryService service) =>
-        {
-            try
-            {
-                var result = await service.ScanAndSaveMediaItemsAsync(
-                    request.FolderPath,
-                    request.MaxDegreeOfParallelism ?? 4);
-
-                return Results.Ok(result);
-            }
-            catch (ArgumentException ex)
-            {
-                return Results.BadRequest(new ApiErrorResponse(ex.Message));
-            }
-            catch (DirectoryNotFoundException ex)
-            {
-                return Results.BadRequest(new ApiErrorResponse(ex.Message));
-            }
-            catch (Exception ex)
-            {
-                return Results.Problem(
-                    detail: ex.Message,
-                    statusCode: 500,
-                    title: "Scan failed"
-                );
-            }
-        })
-        .WithName("ScanMediaFolder")
-        .WithOpenApi();
 
         adminGroup.MapGet("/folders", async (FossegrimDbContext db) =>
         {

@@ -235,6 +235,77 @@ everything is same-origin. (`Cors:AllowedOrigins` in `appsettings.json`
 still exists and is only relevant if you ever run Web as a separate process
 against this Api, the way local dev does.)
 
+### Library scans
+
+Scans run in the background, one at a time, with a progress bar on the
+Admin page and under Settings -> Configured Folders, and a "Scanning 42%"
+note in the top bar for admins.
+
+- **Quick scan** (the default): finds every audio file, then reads tags only
+  from files that are new or whose size or modified time changed. Tracks
+  whose file is gone are removed. If a file turns up somewhere else with
+  the same size and tags, it counts as moved and keeps its play history and
+  playlist entries.
+- **Full rescan**: re-reads every file.
+- **Right-click an album or artist -> Rescan**: re-reads just the folders
+  holding its tracks.
+
+As a safeguard, nothing is removed from a media folder that's missing or
+has no audio files at all, since that usually means a drive isn't mounted.
+The scan reports this as a warning instead.
+
+MP3, FLAC, M4A, OGG and Opus files are scanned and streamed.
+
+#### Starting scans from other applications
+
+Create an API key under **Settings -> API Keys**. The key is shown once,
+and only its hash is stored. A key can start scans and check on them,
+nothing else:
+
+```bash
+# Scan every media folder (quick scan)
+curl -X POST -H "X-Api-Key: fsg_..." http://localhost:8080/api/external/scan
+
+# Scan one folder, e.g. from a Lidarr "on import" custom script
+curl -X POST -H "X-Api-Key: fsg_..." -H "Content-Type: application/json" \
+  -d '{"path": "/music/Artist/Album", "full": false}' \
+  http://localhost:8080/api/external/scan
+
+# Queue, current scan with progress, and recent results
+curl -H "X-Api-Key: fsg_..." http://localhost:8080/api/external/scan
+```
+
+`path` is as Fossegrim sees it, inside the container, so it must be inside
+a configured media folder (e.g. `/music/...`). If the other application
+mounts the same library at a different path, translate the prefix in your
+script. Starting a scan returns `202` with the queued job. Its `id` can be
+polled at `/api/external/scan/{id}`. Asking for a scan that's already
+waiting returns the waiting one rather than queueing a second.
+
+### Renaming files and library health
+
+**Settings -> File Naming** holds one template for the whole server,
+relative to each media folder, e.g. `{artist}/{album}/{track:00} - {title}`.
+Tokens are `{artist}`, `{album}`, `{title}`, `{track}` (or `{track:00}`),
+`{year}` and `{genre}`; the extension is kept. **Rename files...** on an
+album, artist or track's right-click menu (or "Preview renaming the whole
+library") shows old -> new names before anything moves.
+
+- A file is never overwritten. Clashes are skipped and listed.
+- When every track leaves a folder for the same new folder, the folder's
+  other files (`cover.jpg` etc.) go along with them.
+- Folders left empty are removed.
+- Play history and playlists are unaffected.
+
+**Admin -> Library Health** lists:
+
+- **ID3 tag versions**: MP3s whose old ID3v1 tag disagrees with the ID3v2
+  tag Fossegrim reads, which other players may show instead. Fixing
+  rewrites ID3v1 from ID3v2. Files are checked as they're scanned, so run
+  a full rescan once to check a library scanned before this existed.
+- **File names**: files not named as the template says, with a button to
+  rename them.
+
 ### Update checks
 
 Release images know their own version (`APP_VERSION`, from the release

@@ -1,6 +1,7 @@
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services;
+using Fossegrim.Lib.Services.Library;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -174,7 +175,7 @@ public sealed class TagEditingTests : IClassFixture<FossegrimApiFactory>, IDispo
     {
         using (var scope = _factory.Services.CreateScope())
         {
-            await scope.ServiceProvider.GetRequiredService<MediaLibraryService>().ScanAndSaveMediaItemsAsync(_musicFolder, maxDegreeOfParallelism: 1);
+            await scope.ServiceProvider.GetRequiredService<LibraryScanner>().ScanAsync([new ScanTarget(_musicFolder)], full: false);
         }
 
         List<MediaItem> items = [];

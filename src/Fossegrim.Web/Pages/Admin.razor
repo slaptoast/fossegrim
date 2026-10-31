@@ -1,6 +1,6 @@
 @page "/admin"
 @attribute [Authorize(Roles = "Admin")]
-@inject FossegrimApiClient ApiClient
+@inject ScanStatusService Scans
 
 <div class="container">
     <div class="header">
@@ -9,58 +9,27 @@
     </div>
 
     <div class="content">
-        <EditForm Model="_input" OnValidSubmit="ScanAsync">
-            <DataAnnotationsValidator />
-
-            <div class="form-group">
-                <label for="folderPath">Media Folder Path</label>
-                <InputText id="folderPath" @bind-Value="_input.FolderPath" placeholder="/Users/username/Music" />
-            </div>
-
-            <div class="form-group">
-                <label for="maxThreads">Max Parallel Threads</label>
-                <InputNumber id="maxThreads" @bind-Value="_input.MaxDegreeOfParallelism" />
-            </div>
-
-            <button type="submit" class="button" disabled="@_isScanning">@(_isScanning ? "Scanning..." : "Scan Media Library")</button>
-        </EditForm>
-
-        @if (_isScanning)
-        {
-            <div class="scanning"><h2>Scanning media library</h2></div>
-        }
+        <h2 class="section-header">Library Scan</h2>
+        <p>
+            A quick scan reads only new and changed files, and removes tracks whose files are gone.
+            A full rescan re-reads every file. Scans run in the background, one at a time.
+            Folders are managed in <a href="/settings">Settings</a>.
+        </p>
 
         @if (_errorMessage is not null)
         {
-            <div class="error"><strong>Error</strong>@_errorMessage</div>
+            <div class="error-message">@_errorMessage</div>
         }
 
-        @if (_lastScanResult is not null)
-        {
-            <div class="result-card">
-                <div class="success-icon">✅</div>
-                <h2>Scan Complete!</h2>
+        <div class="scan-actions">
+            <button type="button" class="button" disabled="@_starting" @onclick="() => ScanAsync(full: false)">Quick Scan</button>
+            <button type="button" class="button-secondary" disabled="@_starting" @onclick="() => ScanAsync(full: true)">Full Rescan</button>
+        </div>
+        <ScanProgress />
 
-                <div class="stats-grid">
-                    <div class="stat">
-                        <div class="stat-value">@_lastScanResult.ScannedCount</div>
-                        <div class="stat-label">Files Scanned</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">@_lastScanResult.ItemsAdded</div>
-                        <div class="stat-label">Items Added</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">@_lastScanResult.ItemsUpdated</div>
-                        <div class="stat-label">Items Updated</div>
-                    </div>
-                </div>
-
-                <p class="result-meta">
-                    <strong>Folder:</strong> @_lastScanResult.FolderPath
-                </p>
-            </div>
-        }
+        <h2 class="section-header">Library Health</h2>
+        <p>Find files whose ID3v1 and ID3v2 tags disagree, or whose names don't match the file-naming template, and fix them.</p>
+        <a class="button-secondary" href="/library-health">Open Library Health</a>
 
         <h2 class="section-header">Updates</h2>
         <UpdateCheckSettings />
@@ -72,35 +41,24 @@
 </div>
 
 @code {
-    private readonly ScanInput _input = new();
-    private bool _isScanning;
-    private ScanResult? _lastScanResult;
+    private bool _starting;
     private string? _errorMessage;
 
-    private async Task ScanAsync()
+    private async Task ScanAsync(bool full)
     {
-        _isScanning = true;
+        _starting = true;
         _errorMessage = null;
         try
         {
-            _lastScanResult = await ApiClient.ScanAsync(_input.FolderPath, _input.MaxDegreeOfParallelism);
+            await Scans.StartAsync(new StartScanRequest(Full: full));
         }
         catch (Exception ex)
         {
-            _errorMessage = $"Scan failed: {ex.Message}";
+            _errorMessage = ex.Message;
         }
         finally
         {
-            _isScanning = false;
+            _starting = false;
         }
-    }
-
-    private class ScanInput
-    {
-        [Required]
-        public string FolderPath { get; set; } = "/Users/tj/Documents/Music";
-
-        [Range(1, 16)]
-        public int MaxDegreeOfParallelism { get; set; } = 4;
     }
 }

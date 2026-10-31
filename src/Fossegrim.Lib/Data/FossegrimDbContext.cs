@@ -8,6 +8,7 @@ namespace Fossegrim.Lib.Data;
 public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
 {
     public DbSet<MediaItem> MediaItems { get; set; }
+    public DbSet<ApiKey> ApiKeys { get; set; }
     public DbSet<Artist> Artists { get; set; }
     public DbSet<Album> Albums { get; set; }
     public DbSet<MediaFolder> MediaFolders { get; set; }
@@ -26,6 +27,12 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<ApiKey>(entity =>
+        {
+            // Every API request looks its key up by hash.
+            entity.HasIndex(e => e.Hash).IsUnique();
+        });
 
         // Configure Artist entity
         modelBuilder.Entity<Artist>(entity =>
@@ -83,6 +90,7 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(e => e.ArtistName);
             entity.HasIndex(e => e.Album);
             entity.HasIndex(e => e.Title);
+            entity.HasIndex(e => e.TagVersionMismatch);
 
             entity.Property(e => e.DateAdded)
                   .HasDefaultValueSql("datetime('now')");

@@ -1,0 +1,86 @@
+@implements IDisposable
+@inject ScanStatusService Scans
+
+@* The running scan's progress, what's queued after it, and how the last
+   one went. Used on the Admin page and under the media folders. *@
+
+@if (Scans.Status is { } status)
+{
+    @if (status.Current is { } current)
+    {
+        <div class="scan-progress" role="status">
+            <div class="scan-progress-label">
+                <strong>@current.Description</strong>
+                <span>@PhaseText(current)</span>
+            </div>
+            <div class="scan-progress-track" aria-hidden="true">
+                <div class="scan-progress-fill @(current.Phase == ScanPhase.Counting ? "indeterminate" : null)" style="width: @Percent(current)%"></div>
+            </div>
+        </div>
+    }
+
+    @foreach (var queued in status.Queued)
+    {
+        <div class="scan-queued">Waiting: @queued.Description@(queued.Full ? " (full rescan)" : "")</div>
+    }
+
+    @if (ShowLastResult && status.Current is null && status.Recent.FirstOrDefault() is { } last)
+    {
+        <div class="@(last.State == ScanJobState.Failed ? "error-message" : "success-message") scan-result">
+            @if (last.Summary is { } summary)
+            {
+                <span>
+                    <strong>@last.Description</strong> scanned@(last.FinishedAt is { } at ? $" at {DateTime.SpecifyKind(at, DateTimeKind.Utc).ToLocalTime():t}" : ""):
+                    @summary.FilesFound files, @summary.Added added, @summary.Updated updated, @summary.Unchanged unchanged@(summary.Moved > 0 ? $", {summary.Moved} moved" : "")@(summary.Removed > 0 ? $", {summary.Removed} removed" : "")@(summary.Failed > 0 ? $", {summary.Failed} unreadable" : "").
+                </span>
+                @if (summary.Warnings.Count > 0)
+                {
+                    <details>
+                        <summary>@summary.Warnings.Count warning@(summary.Warnings.Count == 1 ? "" : "s")</summary>
+                        <ul>
+                            @foreach (var warning in summary.Warnings)
+                            {
+                                <li>@warning</li>
+                            }
+                        </ul>
+                    </details>
+                }
+            }
+            else
+            {
+                <span><strong>@last.Description</strong> failed: @last.Error</span>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public bool ShowLastResult { get; set; } = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Scans.Changed += OnChanged;
+        await Scans.RefreshAsync();
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public static int Percent(ScanJobDto job) => job.Phase switch
+    {
+        ScanPhase.Counting => 100,
+        ScanPhase.Saving or ScanPhase.Done => 100,
+        _ => job.Total == 0 ? 0 : (int)(100L * job.Processed / job.Total)
+    };
+
+    public static string PhaseText(ScanJobDto job) => job.Phase switch
+    {
+        ScanPhase.Waiting => "Waiting",
+        ScanPhase.Counting => job.Total > 0 ? $"Counting files ({job.Total:N0} so far)" : "Counting files",
+        ScanPhase.Reading => $"{job.Processed:N0} of {job.Total:N0} files ({Percent(job)}%)",
+        ScanPhase.Saving => "Saving",
+        _ => "Done"
+    };
+
+    public void Dispose() => Scans.Changed -= OnChanged;
+}

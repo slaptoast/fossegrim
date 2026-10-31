@@ -1,0 +1,70 @@
+@inject FossegrimApiClient ApiClient
+
+@* The server's file-name template, used by "Rename files" and the
+   Library health file-name report. *@
+
+@if (_message is not null)
+{
+    <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+}
+
+@if (_template is not null)
+{
+    <div class="folder-item">
+        <div class="form-group">
+            <label for="renameTemplate">Template</label>
+            <input id="renameTemplate" type="text" @bind="_input" @bind:event="oninput" spellcheck="false" />
+        </div>
+        <p class="backup-hint">
+            Relative to each media folder; <code>/</code> starts a new folder and the file's extension is kept.
+            Tokens: <code>{artist}</code> <code>{album}</code> <code>{title}</code> <code>{track}</code> <code>{track:00}</code>
+            <code>{year}</code> <code>{genre}</code>. Characters that aren't allowed in file names become <code>_</code>,
+            and missing tags become "Unknown Artist" and the like.
+        </p>
+        <p class="backup-hint">Saved example: <code>@_template.Example</code></p>
+
+        <button type="button" class="button-secondary" disabled="@(_busy || _input == _template.Template)" @onclick="SaveAsync">Save Template</button>
+        <a class="button-secondary" href="/files/rename?all=true">Preview Renaming the Whole Library</a>
+    </div>
+}
+
+@code {
+    private RenameTemplateDto? _template;
+    private string _input = "";
+    private string? _message;
+    private bool _success;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _template = await ApiClient.GetRenameTemplateAsync();
+            _input = _template.Template;
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = ($"Failed to load the template: {ex.Message}", false);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            _template = await ApiClient.SaveRenameTemplateAsync(_input);
+            _input = _template.Template;
+            (_message, _success) = ("Template saved. Nothing is renamed until you choose to.", true);
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

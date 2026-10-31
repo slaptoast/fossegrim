@@ -3,6 +3,8 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 @inject AlbumArtEditorState AlbumArtEditor
+@inject ScanStatusService Scans
+@inject ToastService Toasts
 @implements IDisposable
 
 <div class="album-list-component">
@@ -150,6 +152,12 @@
                     return Task.CompletedTask;
                 }));
             }
+            actions.Add(new ContextMenuAction("Rename files...", () =>
+            {
+                Navigation.NavigateTo($"/files/rename?ids={Uri.EscapeDataString(string.Join(',', trackIds))}");
+                return Task.CompletedTask;
+            }));
+            actions.Add(new ContextMenuAction("Rescan album", () => RescanAsync(album)));
         }
 
         _contextMenuActions = actions;
@@ -157,6 +165,19 @@
     }
 
     private void CloseContextMenu() => _contextMenuOpen = false;
+
+    private async Task RescanAsync(AlbumDto album)
+    {
+        try
+        {
+            await Scans.RescanAlbumAsync(album.Id);
+            Toasts.Show($"Rescanning {album.Name}");
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show($"Couldn't rescan {album.Name}: {ex.Message}");
+        }
+    }
 
     private void OpenAddToPlaylist(IReadOnlyList<Guid> mediaItemIds)
     {

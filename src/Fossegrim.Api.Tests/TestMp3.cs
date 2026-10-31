@@ -38,6 +38,24 @@ public static class TestMp3
         return path;
     }
 
+    /// <summary>Gives the file an ID3v1 tag that copies its ID3v2 tag except where told otherwise.</summary>
+    public static void SetId3v1(string path, string? title = null, uint? year = null)
+    {
+        using var file = TagLib.File.Create(path);
+        var v2 = file.GetTag(TagLib.TagTypes.Id3v2);
+        var v1 = file.GetTag(TagLib.TagTypes.Id3v1, create: true);
+        v2.CopyTo(v1, overwrite: true);
+        if (title is not null)
+        {
+            v1.Title = title;
+        }
+        if (year is not null)
+        {
+            v1.Year = year.Value;
+        }
+        file.Save();
+    }
+
     public static Mp3Tags Read(string path)
     {
         using var file = TagLib.File.Create(path);

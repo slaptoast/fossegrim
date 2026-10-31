@@ -1,0 +1,59 @@
+@* Tracks in a rename preview or result: where each file is, where it's
+   going, or why it can't be renamed. *@
+
+<table class="rename-table">
+    <thead>
+        <tr>
+            <th>Track</th>
+            <th>Current file</th>
+            <th>New file</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var entry in Entries.Take(Limit))
+        {
+            <tr class="@(entry.Status == RenameStatus.Rename ? null : "rename-problem")">
+                <td class="title-cell">
+                    @(entry.Title ?? "Untitled")
+                    <div class="rename-sub">@entry.ArtistName@(entry.Album is not null ? $" · {entry.Album}" : "")</div>
+                </td>
+                <td><span class="file-path" title="@entry.CurrentPath">@Relative(entry, entry.CurrentPath)</span></td>
+                <td>
+                    @if (entry.Status == RenameStatus.Rename)
+                    {
+                        <span class="file-path" title="@entry.NewPath">@Relative(entry, entry.NewPath!)</span>
+                    }
+                    else
+                    {
+                        <span class="text-danger">@StatusText(entry)</span>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+@if (Entries.Count > Limit)
+{
+    <p class="backup-hint">Showing the first @Limit of @Entries.Count.</p>
+}
+
+@code {
+    // Rendering tens of thousands of rows would freeze the page.
+    private const int Limit = 1000;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<RenameEntryDto> Entries { get; set; } = [];
+
+    // Inside its media folder, the part that changes is what matters.
+    private static string Relative(RenameEntryDto entry, string path) =>
+        entry.FolderPath is { } folder && path.Length > folder.Length + 1 &&
+        path.StartsWith(folder, StringComparison.Ordinal) && path[folder.Length] is '/' or '\\'
+            ? path[(folder.Length + 1)..]
+            : path;
+
+    private static string StatusText(RenameEntryDto entry) => entry.Status switch
+    {
+        RenameStatus.Conflict => $"Skipped: {entry.Message} ({Relative(entry, entry.NewPath!)})",
+        _ => $"Skipped: {entry.Message}"
+    };
+}

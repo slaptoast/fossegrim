@@ -1,3 +1,4 @@
+@inject NavigationManager Navigation
 @inject PlayerState PlayerState
 @inject AuthenticationStateProvider AuthStateProvider
 @inject AlbumArtEditorState AlbumArtEditor
@@ -222,6 +223,11 @@
                     return Task.CompletedTask;
                 }));
             }
+            actions.Add(new ContextMenuAction("Rename file...", () =>
+            {
+                Navigation.NavigateTo($"/files/rename?ids={item.Id}");
+                return Task.CompletedTask;
+            }));
         }
 
         _contextMenuActions = actions;

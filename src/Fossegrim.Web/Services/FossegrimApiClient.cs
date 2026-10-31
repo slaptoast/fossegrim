@@ -42,6 +42,33 @@ public class FossegrimApiClient
         return dto?.Version;
     }
 
+    public async Task<UpdateStatusDto> GetUpdateStatusAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/admin/updates");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<UpdateStatusDto>()
+            ?? throw new ApiException("Update status returned no result.");
+    }
+
+    public async Task<UpdateStatusDto> CheckForUpdatesAsync()
+    {
+        var response = await _httpClient.PostAsync("/api/admin/updates/check", null);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadProblemDetailAsync(response) ?? $"Checking for updates failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<UpdateStatusDto>()
+            ?? throw new ApiException("Checking for updates returned no result.");
+    }
+
+    public async Task<UpdateStatusDto> SetUpdateCheckEnabledAsync(bool enabled)
+    {
+        var response = await _httpClient.PutAsJsonAsync("/api/admin/updates/settings", new UpdateCheckSettingsRequest(enabled));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<UpdateStatusDto>()
+            ?? throw new ApiException("Saving update check settings returned no result.");
+    }
+
     public async Task<string> GetStreamUrlAsync(Guid mediaItemId)
     {
         var token = await _tokenStore.GetTokenAsync()

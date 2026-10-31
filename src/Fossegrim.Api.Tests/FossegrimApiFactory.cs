@@ -31,12 +31,15 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("DataProtection:KeysDirectory", Path.Combine(_directory, "dataprotection-keys"));
         // Tests drive Scrobbler directly, with a controlled clock.
         builder.UseSetting("Scrobbling:Enabled", "false");
+        // Tests run update checks on demand, against the fake Docker Hub.
+        builder.UseSetting("UpdateCheck:WorkerEnabled", "false");
 
         builder.ConfigureTestServices(services =>
         {
             services.AddHttpClient<LastFmClient>().ConfigurePrimaryHttpMessageHandler(() => LastFm);
             services.AddHttpClient<CoverSearchService>().ConfigurePrimaryHttpMessageHandler(() => Covers);
             services.AddHttpClient<CoverDownloader>().ConfigurePrimaryHttpMessageHandler(() => Covers);
+            services.AddHttpClient<DockerHubClient>().ConfigurePrimaryHttpMessageHandler(() => DockerHub);
         });
     }
 
@@ -45,6 +48,9 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
 
     /// <summary>Stands in for the cover search providers and their image hosts.</summary>
     public FakeCoverProvidersHandler Covers { get; } = new();
+
+    /// <summary>Stands in for Docker Hub's tags API.</summary>
+    public FakeDockerHubHandler DockerHub { get; } = new();
 
     /// <summary>Registers a brand-new user and returns a client signed in as them.</summary>
     public async Task<HttpClient> CreateUserClientAsync() => (await CreateUserAsync()).Client;

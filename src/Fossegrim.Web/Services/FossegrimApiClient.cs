@@ -350,6 +350,56 @@ public class FossegrimApiClient
             ?? throw new ApiException("Removing Last.fm settings returned no result.");
     }
 
+    public async Task<BackupStatusDto> GetBackupStatusAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/admin/backups");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<BackupStatusDto>()
+            ?? throw new ApiException("Backup status returned no result.");
+    }
+
+    public async Task<IReadOnlyList<string>> GetBackupTimeZonesAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/admin/backups/time-zones");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<string>>() ?? [];
+    }
+
+    public async Task<BackupStatusDto> SaveBackupScheduleAsync(BackupScheduleDto schedule)
+    {
+        var response = await _httpClient.PutAsJsonAsync("/api/admin/backups/schedule", schedule);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadProblemDetailAsync(response) ?? $"Saving the backup schedule failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<BackupStatusDto>()
+            ?? throw new ApiException("Saving the backup schedule returned no result.");
+    }
+
+    public async Task<BackupStatusDto> RunBackupAsync()
+    {
+        var response = await _httpClient.PostAsync("/api/admin/backups", null);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadProblemDetailAsync(response) ?? $"Backup failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<BackupStatusDto>()
+            ?? throw new ApiException("Backup returned no result.");
+    }
+
+    public async Task<Stream> DownloadBackupAsync(string fileName)
+    {
+        var response = await _httpClient.GetAsync($"/api/admin/backups/files/{Uri.EscapeDataString(fileName)}", HttpCompletionOption.ResponseHeadersRead);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStreamAsync();
+    }
+
+    public async Task DeleteBackupAsync(string fileName)
+    {
+        var response = await _httpClient.DeleteAsync($"/api/admin/backups/files/{Uri.EscapeDataString(fileName)}");
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task UpdateLastFmNowPlayingAsync(Guid mediaItemId)
     {
         var response = await _httpClient.PostAsJsonAsync("/api/lastfm/now-playing", new LastFmNowPlayingRequest(mediaItemId));

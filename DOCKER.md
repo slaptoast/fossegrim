@@ -93,6 +93,7 @@ into the image for a given deployment.
 | `JWT_ISSUER` / `JWT_AUDIENCE` / `JWT_EXPIRY_MINUTES` | JWT claims/expiry. Defaults match dev settings. |
 | `MUSIC_LIBRARY_PATH` | Host path to your music library; mounted **read-write** at `/music` in the container. After startup, register `/music` (or a subfolder) as a media folder from the admin UI. |
 | `PORT` | Host-side port to publish. |
+| `BACKUP_PATH` | Host folder for backup zips, mounted at `/backups`. Must be writable by uid 100 / gid 101. See [Backups](#backups). |
 | `LASTFM_API_KEY` / `LASTFM_API_SECRET` | Last.fm API application credentials. Optional -- usually entered on the admin Settings page instead; when set, these override it. See [Last.fm](#lastfm). |
 
 ### Auth signing key
@@ -232,6 +233,56 @@ docker compose pull && docker compose up -d
 Admins can turn the daily check off on the Admin page. "Check Now" still
 works when it's off. Development builds (`dev`, e.g. `docker compose up
 --build`) have no version to compare and never contact Docker Hub.
+
+### Backups
+
+Admins can back up from **Settings -> Backups**, either on demand or on a
+schedule: every N hours, daily, on chosen weekdays, or on a day of the
+month, at a time in a chosen time zone. Each backup is a zip written to
+`/backups`, which `docker-compose.yml` maps to `BACKUP_PATH` on the host:
+
+```
+fossegrim-backup-20261029-030000.zip
+├── fossegrim.db            # consistent copy, taken with SQLite's online backup API
+├── jwt.key                 # sign-in key (when generated into /data)
+├── dataprotection-keys/    # decrypt the saved Last.fm secret and session keys
+└── manifest.json           # app version, time, last applied migration
+```
+
+Point `BACKUP_PATH` at a different disk from the data volume if you can.
+A backup on the same disk won't survive losing that disk. The folder has
+to be writable by the container's user:
+
+```bash
+mkdir -p /path/to/backups && chown 100:101 /path/to/backups
+```
+
+After each successful backup, old ones are pruned by the retention
+settings: keep the newest N, and/or delete any older than N days. Manual
+backups count toward the limits. The newest backup is never pruned, and
+files in the folder that aren't named like Fossegrim backups are never
+touched. A backup missed while the server was down runs once when it
+comes back up.
+
+Backups contain `jwt.key` and the Data Protection keys, so treat them like
+the `/data` volume itself.
+
+**Restoring** is manual. Stop the container, replace the contents of
+`/data` with the zip's contents, then start it again. With the default
+named volume:
+
+```bash
+docker compose down
+docker run --rm -v fossegrim_fossegrim-data:/data -v /path/to/backups:/backups alpine \
+  sh -c 'rm -rf /data/* && unzip -o /backups/fossegrim-backup-20261029-030000.zip -d /data \
+         && rm /data/manifest.json && chown -R 100:101 /data'
+docker compose up -d
+```
+
+(Check the volume name with `docker volume ls`. It's prefixed with the
+compose project name.) Restoring onto an older Fossegrim version than the
+one that made the backup isn't supported. `manifest.json` records which
+version that was.
 
 ## Building the image by hand
 

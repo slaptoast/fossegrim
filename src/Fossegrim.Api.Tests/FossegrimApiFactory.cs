@@ -33,6 +33,9 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Scrobbling:Enabled", "false");
         // Tests run update checks on demand, against the fake Docker Hub.
         builder.UseSetting("UpdateCheck:WorkerEnabled", "false");
+        // Tests run backups on demand, into this factory's own folder.
+        builder.UseSetting("Backup:WorkerEnabled", "false");
+        builder.UseSetting("Backup:Directory", BackupDirectory);
 
         builder.ConfigureTestServices(services =>
         {
@@ -42,6 +45,8 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
             services.AddHttpClient<DockerHubClient>().ConfigurePrimaryHttpMessageHandler(() => DockerHub);
         });
     }
+
+    public string BackupDirectory => Path.Combine(_directory, "backups");
 
     /// <summary>Stands in for ws.audioscrobbler.com; every Last.fm call goes here.</summary>
     public FakeLastFmHandler LastFm { get; } = new();

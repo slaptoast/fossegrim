@@ -120,6 +120,15 @@ if (appVersion.Release is not null && builder.Configuration.GetValue("UpdateChec
     builder.Services.AddHostedService<UpdateCheckWorker>();
 }
 
+// Backups: zips of the database and its key material, written to
+// Backup:Directory on demand or on the admin's schedule.
+builder.Services.AddSingleton<BackupCoordinator>();
+builder.Services.AddScoped<BackupService>();
+if (builder.Configuration.GetValue("Backup:WorkerEnabled", true))
+{
+    builder.Services.AddHostedService<BackupWorker>();
+}
+
 // Data Protection encrypts stored secrets (Last.fm session keys). Its keys
 // must outlive the container or those secrets become unreadable, so Docker
 // points DataProtection:KeysDirectory at the /data volume. Unset, the
@@ -191,6 +200,7 @@ app.MapLastFmEndpoints();
 app.MapUserEndpoints();
 app.MapPreferenceEndpoints();
 app.MapAlbumCoverEndpoints();
+app.MapBackupEndpoints();
 
 app.MapFallbackToFile("index.html");
 

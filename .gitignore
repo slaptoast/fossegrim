@@ -405,3 +405,5 @@ FodyWeavers.xsd
 # Local SQLite databases (created and updated at runtime)
 src/Fossegrim.Api/fossegrim.db
 src/Fossegrim.Lib/fossegrim.db
+src/Fossegrim.Api/backups/
+/backups/

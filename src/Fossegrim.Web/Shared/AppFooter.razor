@@ -1,12 +1,20 @@
 @inject FossegrimApiClient ApiClient
+@inject AuthenticationStateProvider AuthStateProvider
 
 @if (_displayVersion is not null)
 {
-    <footer class="app-footer">@_displayVersion</footer>
+    <footer class="app-footer">
+        @if (_update is { UpdateAvailable: true })
+        {
+            <a href="/admin" class="update-badge" title="A newer release is on Docker Hub">Update available: v@(_update.LatestVersion)</a>
+        }
+        @_displayVersion
+    </footer>
 }
 
 @code {
     private string? _displayVersion;
+    private UpdateStatusDto? _update;
 
     protected override async Task OnInitializedAsync()
     {
@@ -20,6 +28,13 @@
                 // build, or a PR/sha fallback from CI) already reads fine as-is
                 // -- "vdev" does not.
                 _displayVersion = char.IsDigit(version[0]) ? $"v{version}" : version;
+            }
+
+            // Only admins can act on an update, so only they see the badge.
+            var state = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (state.User.IsInRole("Admin"))
+            {
+                _update = await ApiClient.GetUpdateStatusAsync();
             }
         }
         catch

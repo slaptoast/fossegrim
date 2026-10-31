@@ -72,6 +72,13 @@ This is loaded by the Blazor WASM app at startup to configure which Api it talks
 
 Only `Fossegrim.Api` touches the database (`fossegrim.db`, SQLite). `Fossegrim.Web` has no database access.
 
+### Default admin and the setup wizard
+
+In Development, the Api seeds `admin@fossegrim.local` / `Admin123!` (and the
+login page prefills it), so the first-run setup wizard never starts on its
+own. To try it, run the Api with `ASPNETCORE_ENVIRONMENT=Production` against
+an empty database, or re-run it from the Admin page.
+
 ### Auth signing key
 
 There's no JWT key in `appsettings.json`. Locally, with no key configured,

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Fossegrim.Api.Services;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services;
@@ -33,8 +34,14 @@ public static class Auth
         authGroup.MapPost("/register", async (
             RegisterRequest request,
             UserManager<ApplicationUser> userManager,
+            SetupService setup,
             IConfiguration configuration) =>
         {
+            if (!await setup.IsRegistrationOpenAsync())
+            {
+                return Results.Problem("Registration is closed. Ask an admin for an account.", statusCode: StatusCodes.Status403Forbidden);
+            }
+
             var user = new ApplicationUser
             {
                 UserName = request.Email,
@@ -118,7 +125,7 @@ public static class Auth
         .WithOpenApi();
     }
 
-    private static LoginResponse IssueLoginResponse(ApplicationUser user, IList<string> roles, IConfiguration configuration)
+    internal static LoginResponse IssueLoginResponse(ApplicationUser user, IList<string> roles, IConfiguration configuration)
     {
         var jwtSection = configuration.GetSection("Jwt");
         var (token, expiresAt) = JwtTokenService.GenerateToken(

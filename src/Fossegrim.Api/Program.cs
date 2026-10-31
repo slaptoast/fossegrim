@@ -120,6 +120,8 @@ if (appVersion.Release is not null && builder.Configuration.GetValue("UpdateChec
     builder.Services.AddHostedService<UpdateCheckWorker>();
 }
 
+builder.Services.AddScoped<SetupService>();
+
 // Backups: zips of the database and its key material, written to
 // Backup:Directory on demand or on the admin's schedule.
 builder.Services.AddSingleton<BackupCoordinator>();
@@ -159,7 +161,8 @@ switch (jwtKeySource)
 using (var scope = app.Services.CreateScope())
 {
     await scope.ServiceProvider.GetRequiredService<FossegrimDbContext>().Database.MigrateAsync();
-    await RoleSeeder.SeedRolesAndAdminAsync(scope.ServiceProvider);
+    await RoleSeeder.SeedRolesAndAdminAsync(scope.ServiceProvider, seedDefaultAdmin: app.Environment.IsDevelopment());
+    await scope.ServiceProvider.GetRequiredService<SetupService>().MarkExistingInstallCompleteAsync();
     await scope.ServiceProvider.GetRequiredService<LastFmSettingsStore>().LoadAsync();
 }
 
@@ -201,6 +204,7 @@ app.MapUserEndpoints();
 app.MapPreferenceEndpoints();
 app.MapAlbumCoverEndpoints();
 app.MapBackupEndpoints();
+app.MapSetupEndpoints();
 
 app.MapFallbackToFile("index.html");
 

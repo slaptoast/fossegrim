@@ -3,7 +3,7 @@
 @implements IAsyncDisposable
 
 @* Backup schedule, retention, run-now and the list of backups. Used on the
-   Settings page. *@
+   Settings page and in the setup wizard. *@
 
 @if (_message is not null)
 {
@@ -169,6 +169,10 @@ else
 }
 
 @code {
+    // Raised after the schedule is saved or a backup is made or deleted.
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
     private static readonly DayOfWeek[] WeekDays =
         [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday];
 
@@ -200,6 +204,7 @@ else
         {
             SetStatus(await ApiClient.SaveBackupScheduleAsync(_input.ToDto()));
             ShowSuccess(_input.Enabled ? "Backup schedule saved." : "Automatic backups are off.");
+            await OnChanged.InvokeAsync();
         });
     }
 
@@ -218,6 +223,7 @@ else
             {
                 ShowSuccess($"Backup saved as {status.LastRun?.FileName}.");
             }
+            await OnChanged.InvokeAsync();
         });
         _running = false;
     }

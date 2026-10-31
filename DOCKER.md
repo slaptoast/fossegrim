@@ -23,9 +23,29 @@ docker compose up --build
 ```
 
 - App: http://localhost:8080 (API and Web UI, same origin)
-- Log in with `admin@fossegrim.local` / `Admin123!` and change the password
-  immediately -- that's a hardcoded seed account, not something Docker
-  changes for you (`src/Fossegrim.Lib/Services/RoleSeeder.cs`).
+- The first visit opens the setup wizard. Create your admin account (the
+  only required step), then optionally add media folders (your library is
+  at `/music`), Last.fm, accounts and sign-ups, backups and update checks.
+  Admins can run the wizard again from the Admin page.
+
+### First-run setup
+
+A fresh install has no accounts. Until the first one exists, the wizard's
+"create admin account" step is open to anyone who can reach the server,
+and whoever gets there first becomes the admin. Jellyfin and Navidrome work
+the same way. Finish it before exposing the server publicly. Once an
+account exists, that endpoint is closed for good, and every other setting
+is admin-only.
+
+Self-registration is **off** by default: the sign-in page has no "Create
+account" link, and admins add accounts under Settings -> Accounts (or in
+the wizard). Admins can open sign-ups there too.
+
+Installs from before the wizard already have accounts, so they count as set
+up and are never sent through it. Updating them does close
+self-registration until an admin opens it again. The old
+`admin@fossegrim.local` / `Admin123!` seed account is now only created in
+local development (`run-dev.sh`), where the wizard never starts on its own.
 
 ## Cutting a release
 

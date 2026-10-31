@@ -57,37 +57,36 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
     /// <summary>Stands in for Docker Hub's tags API.</summary>
     public FakeDockerHubHandler DockerHub { get; } = new();
 
-    /// <summary>Registers a brand-new user and returns a client signed in as them.</summary>
+    /// <summary>Creates a brand-new user and returns a client signed in as them.</summary>
     public async Task<HttpClient> CreateUserClientAsync() => (await CreateUserAsync()).Client;
 
-    public async Task<TestUser> CreateUserAsync()
-    {
-        var client = CreateClient();
-        var email = $"user-{Guid.NewGuid():N}@example.com";
-        var response = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, "Test User", "Passw0rd!x"));
-        response.EnsureSuccessStatusCode();
-        var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
-        return new TestUser(client, login.UserId);
-    }
+    public Task<TestUser> CreateUserAsync() => CreateSignedInUserAsync("user", "Test User", isAdmin: false);
 
     /// <summary>A new user in the Admin role, signed in after the role was added so their token carries it.</summary>
-    public async Task<TestUser> CreateAdminAsync()
+    public Task<TestUser> CreateAdminAsync() => CreateSignedInUserAsync("admin", "Test Admin", isAdmin: true);
+
+    // Created directly rather than through /api/auth/register, which is
+    // closed unless an admin opens it.
+    private async Task<TestUser> CreateSignedInUserAsync(string prefix, string displayName, bool isAdmin)
     {
-        var client = CreateClient();
-        var email = $"admin-{Guid.NewGuid():N}@example.com";
+        var email = $"{prefix}-{Guid.NewGuid():N}@example.com";
         const string password = "Passw0rd!x";
-        (await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, "Test Admin", password))).EnsureSuccessStatusCode();
 
         string userId;
         using (var scope = Services.CreateScope())
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            var user = await users.FindByEmailAsync(email);
-            await users.AddToRoleAsync(user!, "Admin");
-            userId = user!.Id;
+            var user = new ApplicationUser { UserName = email, Email = email, DisplayName = displayName, DateJoined = DateTime.UtcNow };
+            var result = await users.CreateAsync(user, password);
+            Assert.True(result.Succeeded, string.Join(", ", result.Errors.Select(e => e.Description)));
+            if (isAdmin)
+            {
+                await users.AddToRoleAsync(user, "Admin");
+            }
+            userId = user.Id;
         }
 
+        var client = CreateClient();
         var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
         response.EnsureSuccessStatusCode();
         var login = await response.Content.ReadFromJsonAsync<LoginResponse>();

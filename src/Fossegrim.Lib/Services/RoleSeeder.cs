@@ -7,7 +7,9 @@ namespace Fossegrim.Lib.Services;
 
 public static class RoleSeeder
 {
-    public static async Task SeedRolesAndAdminAsync(IServiceProvider serviceProvider)
+    // The default admin is a local-development convenience only; everywhere
+    // else the first account is created by the setup wizard.
+    public static async Task SeedRolesAndAdminAsync(IServiceProvider serviceProvider, bool seedDefaultAdmin)
     {
         var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -33,6 +35,11 @@ public static class RoleSeeder
                     logger.LogError($"Failed to create role '{roleName}'.");
                 }
             }
+        }
+
+        if (!seedDefaultAdmin)
+        {
+            return;
         }
 
         // Create default admin user if it doesn't exist

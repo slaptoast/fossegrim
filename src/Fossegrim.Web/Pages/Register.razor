@@ -11,6 +11,14 @@
         <p>Create a new Fossegrim account</p>
     </div>
 
+    @if (_registrationOpen == false)
+    {
+        <div class="content">
+            <div class="info-text">Registration is closed on this server. Ask an admin to create an account for you.</div>
+        </div>
+    }
+    else
+    {
     <div class="content">
         <div class="info-text">
             Password must be at least 6 characters and include uppercase, lowercase, and a digit.
@@ -58,6 +66,7 @@
             <button type="submit" class="button">Register</button>
         </EditForm>
     </div>
+    }
 
     <div class="content">
         <div class="nav-links centered">
@@ -69,6 +78,19 @@
 @code {
     private readonly RegisterInput _input = new();
     private List<string> _errors = [];
+    private bool? _registrationOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _registrationOpen = (await ApiClient.GetSetupStatusAsync()).RegistrationOpen;
+        }
+        catch
+        {
+            // Show the form; the server still refuses if registration is closed.
+        }
+    }
 
     private async Task HandleRegisterAsync()
     {

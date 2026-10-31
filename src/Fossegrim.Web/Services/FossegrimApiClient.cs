@@ -42,6 +42,52 @@ public class FossegrimApiClient
         return dto?.Version;
     }
 
+    public async Task<SetupStatusDto> GetSetupStatusAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/setup");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<SetupStatusDto>()
+            ?? throw new ApiException("Setup status returned no result.");
+    }
+
+    public async Task<AuthResult> CreateFirstAdminAsync(string email, string displayName, string password)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/setup/admin", new CreateFirstAdminRequest(email, displayName, password));
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return new AuthResult(false, null, [await ReadProblemDetailAsync(response) ?? "Setup has already been done."]);
+        }
+        return await ReadAuthResultAsync(response, "Creating the account failed.");
+    }
+
+    public async Task<SetupStatusDto> CompleteSetupAsync()
+    {
+        var response = await _httpClient.PostAsync("/api/setup/complete", null);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<SetupStatusDto>()
+            ?? throw new ApiException("Finishing setup returned no result.");
+    }
+
+    public async Task<SetupStatusDto> SetRegistrationOpenAsync(bool open)
+    {
+        var response = await _httpClient.PutAsJsonAsync("/api/admin/registration", new RegistrationSettingsRequest(open));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<SetupStatusDto>()
+            ?? throw new ApiException("Saving registration settings returned no result.");
+    }
+
+    public async Task<IReadOnlyList<string>> CreateUserAsync(string email, string displayName, string password, bool isAdmin)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/admin/users", new CreateUserRequest(email, displayName, password, isAdmin));
+        if (response.IsSuccessStatusCode)
+        {
+            return [];
+        }
+
+        var errors = await response.Content.ReadFromJsonAsync<IdentityErrorsResponse>();
+        return errors?.Errors is { Count: > 0 } list ? list : [$"Creating the account failed ({(int)response.StatusCode})."];
+    }
+
     public async Task<UpdateStatusDto> GetUpdateStatusAsync()
     {
         var response = await _httpClient.GetAsync("/api/admin/updates");
@@ -235,6 +281,10 @@ public class FossegrimApiClient
     public async Task<AuthResult> RegisterAsync(string email, string displayName, string password)
     {
         var response = await _httpClient.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, displayName, password));
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return new AuthResult(false, null, [await ReadProblemDetailAsync(response) ?? "Registration is closed."]);
+        }
         return await ReadAuthResultAsync(response, unauthorizedMessage: "Registration failed.");
     }
 

@@ -4,6 +4,7 @@
 @inject TokenStore TokenStore
 @inject JwtAuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
+@inject Microsoft.AspNetCore.Components.WebAssembly.Hosting.IWebAssemblyHostEnvironment HostEnvironment
 
 <div class="container narrow">
     <div class="header">
@@ -43,11 +44,14 @@
         </EditForm>
     </div>
 
-    <div class="content">
-        <div class="nav-links centered">
-            <a href="/register">Create account</a>
+    @if (_registrationOpen)
+    {
+        <div class="content">
+            <div class="nav-links centered">
+                <a href="/register">Create account</a>
+            </div>
         </div>
-    </div>
+    }
 </div>
 
 @code {
@@ -55,15 +59,36 @@
     [SupplyParameterFromQuery]
     public string? ReturnUrl { get; set; }
 
-    private readonly LoginInput _input = new()
-    {
-        // dev convenience: prefill the seeded admin account
-        Email = "admin@fossegrim.local",
-        Password = "Admin123!"
-    };
-
+    private readonly LoginInput _input = new();
     private List<string> _errors = [];
     private bool _isSubmitting;
+    private bool _registrationOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HostEnvironment.Environment == "Development")
+        {
+            // dev convenience: prefill the account seeded in Development
+            _input.Email = "admin@fossegrim.local";
+            _input.Password = "Admin123!";
+        }
+
+        try
+        {
+            var status = await ApiClient.GetSetupStatusAsync();
+            if (status.SetupRequired)
+            {
+                // A fresh install has no accounts to sign in to yet.
+                Navigation.NavigateTo("/setup", replace: true);
+                return;
+            }
+            _registrationOpen = status.RegistrationOpen;
+        }
+        catch
+        {
+            // Signing in still works without the status; just hide the sign-up link.
+        }
+    }
 
     private async Task HandleLoginAsync()
     {

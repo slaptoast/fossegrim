@@ -117,7 +117,7 @@
     private Task PlayAlbumAsync(AlbumDto album)
     {
         var tracks = AlbumTracks(album);
-        return tracks.Count > 0 ? PlayerState.PlayQueueAsync(tracks) : Task.CompletedTask;
+        return tracks.Count > 0 ? PlayerState.PlayAlbumAsync(album.Id, tracks) : Task.CompletedTask;
     }
 
     private void ShowContextMenu(MouseEventArgs e, AlbumDto album)

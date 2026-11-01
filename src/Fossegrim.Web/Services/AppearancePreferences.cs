@@ -22,6 +22,7 @@ public sealed class AppearancePreferences
 
     public PlayerSettings Player { get; set; } = new();
     public VisualizerSettings Visualizer { get; set; } = new();
+    public RandomSettings Random { get; set; } = new();
 }
 
 public sealed class ThemeSettings
@@ -61,6 +62,9 @@ public sealed class PlayerSettings
 {
     // "bottom" or "top"
     public string Position { get; set; } = "bottom";
+
+    // When the queue runs out, keep going with random picks (see PlayerState).
+    public bool AutoFill { get; set; }
 }
 
 public sealed class VisualizerSettings
@@ -70,6 +74,32 @@ public sealed class VisualizerSettings
 
     // A new preset every 20 seconds.
     public bool AutoCycle { get; set; } = true;
+}
+
+// Which kind of random the user prefers (set on the Profile page), and the
+// front-page Random modules' own toggles, which override it when set.
+public sealed class RandomSettings
+{
+    public string PreferredMode { get; set; } = RandomModes.Adjusted;
+    public string? AlbumMode { get; set; }
+    public string? TrackMode { get; set; }
+
+    [JsonIgnore]
+    public string AlbumModeOrPreferred => AlbumMode ?? PreferredMode;
+    [JsonIgnore]
+    public string TrackModeOrPreferred => TrackMode ?? PreferredMode;
+}
+
+// Full ignores listening history; Adjusted favours what hasn't been played recently.
+public static class RandomModes
+{
+    public const string Full = "full";
+    public const string Adjusted = "adjusted";
+
+    public static string Sanitize(string? mode) => mode == Full ? Full : Adjusted;
+
+    // A module override: null (follow the preferred mode) unless it's a known mode.
+    public static string? SanitizeOverride(string? mode) => mode is Full or Adjusted ? mode : null;
 }
 
 public static class ThemeChoices
@@ -224,11 +254,18 @@ public static partial class AppearancePreferencesFile
             Player = new PlayerSettings
             {
                 Position = preferences.Player?.Position == "top" ? "top" : "bottom",
+                AutoFill = preferences.Player?.AutoFill ?? false,
             },
             Visualizer = new VisualizerSettings
             {
                 FlashingNoticeAccepted = preferences.Visualizer?.FlashingNoticeAccepted ?? false,
                 AutoCycle = preferences.Visualizer?.AutoCycle ?? true,
+            },
+            Random = new RandomSettings
+            {
+                PreferredMode = RandomModes.Sanitize(preferences.Random?.PreferredMode),
+                AlbumMode = RandomModes.SanitizeOverride(preferences.Random?.AlbumMode),
+                TrackMode = RandomModes.SanitizeOverride(preferences.Random?.TrackMode),
             },
         };
     }

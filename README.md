@@ -15,3 +15,5 @@
 - [x] library scanning: background scans with progress, quick (changed files only) and full, right-click rescan of an album or artist, scans started by other apps with an API key
 - [x] renaming files from a template (`{artist}/{album}/{track:00} - {title}`), with a preview
 - [x] library health: ID3v1/ID3v2 disagreements and files not named as the template says
+- [x] random albums and tracks on the front page, fully random or adjusted (favours what you haven't played recently, or ever); playing from them keeps going with more random tracks or albums, and the preferred kind of random is a per-user setting
+- [x] optional auto-fill when the queue ends (per-user setting): another random album after an album, more random tracks after a track

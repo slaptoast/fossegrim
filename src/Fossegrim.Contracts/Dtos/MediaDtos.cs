@@ -61,3 +61,8 @@ public record MediaItemTagUpdateError(Guid Id, string Error);
 public record UpdateMediaItemTagsResponse(
     IEnumerable<MediaItemDto> Updated,
     IEnumerable<MediaItemTagUpdateError> Errors);
+
+// Random picks that leave out the given ids (tracks for /api/random/tracks,
+// albums for /api/random/albums), e.g. what's already in the queue. Mode is
+// "full" or "adjusted" (the default); Count defaults to 5.
+public record RandomPickRequest(string? Mode, int? Count, IEnumerable<Guid>? ExcludeIds);

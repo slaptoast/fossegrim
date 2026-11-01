@@ -265,7 +265,7 @@ public class QueueTests : IClassFixture<FossegrimApiFactory>
     }
 
     // TokenStore reads the token from localStorage through JS interop.
-    private sealed class FakeLocalStorage(string token) : IJSRuntime
+    internal sealed class FakeLocalStorage(string token) : IJSRuntime
     {
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) =>
             new(identifier == "localStorage.getItem" ? (TValue)(object)token : default!);

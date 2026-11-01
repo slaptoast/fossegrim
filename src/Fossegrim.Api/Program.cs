@@ -222,6 +222,7 @@ app.MapSetupEndpoints();
 app.MapScanEndpoints();
 app.MapApiKeyEndpoints();
 app.MapLibraryFileEndpoints();
+app.MapRandomEndpoints();
 
 app.MapFallbackToFile("index.html");
 

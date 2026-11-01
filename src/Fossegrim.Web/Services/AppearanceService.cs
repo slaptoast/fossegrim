@@ -13,7 +13,7 @@ namespace Fossegrim.Web.Services;
 /// Nothing is saved until the profile has loaded: if loading fails, editing
 /// stays local rather than overwriting the saved settings with defaults.
 /// </summary>
-public class AppearanceService
+public class AppearanceService : IPlaybackSettings
 {
     private static readonly TimeSpan SaveDelay = TimeSpan.FromMilliseconds(600);
 
@@ -37,6 +37,10 @@ public class AppearanceService
 
     // False until the profile has loaded (or when it failed to).
     public bool IsLoaded => _loadedForUserId is not null;
+
+    public bool AutoFillQueue => Current.Player.AutoFill;
+
+    public string PreferredRandomMode => Current.Random.PreferredMode;
 
     public event Action? Changed;
 

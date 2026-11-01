@@ -1,0 +1,24 @@
+@* Full / Adjusted switch and a reroll button, for the Random album and track modules' headers. *@
+<div class="random-controls" role="group" aria-label="Random mode">
+    <button type="button" class="button-secondary" aria-pressed="@(Mode == RandomModes.Full ? "true" : "false")"
+            title="Every pick equally likely: listening history doesn't count" @onclick="() => SetAsync(RandomModes.Full)">Full</button>
+    <button type="button" class="button-secondary" aria-pressed="@(Mode == RandomModes.Adjusted ? "true" : "false")"
+            title="Favour what you haven't played recently, or ever" @onclick="() => SetAsync(RandomModes.Adjusted)">Adjusted</button>
+    <button type="button" class="button-secondary" title="New picks" aria-label="New picks" disabled="@Loading" @onclick="OnReroll">↻</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Mode { get; set; } = RandomModes.Adjusted;
+
+    [Parameter]
+    public EventCallback<string> ModeChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnReroll { get; set; }
+
+    [Parameter]
+    public bool Loading { get; set; }
+
+    private Task SetAsync(string mode) => mode == Mode ? Task.CompletedTask : ModeChanged.InvokeAsync(mode);
+}

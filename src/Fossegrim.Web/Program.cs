@@ -29,6 +29,7 @@ builder.Services.AddSingleton<AuthenticationStateProvider>(sp => sp.GetRequiredS
 builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<PlayerState>();
 builder.Services.AddScoped<AppearanceService>();
+builder.Services.AddScoped<IPlaybackSettings>(sp => sp.GetRequiredService<AppearanceService>());
 builder.Services.AddScoped<AlbumArtEditorState>();
 builder.Services.AddScoped<ScanStatusService>();
 

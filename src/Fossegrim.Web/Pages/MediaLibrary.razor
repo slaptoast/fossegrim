@@ -86,6 +86,8 @@
             new("albums", "Albums", new LayoutItem { Id = "albums", X = 8, Y = 0, W = 8, H = 10 }, AlbumsModule),
             new("visualizer", "Visualizer", new LayoutItem { Id = "visualizer", X = 16, Y = 0, W = 8, H = 10 }, VisualizerPanel, MinW: 6, MinH: 6),
             new("tracks", "Tracks", new LayoutItem { Id = "tracks", X = 0, Y = 10, W = 24, H = 14 }, TracksModule, MinW: 8, MinH: 5),
+            new("randomalbums", "Random albums", new LayoutItem { Id = "randomalbums", X = 0, Y = 24, W = 8, H = 8 }, RandomAlbumsModule),
+            new("randomtracks", "Random tracks", new LayoutItem { Id = "randomtracks", X = 8, Y = 24, W = 8, H = 8 }, RandomTracksModule),
             new("upnext", "Up next", new LayoutItem { Id = "upnext", X = 16, Y = 24, W = 8, H = 10, Hidden = true }, UpNextModule),
         ];
         if (includeAlbumArt)
@@ -129,6 +131,10 @@
     private RenderFragment ArtistsModule => @<ArtistList Artists="_artists" />;
 
     private RenderFragment AlbumsModule => @<AlbumList Albums="_albums" AllMediaItems="_mediaItems" />;
+
+    private RenderFragment RandomAlbumsModule => @<RandomAlbums AllMediaItems="_mediaItems" />;
+
+    private RenderFragment RandomTracksModule => @<RandomTracks />;
 
     private RenderFragment VisualizerPanel => @<VisualizerModule />;
 

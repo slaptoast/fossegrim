@@ -729,6 +729,12 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
 .layout-module > .track-list-component,
 .layout-module > .visualizer-module { height: 100%; display: flex; flex-direction: column; }
 .layout-module > .visualizer-module { min-height: 0; }
+/* Random album / track modules: mode switch and reroll on the right of the header. */
+.random-controls { display: flex; gap: var(--space-4); margin-left: auto; }
+.random-controls .button-secondary[aria-pressed="true"] { background: var(--selection-bg); color: var(--selection-fg); border-color: var(--selection-fg); }
+.random-module .album-list-header > .button-secondary { margin-left: auto; }
+.random-module .album-list-header > .button-secondary + .random-controls { margin-left: 0; }
+.random-track { cursor: pointer; }
 .layout-module .artist-list-container,
 .layout-module .album-list-container { max-height: none; flex: 1; min-height: 0; }
 .layout-module .track-list-component > .content { flex: 1; min-height: 0; overflow-y: auto; }

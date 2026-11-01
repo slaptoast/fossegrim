@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject FossegrimApiClient ApiClient
 @inject NavigationManager Navigation
+@inject AppearanceService Appearance
 
 <div class="container medium">
     <div class="header small">
@@ -47,6 +48,25 @@
             <button type="submit" class="button">Update Profile</button>
         </EditForm>
 
+        <h3 class="section-header">Playback</h3>
+
+        <div class="form-group">
+            <label class="checkbox-row">
+                <input type="checkbox" checked="@Appearance.Current.Player.AutoFill" @onchange="SetAutoFillAsync" />
+                Keep playing when the queue ends
+            </label>
+            <p class="backup-hint">Adds another random album if you were playing an album, or more random tracks if you were playing tracks, picked with your preferred random. Queues started from the Random modules always keep going.</p>
+        </div>
+
+        <div class="form-group">
+            <label for="preferredRandom">Preferred random</label>
+            <select id="preferredRandom" value="@Appearance.Current.Random.PreferredMode" @onchange="SetPreferredRandomAsync">
+                <option value="@RandomModes.Adjusted">Adjusted: favour what I haven't played recently, or ever</option>
+                <option value="@RandomModes.Full">Full: every track equally likely</option>
+            </select>
+            <p class="backup-hint">Used by the Random albums and Random tracks modules on the Library page, and for the random tracks or albums that follow when you play from them. Each module's own Full / Adjusted switch overrides this.</p>
+        </div>
+
         @if (_lastFm is { Configured: true })
         {
             <h3 class="section-header">Last.fm</h3>
@@ -84,6 +104,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await Appearance.EnsureLoadedAsync();
         var profile = await ApiClient.GetProfileAsync();
         if (profile is not null)
         {
@@ -99,6 +120,12 @@
             // Leave the Last.fm section hidden if its status can't be loaded.
         }
     }
+
+    private Task SetAutoFillAsync(ChangeEventArgs e) =>
+        Appearance.UpdateAsync(p => p.Player.AutoFill = e.Value is true);
+
+    private Task SetPreferredRandomAsync(ChangeEventArgs e) =>
+        Appearance.UpdateAsync(p => p.Random.PreferredMode = RandomModes.Sanitize(e.Value?.ToString()));
 
     // Sends the user to Last.fm, which redirects back to LastFmCallback.razor.
     private async Task ConnectLastFmAsync()

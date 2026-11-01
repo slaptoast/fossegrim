@@ -53,5 +53,37 @@ public static class Albums
         })
         .WithName("GetAlbumById")
         .WithOpenApi();
+
+        // The album's tracks in play order: by track number, then title.
+        albumGroup.MapGet("/{id:guid}/tracks", async (Guid id, FossegrimDbContext db) =>
+        {
+            if (!await db.Albums.AnyAsync(al => al.Id == id))
+            {
+                return Results.NotFound();
+            }
+
+            var tracks = await db.MediaItems
+                .Where(m => m.Albums.Any(al => al.Id == id))
+                .Select(m => new MediaItemDto(
+                    m.Id,
+                    m.Title,
+                    m.ArtistName,
+                    m.Album,
+                    m.DateAdded,
+                    m.LastModified,
+                    m.Year,
+                    m.Track,
+                    m.Genre,
+                    m.Duration,
+                    m.Bitrate,
+                    m.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name)),
+                    m.Albums.Select(al => new AlbumSummaryDto(al.Id, al.Name, al.Year))))
+                .ToListAsync();
+            return Results.Ok(tracks
+                .OrderBy(m => m.Track ?? int.MaxValue)
+                .ThenBy(m => m.Title, StringComparer.OrdinalIgnoreCase));
+        })
+        .WithName("GetAlbumTracks")
+        .WithOpenApi();
     }
 }

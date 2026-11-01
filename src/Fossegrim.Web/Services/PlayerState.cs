@@ -8,6 +8,20 @@ namespace Fossegrim.Web.Services;
 // can still key on it) and IsSaved is false.
 public record QueueEntry(Guid ItemId, MediaItemDto Track, bool IsSaved = true);
 
+// Whether a play started from an album or from tracks: it decides what a
+// queue refills itself with (another album, or more tracks).
+public enum PlayKind { Track, Album }
+
+// The signed-in user's playback settings (see AppearanceService).
+public interface IPlaybackSettings
+{
+    // Keep playing random picks when the queue runs out.
+    bool AutoFillQueue { get; }
+
+    // RandomModes.Full or RandomModes.Adjusted.
+    string PreferredRandomMode { get; }
+}
+
 /// <summary>
 /// Holds the queue and the currently-playing entry so a persistent player bar
 /// in MainLayout keeps playing across navigation. Backed by the user's
@@ -22,15 +36,27 @@ public class PlayerState
 {
     private readonly FossegrimApiClient _apiClient;
     private readonly ToastService _toasts;
+    private readonly IPlaybackSettings? _settings;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private List<QueueEntry> _queue = [];
     private int _index = -1;
     private Guid? _queueId;
 
-    public PlayerState(FossegrimApiClient apiClient, ToastService toasts)
+    // Set while the queue came from a Random module, which always refills
+    // (in that module's mode). Other queues refill only with AutoFillQueue on.
+    private RandomFill? _random;
+
+    // Albums played this session, so a refill picks a new one while there are any.
+    private readonly HashSet<Guid> _playedAlbumIds = [];
+
+    // How many random tracks are queued at a time.
+    public const int RandomTrackBatch = 20;
+
+    public PlayerState(FossegrimApiClient apiClient, ToastService toasts, IPlaybackSettings? settings = null)
     {
         _apiClient = apiClient;
         _toasts = toasts;
+        _settings = settings;
         Initialized = HydrateFromServerAsync();
     }
 
@@ -51,16 +77,68 @@ public class PlayerState
     // the first track added to an empty queue), so audio doesn't start by surprise.
     public bool AutoPlay { get; private set; }
 
+    // How the latest play this session started (null until something is
+    // played; a queue restored after a reload counts as tracks).
+    public PlayKind? SessionPlayKind { get; private set; }
+
     public event Action? Changed;
 
     public Task PlayAsync(MediaItemDto track) => PlayQueueAsync([track]);
 
     // Replaces the queue with these tracks and starts playing the first.
-    public Task PlayQueueAsync(IReadOnlyList<MediaItemDto> tracks) => WithLockAsync(async () =>
+    public Task PlayQueueAsync(IReadOnlyList<MediaItemDto> tracks) => WithLockAsync(() =>
+    {
+        _random = null;
+        return StartQueueAsync(tracks, PlayKind.Track, albumId: null);
+    });
+
+    // Like PlayQueueAsync, for an album's tracks, so a refill continues with albums.
+    public Task PlayAlbumAsync(Guid albumId, IReadOnlyList<MediaItemDto> tracks) => WithLockAsync(() =>
+    {
+        _random = null;
+        return StartQueueAsync(tracks, PlayKind.Album, albumId);
+    });
+
+    // Plays these tracks followed by RandomTrackBatch more random ones (picked
+    // in this mode, none already queued), and keeps topping the queue up
+    // whenever its last track starts.
+    public Task PlayRandomTracksAsync(IReadOnlyList<MediaItemDto> tracks, string mode) => WithLockAsync(async () =>
     {
         if (tracks.Count == 0)
         {
             return;
+        }
+
+        _random = new RandomFill(PlayKind.Track, mode);
+        var more = await TryGetRandomTracksAsync(mode, tracks.Select(t => t.Id));
+        await StartQueueAsync([.. tracks, .. more], PlayKind.Track, albumId: null);
+    });
+
+    // Plays this album, and when its last track starts, queues another
+    // random album picked in this mode (one not played yet this session,
+    // while there are any).
+    public Task PlayRandomAlbumAsync(Guid albumId, IReadOnlyList<MediaItemDto> tracks, string mode) => WithLockAsync(async () =>
+    {
+        if (tracks.Count == 0)
+        {
+            return;
+        }
+
+        _random = new RandomFill(PlayKind.Album, mode);
+        await StartQueueAsync(tracks, PlayKind.Album, albumId);
+    });
+
+    private async Task StartQueueAsync(IReadOnlyList<MediaItemDto> tracks, PlayKind kind, Guid? albumId)
+    {
+        if (tracks.Count == 0)
+        {
+            return;
+        }
+
+        SessionPlayKind = kind;
+        if (albumId is { } id)
+        {
+            _playedAlbumIds.Add(id);
         }
 
         // Start the audio straight away; the queue entries get their ids once saved.
@@ -77,9 +155,20 @@ public class PlayerState
         {
             // Best-effort: losing sync with the server shouldn't block local playback.
         }
-    });
 
-    public Task PlayNextAsync() => WithLockAsync(() => HasNext ? MoveToAsync(_index + 1) : Task.CompletedTask);
+        await RefillIfAtEndAsync();
+    }
+
+    public Task PlayNextAsync() => WithLockAsync(async () =>
+    {
+        // Normally the refill already happened when this last track started;
+        // this catches one that failed then.
+        await RefillIfAtEndAsync();
+        if (HasNext)
+        {
+            await MoveToAsync(_index + 1);
+        }
+    });
 
     public Task PlayPreviousAsync() => WithLockAsync(() => HasPrevious ? MoveToAsync(_index - 1) : Task.CompletedTask);
 
@@ -194,6 +283,7 @@ public class PlayerState
 
     public void Stop()
     {
+        _random = null;
         _queue = [];
         _index = -1;
         CurrentTrack = null;
@@ -221,6 +311,96 @@ public class PlayerState
         _index = index;
         await LoadCurrentAsync(autoPlay: true);
         await SaveCurrentAsync();
+        await RefillIfAtEndAsync();
+    }
+
+    // Once the last entry is playing, append more random tracks or another
+    // random album: always for a queue from a Random module, otherwise when
+    // the user has AutoFillQueue on (by how the session's latest play started,
+    // in their preferred mode).
+    private async Task RefillIfAtEndAsync()
+    {
+        if (HasNext || CurrentEntry is null)
+        {
+            return;
+        }
+
+        var random = _random ?? (_settings is { AutoFillQueue: true } settings
+            ? new RandomFill(SessionPlayKind ?? PlayKind.Track, settings.PreferredRandomMode)
+            : null);
+        if (random is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<MediaItemDto> more;
+        try
+        {
+            if (random.Kind == PlayKind.Track)
+            {
+                more = await TryGetRandomTracksAsync(random.Mode, _queue.Select(e => e.Track.Id));
+            }
+            else
+            {
+                var album = (await _apiClient.GetRandomAlbumsAsync(random.Mode, 1, _playedAlbumIds)).FirstOrDefault();
+                if (album is null)
+                {
+                    return;
+                }
+
+                // Every album has been played this session: start the round again.
+                if (_playedAlbumIds.Contains(album.Id))
+                {
+                    _playedAlbumIds.Clear();
+                }
+                _playedAlbumIds.Add(album.Id);
+                more = await _apiClient.GetAlbumTracksAsync(album.Id);
+            }
+        }
+        catch
+        {
+            // Best-effort: the queue just ends; the next Next press tries again.
+            return;
+        }
+
+        if (more.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (_queueId is not { } queueId || _queue.Any(e => !e.IsSaved))
+            {
+                throw new InvalidOperationException("The queue isn't saved yet.");
+            }
+
+            Adopt(await _apiClient.AddPlaylistItemsAsync(queueId, more.Select(t => t.Id)));
+        }
+        catch
+        {
+            // Keep playing locally even if the server copy can't be extended.
+            _queue.AddRange(more.Select(t => new QueueEntry(Guid.NewGuid(), t, IsSaved: false)));
+        }
+
+        Changed?.Invoke();
+    }
+
+    // Up to RandomTrackBatch random tracks, leaving out the given ones; none if the request fails.
+    private async Task<IReadOnlyList<MediaItemDto>> TryGetRandomTracksAsync(string mode, IEnumerable<Guid> exclude)
+    {
+        try
+        {
+            var excluded = exclude.ToHashSet();
+            var picked = await _apiClient.GetRandomTracksAsync(mode, RandomTrackBatch, excluded);
+
+            // The server only repeats tracks once there's nothing new left to pick.
+            return picked.Where(t => !excluded.Contains(t.Id)).ToList() is { Count: > 0 } fresh ? fresh : picked;
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     private async Task LoadCurrentAsync(bool autoPlay)
@@ -318,3 +498,6 @@ public class PlayerState
         await LoadCurrentAsync(autoPlay: false);
     });
 }
+
+// What a queue refills itself with: random tracks or random albums, in this mode.
+internal sealed record RandomFill(PlayKind Kind, string Mode);

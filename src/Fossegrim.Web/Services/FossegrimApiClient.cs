@@ -132,6 +132,30 @@ public class FossegrimApiClient
         return await response.Content.ReadFromJsonAsync<List<AlbumDto>>() ?? [];
     }
 
+    // mode is RandomModes.Full or RandomModes.Adjusted. Excluded albums are
+    // left out unless that would leave none.
+    public async Task<IReadOnlyList<AlbumDto>> GetRandomAlbumsAsync(string mode, int count, IEnumerable<Guid>? excludeIds = null)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/random/albums", new RandomPickRequest(mode, count, excludeIds?.ToList()));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<AlbumDto>>() ?? [];
+    }
+
+    // Excluded tracks are left out unless that would leave none.
+    public async Task<IReadOnlyList<MediaItemDto>> GetRandomTracksAsync(string mode, int count, IEnumerable<Guid>? excludeIds = null)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/random/tracks", new RandomPickRequest(mode, count, excludeIds?.ToList()));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<MediaItemDto>>() ?? [];
+    }
+
+    public async Task<IReadOnlyList<MediaItemDto>> GetAlbumTracksAsync(Guid albumId)
+    {
+        var response = await _httpClient.GetAsync($"/api/albums/{albumId}/tracks");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<MediaItemDto>>() ?? [];
+    }
+
     public async Task<string> GetAlbumCoverUrl(Guid albumId)
     {
         var token = await _tokenStore.GetTokenAsync()

@@ -1,0 +1,111 @@
+@inject FossegrimApiClient ApiClient
+@inject PlayerState PlayerState
+@inject AppearanceService Appearance
+
+@* A few random tracks for the front page: click one to play it, Play all
+   to play them all, right-click to queue one. Playing from here keeps the
+   queue topped up with more random tracks in the same mode. *@
+<div class="album-list-component random-module">
+    <div class="album-list-header">
+        <h2>Random tracks</h2>
+        <button type="button" class="button-secondary" disabled="@(_tracks.Count == 0)" @onclick="() => PlayerState.PlayRandomTracksAsync(_tracks, _mode)">Play all</button>
+        <RandomModeToggle Mode="_mode" ModeChanged="SetModeAsync" OnReroll="LoadAsync" Loading="_loading" />
+    </div>
+
+    <div class="album-list-container">
+        @if (_error is not null)
+        {
+            <div class="no-results"><p>@_error</p></div>
+        }
+        else if (_tracks.Count > 0)
+        {
+            <ul class="album-list">
+                @foreach (var track in _tracks)
+                {
+                    <li class="album-item random-track" @key="track.Id" title="Play" @onclick="() => PlayerState.PlayRandomTracksAsync([track], _mode)"
+                        @oncontextmenu="e => ShowContextMenu(e, track)" @oncontextmenu:preventDefault="true">
+                        <div class="album-title">@(track.Title ?? "Unknown")</div>
+                        <div class="album-artist">@(track.ArtistName ?? "Unknown Artist")</div>
+                    </li>
+                }
+            </ul>
+        }
+        else if (!_loading)
+        {
+            <div class="no-results"><p>No tracks yet.</p></div>
+        }
+    </div>
+</div>
+
+<ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="() => _contextMenuOpen = false" />
+
+<AddToPlaylistModal IsOpen="_showAddToPlaylist" MediaItemIds="_addToPlaylistIds" OnClose="() => _showAddToPlaylist = false" />
+
+@code {
+    private const int Count = 5;
+
+    private IReadOnlyList<MediaItemDto> _tracks = [];
+    private string _mode = RandomModes.Adjusted;
+    private bool _loading = true;
+    private string? _error;
+
+    private bool _contextMenuOpen;
+    private double _contextMenuX;
+    private double _contextMenuY;
+    private IReadOnlyList<ContextMenuAction> _contextMenuActions = [];
+
+    private bool _showAddToPlaylist;
+    private IReadOnlyList<Guid> _addToPlaylistIds = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Appearance.EnsureLoadedAsync();
+        _mode = Appearance.Current.Random.TrackModeOrPreferred;
+        await LoadAsync();
+    }
+
+    private async Task SetModeAsync(string mode)
+    {
+        _mode = mode;
+        // Back on the preferred mode, follow it again if that setting changes.
+        await Appearance.UpdateAsync(p => p.Random.TrackMode = mode == p.Random.PreferredMode ? null : mode);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _tracks = await ApiClient.GetRandomTracksAsync(_mode, Count);
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Couldn't load random tracks: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ShowContextMenu(MouseEventArgs e, MediaItemDto track)
+    {
+        _contextMenuX = e.ClientX;
+        _contextMenuY = e.ClientY;
+        _contextMenuActions =
+        [
+            new("Play", () => PlayerState.PlayRandomTracksAsync([track], _mode)),
+            new("Add to next in queue", () => PlayerState.AddToQueueNextAsync([track.Id])),
+            new("Add to end of queue", () => PlayerState.AddToQueueEndAsync([track.Id])),
+            new("Add to playlist...", () =>
+            {
+                _addToPlaylistIds = [track.Id];
+                _showAddToPlaylist = true;
+                return Task.CompletedTask;
+            }),
+        ];
+        _contextMenuOpen = true;
+    }
+}

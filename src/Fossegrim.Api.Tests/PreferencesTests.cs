@@ -124,6 +124,34 @@ public class AppearancePreferencesFileTests
         Assert.Equal((false, true), (older.Visualizer.FlashingNoticeAccepted, older.Visualizer.AutoCycle));
     }
 
+    [Fact]
+    public void AutoFill_RoundTrips_AndIsOffByDefault()
+    {
+        var original = new AppearancePreferences { Player = new PlayerSettings { AutoFill = true } };
+
+        var imported = AppearancePreferencesFile.Parse(AppearancePreferencesFile.Serialize(original))!;
+        var older = AppearancePreferencesFile.Parse("""{"player":{"position":"top"}}""")!;
+
+        Assert.True(imported.Player.AutoFill);
+        Assert.False(older.Player.AutoFill);
+    }
+
+    [Fact]
+    public void RandomSettings_RoundTrip_AndFallBackToThePreferredMode()
+    {
+        var original = new AppearancePreferences { Random = new RandomSettings { PreferredMode = RandomModes.Full, AlbumMode = RandomModes.Adjusted } };
+
+        var imported = AppearancePreferencesFile.Parse(AppearancePreferencesFile.Serialize(original))!;
+        var unknown = AppearancePreferencesFile.Parse("""{"random":{"preferredMode":"shuffle","albumMode":"shuffle","trackMode":null}}""")!;
+        var older = AppearancePreferencesFile.Parse("""{"theme":{"choice":"dark","custom":[]}}""")!;
+
+        Assert.Equal((RandomModes.Full, RandomModes.Adjusted, null), (imported.Random.PreferredMode, imported.Random.AlbumMode, imported.Random.TrackMode));
+        // No override: a module follows the preferred mode.
+        Assert.Equal((RandomModes.Adjusted, RandomModes.Full), (imported.Random.AlbumModeOrPreferred, imported.Random.TrackModeOrPreferred));
+        Assert.Equal((RandomModes.Adjusted, null, null), (unknown.Random.PreferredMode, unknown.Random.AlbumMode, unknown.Random.TrackMode));
+        Assert.Equal((RandomModes.Adjusted, null, null), (older.Random.PreferredMode, older.Random.AlbumMode, older.Random.TrackMode));
+    }
+
     [Theory]
     [InlineData("url(https://example.com/track.png)")] // would make the browser fetch
     [InlineData("red; background: url(x)")]

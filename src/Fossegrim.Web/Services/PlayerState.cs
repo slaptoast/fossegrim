@@ -3,9 +3,10 @@ using Fossegrim.Contracts.Dtos;
 namespace Fossegrim.Web.Services;
 
 // One entry in the queue. ItemId is the server's queue entry id, so a track
-// queued twice is still two distinct entries; it's Guid.Empty only briefly,
-// while a newly started queue is being saved.
-public record QueueEntry(Guid ItemId, MediaItemDto Track);
+// queued twice is still two distinct entries. While a newly started queue is
+// being saved, entries get a temporary local id (unique, so the Up next list
+// can still key on it) and IsSaved is false.
+public record QueueEntry(Guid ItemId, MediaItemDto Track, bool IsSaved = true);
 
 /// <summary>
 /// Holds the queue and the currently-playing entry so a persistent player bar
@@ -63,7 +64,7 @@ public class PlayerState
         }
 
         // Start the audio straight away; the queue entries get their ids once saved.
-        _queue = tracks.Select(t => new QueueEntry(Guid.Empty, t)).ToList();
+        _queue = tracks.Select(t => new QueueEntry(Guid.NewGuid(), t, IsSaved: false)).ToList();
         _index = 0;
         await LoadCurrentAsync(autoPlay: true);
 
@@ -91,7 +92,8 @@ public class PlayerState
     // Removes an entry other than the one playing (the Up next panel doesn't offer that).
     public Task RemoveAsync(Guid itemId) => WithLockAsync(async () =>
     {
-        if (_queueId is not { } queueId || CurrentEntry?.ItemId == itemId)
+        if (_queueId is not { } queueId || CurrentEntry?.ItemId == itemId ||
+            _queue.Find(e => e.ItemId == itemId) is not { IsSaved: true })
         {
             return;
         }
@@ -243,7 +245,7 @@ public class PlayerState
 
     private async Task SaveCurrentAsync()
     {
-        if (CurrentEntry is not { ItemId: var itemId } || itemId == Guid.Empty)
+        if (CurrentEntry is not { IsSaved: true, ItemId: var itemId })
         {
             return;
         }

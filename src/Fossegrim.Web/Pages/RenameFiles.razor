@@ -1,0 +1,120 @@
+@page "/files/rename"
+@attribute [Authorize(Roles = "Admin")]
+@inject FossegrimApiClient ApiClient
+
+@* Preview, then apply, renaming tracks' files to the file-naming template.
+   Opened with ?ids=... (from a right-click menu) or ?all=true. *@
+
+<div class="container wide">
+    <div class="header">
+        <h1>📁 Rename Files</h1>
+        <p>@(All ? "Whole library" : $"{_ids.Count} track{(_ids.Count == 1 ? "" : "s")}")@(_plan is not null ? $" · template {_plan.Template}" : "")</p>
+    </div>
+
+    <div class="content">
+        @if (_errorMessage is not null)
+        {
+            <div class="error-message">@_errorMessage</div>
+        }
+
+        @if (_result is not null)
+        {
+            <div class="success-message">
+                Renamed @_result.Renamed file@(_result.Renamed == 1 ? "" : "s").
+                @(_result.Problems.Count > 0 ? $"{_result.Problems.Count} skipped (listed below)." : "")
+            </div>
+            @if (_result.Problems.Count > 0)
+            {
+                <RenameEntryTable Entries="_result.Problems" />
+            }
+        }
+        else if (_plan is null)
+        {
+            <div class="loading"><h2>Working out new names</h2></div>
+        }
+        else
+        {
+            var toRename = _plan.Entries.Count(e => e.Status == RenameStatus.Rename);
+            <p>
+                @toRename file@(toRename == 1 ? "" : "s") will be renamed; @_plan.UnchangedCount already match@(_plan.UnchangedCount == 1 ? "es" : "").
+                @if (_plan.Entries.Count > toRename)
+                {
+                    <span>@(_plan.Entries.Count - toRename) can't be renamed and will be skipped.</span>
+                }
+                Change the template in <a href="/settings">Settings</a>.
+            </p>
+
+            @if (_plan.Entries.Count > 0)
+            {
+                <RenameEntryTable Entries="_plan.Entries" />
+            }
+
+            <div class="setup-nav">
+                <a class="button-secondary" href="javascript:history.back()">Cancel</a>
+                <button type="button" class="button" disabled="@(_busy || toRename == 0)" @onclick="ApplyAsync">
+                    @(_busy ? "Renaming..." : $"Rename {toRename} File{(toRename == 1 ? "" : "s")}")
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, SupplyParameterFromQuery(Name = "ids")]
+    public string? IdsParameter { get; set; }
+
+    [Parameter, SupplyParameterFromQuery(Name = "all")]
+    public bool All { get; set; }
+
+    private List<Guid> _ids = [];
+    private RenamePlanDto? _plan;
+    private RenameResultDto? _result;
+    private string? _errorMessage;
+    private bool _busy;
+
+    private RenameRequest Request => All ? new RenameRequest(All: true) : new RenameRequest(_ids);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _ids = (IdsParameter ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(id => Guid.TryParse(id, out var guid) ? guid : Guid.Empty)
+            .Where(id => id != Guid.Empty)
+            .ToList();
+        _plan = null;
+        _result = null;
+        _errorMessage = null;
+
+        if (!All && _ids.Count == 0)
+        {
+            _errorMessage = "No tracks were chosen.";
+            return;
+        }
+
+        try
+        {
+            _plan = await ApiClient.PreviewRenameAsync(Request);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task ApplyAsync()
+    {
+        _busy = true;
+        _errorMessage = null;
+        try
+        {
+            _result = await ApiClient.RenameAsync(Request);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

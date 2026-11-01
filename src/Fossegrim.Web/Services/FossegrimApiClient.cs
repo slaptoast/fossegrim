@@ -20,6 +20,9 @@ public class FossegrimApiClient
         _tokenStore = tokenStore;
     }
 
+    // Where the Api is, e.g. for showing other applications which URL to call.
+    public Uri? BaseAddress => _httpClient.BaseAddress;
+
     public async Task<IReadOnlyList<ArtistDto>> GetArtistsAsync()
     {
         var response = await _httpClient.GetAsync("/api/artists");
@@ -258,18 +261,145 @@ public class FossegrimApiClient
         }
     }
 
-    public async Task<ScanResult> ScanAsync(string folderPath, int maxDegreeOfParallelism)
+    public async Task<ScanStatusDto> GetScanStatusAsync()
     {
-        var response = await _httpClient.PostAsJsonAsync("/api/admin/scan", new ScanRequest(folderPath, maxDegreeOfParallelism));
+        var response = await _httpClient.GetAsync("/api/admin/scans");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ScanStatusDto>()
+            ?? throw new ApiException("Scan status returned no result.");
+    }
 
+    public Task<ScanJobDto> StartScanAsync(StartScanRequest request) =>
+        PostScanAsync("/api/admin/scans", JsonContent.Create(request));
+
+    public Task<ScanJobDto> RescanAlbumAsync(Guid albumId) => PostScanAsync($"/api/admin/scans/albums/{albumId}", null);
+
+    public Task<ScanJobDto> RescanArtistAsync(Guid artistId) => PostScanAsync($"/api/admin/scans/artists/{artistId}", null);
+
+    private async Task<ScanJobDto> PostScanAsync(string url, HttpContent? content)
+    {
+        var response = await _httpClient.PostAsync(url, content);
         if (!response.IsSuccessStatusCode)
         {
-            var error = await response.Content.ReadFromJsonAsync<ApiErrorResponse>();
-            throw new ApiException(error?.Error ?? $"Scan failed with status {(int)response.StatusCode}.");
+            throw new ApiException(await ReadErrorAsync(response) ?? $"Starting the scan failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<ScanJobDto>()
+            ?? throw new ApiException("Starting the scan returned no result.");
+    }
+
+    public async Task<IReadOnlyList<ApiKeyDto>> GetApiKeysAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/admin/api-keys");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<ApiKeyDto>>() ?? [];
+    }
+
+    public async Task<CreatedApiKeyDto> CreateApiKeyAsync(string name)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/admin/api-keys", new CreateApiKeyRequest(name));
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadErrorAsync(response) ?? $"Creating the key failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<CreatedApiKeyDto>()
+            ?? throw new ApiException("Creating the key returned no result.");
+    }
+
+    public async Task RevokeApiKeyAsync(Guid id)
+    {
+        var response = await _httpClient.DeleteAsync($"/api/admin/api-keys/{id}");
+        if (response.StatusCode != HttpStatusCode.NotFound)
+        {
+            response.EnsureSuccessStatusCode();
+        }
+    }
+
+    public async Task<RenameTemplateDto> GetRenameTemplateAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/admin/rename/template");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<RenameTemplateDto>()
+            ?? throw new ApiException("The file-name template returned no result.");
+    }
+
+    public async Task<RenameTemplateDto> SaveRenameTemplateAsync(string template)
+    {
+        var response = await _httpClient.PutAsJsonAsync("/api/admin/rename/template", new UpdateRenameTemplateRequest(template));
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadErrorAsync(response) ?? $"Saving the template failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<RenameTemplateDto>()
+            ?? throw new ApiException("Saving the template returned no result.");
+    }
+
+    public async Task<RenamePlanDto> PreviewRenameAsync(RenameRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/admin/rename/preview", request);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadErrorAsync(response) ?? $"Previewing failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<RenamePlanDto>()
+            ?? throw new ApiException("Previewing returned no result.");
+    }
+
+    public async Task<RenameResultDto> RenameAsync(RenameRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/admin/rename", request);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadErrorAsync(response) ?? $"Renaming failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<RenameResultDto>()
+            ?? throw new ApiException("Renaming returned no result.");
+    }
+
+    public async Task<LibraryHealthDto> GetLibraryHealthAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/admin/library-health");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<LibraryHealthDto>()
+            ?? throw new ApiException("Library health returned no result.");
+    }
+
+    public async Task<IReadOnlyList<TagVersionMismatchDto>> GetTagVersionMismatchesAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/admin/library-health/tag-versions");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<TagVersionMismatchDto>>() ?? [];
+    }
+
+    public async Task<FixTagVersionsResultDto> FixTagVersionsAsync(IEnumerable<Guid> mediaItemIds)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/admin/library-health/tag-versions/fix", new FixTagVersionsRequest(mediaItemIds.ToList()));
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadErrorAsync(response) ?? $"Fixing tags failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<FixTagVersionsResultDto>()
+            ?? throw new ApiException("Fixing tags returned no result.");
+    }
+
+    // ApiErrorResponse ({ "error": ... }) or a problem/plain-string body.
+    private static async Task<string?> ReadErrorAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(body);
+            if (json.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                json.RootElement.TryGetProperty("error", out var error))
+            {
+                return error.GetString();
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
         }
 
-        return await response.Content.ReadFromJsonAsync<ScanResult>()
-            ?? throw new ApiException("Scan succeeded but returned no result.");
+        using var copy = new HttpResponseMessage { Content = new StringContent(body) };
+        return await ReadProblemDetailAsync(copy);
     }
 
     public async Task<AuthResult> LoginAsync(string email, string password)

@@ -1,5 +1,5 @@
 using Fossegrim.Lib.Data;
-using Fossegrim.Lib.Enums;
+using Fossegrim.Lib.Services.Library;
 
 namespace Fossegrim.Api.Endpoints;
 
@@ -16,13 +16,12 @@ public static class Streaming
                 return Results.NotFound();
             }
 
-            var fileType = MediaFileTypeHelper.GetFileType(Path.GetExtension(mediaItem.FileLocation));
-            if (fileType != MediaFileType.MP3)
+            if (AudioFormats.ContentType(mediaItem.FileLocation) is not { } contentType)
             {
-                return Results.BadRequest("Only MP3 files can be streamed.");
+                return Results.BadRequest("This file type can't be streamed.");
             }
 
-            return Results.File(mediaItem.FileLocation, "audio/mpeg", enableRangeProcessing: true);
+            return Results.File(mediaItem.FileLocation, contentType, enableRangeProcessing: true);
         })
         .WithName("StreamMediaFile")
         .WithOpenApi()

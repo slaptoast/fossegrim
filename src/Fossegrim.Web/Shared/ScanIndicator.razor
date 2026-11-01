@@ -1,0 +1,30 @@
+@implements IDisposable
+@inject ScanStatusService Scans
+@inject AuthenticationStateProvider AuthStateProvider
+
+@* Top-bar note that a scan is running, for admins, linking to its progress. *@
+
+@if (_isAdmin && Scans.Status?.Current is { } current)
+{
+    <a class="scan-indicator" href="/admin" title="@current.Description: @ScanProgress.PhaseText(current)">
+        Scanning@(current.Phase == ScanPhase.Reading ? $" {ScanProgress.Percent(current)}%" : "…")
+    </a>
+}
+
+@code {
+    private bool _isAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isAdmin = (await AuthStateProvider.GetAuthenticationStateAsync()).User.IsInRole("Admin");
+        if (_isAdmin)
+        {
+            Scans.Changed += OnChanged;
+            await Scans.RefreshAsync();
+        }
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Scans.Changed -= OnChanged;
+}

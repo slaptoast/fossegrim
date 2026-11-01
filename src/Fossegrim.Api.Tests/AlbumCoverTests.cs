@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Services;
+using Fossegrim.Lib.Services.Library;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -372,7 +373,7 @@ public sealed class AlbumCoverEndpointTests : IClassFixture<FossegrimApiFactory>
 
         using (var scope = _factory.Services.CreateScope())
         {
-            await scope.ServiceProvider.GetRequiredService<MediaLibraryService>().ScanAndSaveMediaItemsAsync(_musicFolder, maxDegreeOfParallelism: 1);
+            await scope.ServiceProvider.GetRequiredService<LibraryScanner>().ScanAsync([new ScanTarget(_musicFolder)], full: false);
         }
 
         var albumId = Guid.Empty;

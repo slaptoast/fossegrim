@@ -105,6 +105,41 @@ namespace fossegrim.lib.Migrations
                     b.ToTable("Albums");
                 });
 
+            modelBuilder.Entity("Fossegrim.Lib.Models.ApiKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Hash")
+                        .IsUnique();
+
+                    b.ToTable("ApiKeys");
+                });
+
             modelBuilder.Entity("Fossegrim.Lib.Models.AppSetting", b =>
                 {
                     b.Property<string>("Key")
@@ -287,6 +322,12 @@ namespace fossegrim.lib.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("FileModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("FileSize")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Genre")
                         .HasColumnType("TEXT");
 
@@ -296,6 +337,10 @@ namespace fossegrim.lib.Migrations
                         .HasDefaultValueSql("datetime('now')");
 
                     b.Property<Guid?>("MediaFolderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TagVersionMismatch")
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Title")
@@ -317,6 +362,8 @@ namespace fossegrim.lib.Migrations
                         .IsUnique();
 
                     b.HasIndex("MediaFolderId");
+
+                    b.HasIndex("TagVersionMismatch");
 
                     b.HasIndex("Title");
 

@@ -30,6 +30,7 @@ builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<PlayerState>();
 builder.Services.AddScoped<AppearanceService>();
 builder.Services.AddScoped<AlbumArtEditorState>();
+builder.Services.AddScoped<ScanStatusService>();
 
 builder.Services.AddTransient<AuthorizedHttpMessageHandler>();
 builder.Services.AddHttpClient<FossegrimApiClient>(client =>

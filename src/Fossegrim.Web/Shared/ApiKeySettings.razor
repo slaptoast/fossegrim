@@ -1,0 +1,136 @@
+@inject FossegrimApiClient ApiClient
+@inject IJSRuntime JSRuntime
+
+@* API keys other applications use to start library scans. *@
+
+<p>
+    Let other applications (Lidarr, a script after a download finishes…) start a library scan.
+    Send the key in an <code>X-Api-Key</code> header to <code>POST @(BaseUrl)api/external/scan</code>,
+    optionally with <code>{"path": "/music/Artist/Album"}</code> to scan just that folder.
+    A key can only start scans and check on them.
+</p>
+
+@if (_message is not null)
+{
+    <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+}
+
+@if (_created is not null)
+{
+    <div class="info-text api-key-secret">
+        <strong>Copy the key for “@_created.Key.Name” now. It won't be shown again.</strong>
+        <code>@_created.Secret</code>
+        <pre>curl -X POST -H "X-Api-Key: @_created.Secret" @(BaseUrl)api/external/scan</pre>
+    </div>
+}
+
+@if (_keys.Count > 0)
+{
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Key</th>
+                <th>Created</th>
+                <th>Last used</th>
+                <th class="actions-cell">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var key in _keys)
+            {
+                <tr>
+                    <td class="title-cell">@key.Name</td>
+                    <td><code>@key.Prefix…</code></td>
+                    <td>@Local(key.CreatedAt)</td>
+                    <td>@(key.LastUsedAt is { } used ? Local(used) : "never")</td>
+                    <td class="actions-cell">
+                        <button class="button-danger" disabled="@_busy" @onclick="() => RevokeAsync(key)">Revoke</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<div class="folder-item api-key-new">
+    <div class="form-group">
+        <label for="apiKeyName">New key name</label>
+        <input id="apiKeyName" type="text" @bind="_name" @bind:event="oninput" placeholder="Lidarr" maxlength="100" />
+    </div>
+    <button type="button" class="button-secondary" disabled="@(_busy || string.IsNullOrWhiteSpace(_name))" @onclick="CreateAsync">+ Create Key</button>
+</div>
+
+@code {
+    private List<ApiKeyDto> _keys = [];
+    private CreatedApiKeyDto? _created;
+    private string _name = "";
+    private string? _message;
+    private bool _success;
+    private bool _busy;
+
+    private string BaseUrl => ApiClient.BaseAddress?.ToString() is { } url ? url.TrimEnd('/') + "/" : "/";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _keys = (await ApiClient.GetApiKeysAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = ($"Failed to load API keys: {ex.Message}", false);
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            _created = await ApiClient.CreateApiKeyAsync(_name);
+            _name = "";
+            _keys = (await ApiClient.GetApiKeysAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RevokeAsync(ApiKeyDto key)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Revoke the key “{key.Name}”? Anything using it stops working."))
+        {
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+        try
+        {
+            await ApiClient.RevokeApiKeyAsync(key.Id);
+            if (_created?.Key.Id == key.Id)
+            {
+                _created = null;
+            }
+            _keys = (await ApiClient.GetApiKeysAsync()).ToList();
+            (_message, _success) = ($"Revoked “{key.Name}”.", true);
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Local(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime().ToString("g");
+}

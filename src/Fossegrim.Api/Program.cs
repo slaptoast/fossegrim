@@ -7,6 +7,8 @@ using Microsoft.IdentityModel.Tokens;
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services;
+using Fossegrim.Lib.Services.Library;
+using Microsoft.AspNetCore.Authentication;
 using Fossegrim.Api.Endpoints;
 using Fossegrim.Api.Services;
 
@@ -72,12 +74,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 return Task.CompletedTask;
             }
         };
-    });
+    })
+    // Other applications (e.g. Lidarr) start scans with an API key; see Endpoints/Scans.cs.
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthentication>(ApiKeyAuthentication.Scheme, null);
 
 builder.Services.AddAuthorization();
 
 // Register application services
 builder.Services.AddScoped<MediaLibraryService>();
+
+// Library scans run in the background, one at a time (see Endpoints/Scans.cs);
+// renames share the lock so they never overlap a scan.
+builder.Services.AddSingleton<LibraryLock>();
+builder.Services.AddSingleton<ScanQueue>();
+builder.Services.AddScoped<LibraryScanner>();
+builder.Services.AddScoped<ScanRequests>();
+builder.Services.AddScoped<FileRenamer>();
+builder.Services.AddScoped<ApiKeyService>();
+builder.Services.AddHostedService<ScanWorker>();
 
 // Album cover search (MusicBrainz + Cover Art Archive, Deezer) and downloads.
 // The limits are shared by the whole server, as the providers count them.
@@ -205,6 +219,9 @@ app.MapPreferenceEndpoints();
 app.MapAlbumCoverEndpoints();
 app.MapBackupEndpoints();
 app.MapSetupEndpoints();
+app.MapScanEndpoints();
+app.MapApiKeyEndpoints();
+app.MapLibraryFileEndpoints();
 
 app.MapFallbackToFile("index.html");
 

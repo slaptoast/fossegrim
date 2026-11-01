@@ -1,0 +1,214 @@
+@page "/library-health"
+@attribute [Authorize(Roles = "Admin")]
+@inject FossegrimApiClient ApiClient
+
+@* Reports on files that need attention: ID3v1 and ID3v2 tags that
+   disagree, and file names that don't match the file-naming template. *@
+
+<div class="container wide">
+    <div class="header">
+        <h1>🩺 Library Health</h1>
+        <p>Files that need attention</p>
+    </div>
+
+    <div class="content">
+        @if (_errorMessage is not null)
+        {
+            <div class="error-message">@_errorMessage</div>
+        }
+        @if (_message is not null)
+        {
+            <div class="success-message">@_message</div>
+        }
+
+        @if (_health is not null)
+        {
+            <div class="health-tabs" role="tablist">
+                <button type="button" role="tab" class="@(_tab == Tab.TagVersions ? "active" : null)" aria-selected="@(_tab == Tab.TagVersions)" @onclick="() => ShowAsync(Tab.TagVersions)">
+                    ID3 tag versions <span class="health-count">@_health.TagVersionMismatches</span>
+                </button>
+                <button type="button" role="tab" class="@(_tab == Tab.FileNames ? "active" : null)" aria-selected="@(_tab == Tab.FileNames)" @onclick="() => ShowAsync(Tab.FileNames)">
+                    File names <span class="health-count">@(_health.FileNameMismatches + _health.FileMissing + _health.NotInMediaFolder)</span>
+                </button>
+            </div>
+        }
+
+        @if (_tab == Tab.TagVersions)
+        {
+            <p>
+                MP3s can carry an old ID3v1 tag next to the ID3v2 tag Fossegrim reads. When the two disagree, other players
+                may show the old values. Fixing a file rewrites its ID3v1 tag from its ID3v2 tag.
+                Files are checked during scans, so run a <a href="/admin">full rescan</a> to check ones scanned before this report existed.
+            </p>
+
+            @if (_tagVersions is null)
+            {
+                <div class="loading"><h2>Loading</h2></div>
+            }
+            else if (_tagVersions.Count == 0)
+            {
+                <div class="no-results"><p>No disagreeing tags found.</p></div>
+            }
+            else
+            {
+                <div class="scan-actions">
+                    <button type="button" class="button" disabled="@(_busy || _selected.Count == 0)" @onclick="FixSelectedAsync">
+                        @(_busy ? "Fixing..." : $"Fix {_selected.Count} Selected")
+                    </button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="checkbox-cell">
+                                <input type="checkbox" aria-label="Select all" checked="@(_selected.Count == _tagVersions.Count)" @onchange="ToggleAll" />
+                            </th>
+                            <th>Track</th>
+                            <th>Disagrees on</th>
+                            <th>File</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _tagVersions)
+                        {
+                            <tr>
+                                <td class="checkbox-cell">
+                                    <input type="checkbox" aria-label="Select @item.Title" checked="@_selected.Contains(item.MediaItemId)" @onchange="e => Toggle(item.MediaItemId, e)" />
+                                </td>
+                                <td class="title-cell">
+                                    @(item.Title ?? "Untitled")
+                                    <div class="rename-sub">@item.ArtistName@(item.Album is not null ? $" · {item.Album}" : "")</div>
+                                </td>
+                                <td>@string.Join(", ", item.Fields)</td>
+                                <td><span class="file-path" title="@item.Path">@item.Path</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+        else if (_tab == Tab.FileNames)
+        {
+            <p>
+                Files whose names don't match the file-naming template set in <a href="/settings">Settings</a>.
+                Renaming moves them to match; play history and playlists are kept.
+            </p>
+
+            @if (_fileNames is null)
+            {
+                <div class="loading"><h2>Loading</h2></div>
+            }
+            else if (_fileNames.Entries.Count == 0)
+            {
+                <div class="no-results"><p>Every file matches the template.</p></div>
+            }
+            else
+            {
+                <div class="scan-actions">
+                    <a class="button" href="/files/rename?all=true">Rename to Match…</a>
+                </div>
+                <RenameEntryTable Entries="_fileNames.Entries" />
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private enum Tab { TagVersions, FileNames }
+
+    private LibraryHealthDto? _health;
+    private Tab _tab = Tab.TagVersions;
+    private List<TagVersionMismatchDto>? _tagVersions;
+    private RenamePlanDto? _fileNames;
+    private readonly HashSet<Guid> _selected = [];
+    private string? _errorMessage;
+    private string? _message;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHealthAsync();
+        await ShowAsync(Tab.TagVersions);
+    }
+
+    private async Task LoadHealthAsync()
+    {
+        try
+        {
+            _health = await ApiClient.GetLibraryHealthAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load the reports: {ex.Message}";
+        }
+    }
+
+    private async Task ShowAsync(Tab tab)
+    {
+        _tab = tab;
+        _errorMessage = null;
+        try
+        {
+            if (tab == Tab.TagVersions)
+            {
+                _tagVersions = (await ApiClient.GetTagVersionMismatchesAsync()).ToList();
+                _selected.IntersectWith(_tagVersions.Select(i => i.MediaItemId));
+            }
+            else
+            {
+                _fileNames = await ApiClient.PreviewRenameAsync(new RenameRequest(All: true));
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private void Toggle(Guid id, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+        {
+            _selected.Add(id);
+        }
+        else
+        {
+            _selected.Remove(id);
+        }
+    }
+
+    private void ToggleAll(ChangeEventArgs e)
+    {
+        _selected.Clear();
+        if (e.Value is true && _tagVersions is not null)
+        {
+            _selected.UnionWith(_tagVersions.Select(i => i.MediaItemId));
+        }
+    }
+
+    private async Task FixSelectedAsync()
+    {
+        _busy = true;
+        _message = null;
+        _errorMessage = null;
+        try
+        {
+            var result = await ApiClient.FixTagVersionsAsync(_selected);
+            _message = $"Fixed {result.Fixed} file{(result.Fixed == 1 ? "" : "s")}.";
+            if (result.Errors.Count > 0)
+            {
+                _errorMessage = string.Join(" ", result.Errors.Select(e => e.Error).Distinct());
+            }
+            _selected.Clear();
+            await LoadHealthAsync();
+            await ShowAsync(Tab.TagVersions);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

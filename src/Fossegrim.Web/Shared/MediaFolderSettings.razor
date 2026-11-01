@@ -1,5 +1,6 @@
 @inject FossegrimApiClient ApiClient
 @inject IJSRuntime JSRuntime
+@inject ScanStatusService Scans
 
 @* The library's media folders: list, add, remove and scan. Used on the
    Settings page and in the setup wizard. *@
@@ -25,13 +26,15 @@ else if (_folders.Count > 0)
                     <td class="title-cell">@(string.IsNullOrEmpty(folder.Name) ? "Unnamed" : folder.Name)</td>
                     <td><span class="file-path" title="@folder.Location">@folder.Location</span></td>
                     <td class="actions-cell">
-                        <button class="button-secondary" disabled="@(_scanningId is not null)" @onclick="() => ScanFolderAsync(folder)">@(_scanningId == folder.Id ? "Scanning..." : "Scan")</button>
+                        <button class="button-secondary" title="Read new and changed files" @onclick="() => ScanFolderAsync(folder, full: false)">Scan</button>
+                        <button class="button-secondary" title="Re-read every file" @onclick="() => ScanFolderAsync(folder, full: true)">Full Rescan</button>
                         <button class="button-danger" @onclick="() => RemoveFolderAsync(folder)">Remove</button>
                     </td>
                 </tr>
             }
         </tbody>
     </table>
+    <ScanProgress />
 }
 else
 {
@@ -77,7 +80,6 @@ else
     private bool _isLoading = true;
     private string? _statusMessage;
     private bool _isSuccess;
-    private Guid? _scanningId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -144,25 +146,19 @@ else
         }
     }
 
-    private async Task ScanFolderAsync(MediaFolderDto folder)
+    // Queues the scan; its progress shows in ScanProgress below the table.
+    private async Task ScanFolderAsync(MediaFolderDto folder, bool full)
     {
-        _scanningId = folder.Id;
         _statusMessage = null;
         try
         {
-            var result = await ApiClient.ScanAsync(folder.Location, maxDegreeOfParallelism: 4);
-            _statusMessage = $"Scan of '{folder.Name}' complete: {result.ItemsAdded} added, {result.ItemsUpdated} updated.";
-            _isSuccess = true;
+            await Scans.StartAsync(new StartScanRequest(FolderIds: [folder.Id], Full: full));
             await OnChanged.InvokeAsync();
         }
         catch (Exception ex)
         {
-            _statusMessage = $"Scan failed: {ex.Message}";
+            _statusMessage = $"Couldn't start the scan: {ex.Message}";
             _isSuccess = false;
-        }
-        finally
-        {
-            _scanningId = null;
         }
     }
 

@@ -1,3 +1,9 @@
+@inject PlayerState PlayerState
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject ScanStatusService Scans
+@inject ToastService Toasts
+
 <div class="artist-list-component">
     <div class="artist-list-header">
         <h2>Artists</h2>
@@ -13,7 +19,7 @@
                 @foreach (var artist in PagedArtists)
                 {
                     var trackCount = artist.MediaItems.Count();
-                    <li class="artist-item">
+                    <li class="artist-item" @oncontextmenu="e => ShowContextMenu(e, artist)" @oncontextmenu:preventDefault="true">
                         <div class="artist-info">
                             <div class="artist-avatar">@artist.Name.Substring(0, 1).ToUpperInvariant()</div>
                             <div class="artist-details">
@@ -36,6 +42,8 @@
     <Pager @bind-CurrentPage="_currentPage" TotalPages="TotalPages" />
 </div>
 
+<ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
+
 @code {
     private const int PageSize = 10;
 
@@ -44,6 +52,17 @@
 
     private string _filter = "";
     private int _currentPage = 1;
+    private bool _isAdmin;
+
+    private bool _contextMenuOpen;
+    private double _contextMenuX;
+    private double _contextMenuY;
+    private IReadOnlyList<ContextMenuAction> _contextMenuActions = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isAdmin = (await AuthStateProvider.GetAuthenticationStateAsync()).User.IsInRole("Admin");
+    }
 
     private List<ArtistDto> FilteredArtists =>
         Artists.Where(a => a.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -57,5 +76,51 @@
     {
         _filter = e.Value?.ToString() ?? "";
         _currentPage = 1;
+    }
+
+    private void ShowContextMenu(MouseEventArgs e, ArtistDto artist)
+    {
+        var trackIds = artist.MediaItems.Select(m => m.Id).ToList();
+        _contextMenuX = e.ClientX;
+        _contextMenuY = e.ClientY;
+
+        var actions = new List<ContextMenuAction>
+        {
+            new("Add to next in queue", () => PlayerState.AddToQueueNextAsync(trackIds)),
+            new("Add to end of queue", () => PlayerState.AddToQueueEndAsync(trackIds)),
+        };
+
+        if (_isAdmin)
+        {
+            actions.Add(new ContextMenuAction("Edit all tags", () =>
+            {
+                Navigation.NavigateTo($"/tags/edit?ids={Uri.EscapeDataString(string.Join(',', trackIds))}");
+                return Task.CompletedTask;
+            }));
+            actions.Add(new ContextMenuAction("Rename files...", () =>
+            {
+                Navigation.NavigateTo($"/files/rename?ids={Uri.EscapeDataString(string.Join(',', trackIds))}");
+                return Task.CompletedTask;
+            }));
+            actions.Add(new ContextMenuAction("Rescan artist", () => RescanAsync(artist)));
+        }
+
+        _contextMenuActions = actions;
+        _contextMenuOpen = true;
+    }
+
+    private void CloseContextMenu() => _contextMenuOpen = false;
+
+    private async Task RescanAsync(ArtistDto artist)
+    {
+        try
+        {
+            await Scans.RescanArtistAsync(artist.Id);
+            Toasts.Show($"Rescanning {artist.Name}");
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show($"Couldn't rescan {artist.Name}: {ex.Message}");
+        }
     }
 }

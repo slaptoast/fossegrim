@@ -68,10 +68,15 @@ public class PlayerState
     public QueueEntry? CurrentEntry => _index >= 0 && _index < _queue.Count ? _queue[_index] : null;
     public bool HasNext => _index + 1 < _queue.Count;
     public bool HasPrevious => _index > 0;
+    public MediaItemDto? NextTrack => HasNext && _index >= 0 ? _queue[_index + 1].Track : null;
 
     public MediaItemDto? CurrentTrack { get; private set; }
     public string? StreamUrl { get; private set; }
     public string? ErrorMessage { get; private set; }
+
+    // Goes up each time the player has to load the current track from scratch.
+    // A transition the player makes by itself (AdvanceToNextAsync) leaves it alone.
+    public int LoadVersion { get; private set; }
 
     // False for a track that's only been loaded (restored after a reload, or
     // the first track added to an empty queue), so audio doesn't start by surprise.
@@ -170,6 +175,63 @@ public class PlayerState
         }
     });
 
+    // The player has already started the next track itself (a crossfade or a
+    // gapless transition), so this only moves the queue along, without the
+    // reload PlayNextAsync would cause. loadVersion and trackId say what it
+    // prepared: a load since then (say the user pressed Next at that moment)
+    // has already replaced what's playing, so the transition is ignored; a
+    // queue edit that changed the next track gets the audio corrected.
+    public Task AdvanceToNextAsync(int loadVersion, Guid trackId) => WithLockAsync(async () =>
+    {
+        if (loadVersion != LoadVersion || CurrentEntry is null)
+        {
+            return;
+        }
+
+        if (NextTrack is not { } next)
+        {
+            await LoadCurrentAsync(autoPlay: true);
+            return;
+        }
+
+        if (next.Id != trackId)
+        {
+            await MoveToAsync(_index + 1);
+            return;
+        }
+
+        _index++;
+        CurrentTrack = next;
+        AutoPlay = true;
+        ErrorMessage = null;
+        try
+        {
+            StreamUrl = await _apiClient.GetStreamUrlAsync(next.Id);
+        }
+        catch
+        {
+            // Only reloads need it, and the audio is already playing.
+        }
+
+        Changed?.Invoke();
+        await SaveCurrentAsync();
+        await RefillIfAtEndAsync();
+    });
+
+    // The stream URL to preload a track from; null if it can't be built.
+    public async Task<string?> TryGetStreamUrlAsync(Guid trackId)
+    {
+        try
+        {
+            return await _apiClient.GetStreamUrlAsync(trackId);
+        }
+        catch
+        {
+            // The ordinary load when this track ends reports the problem.
+            return null;
+        }
+    }
+
     public Task PlayPreviousAsync() => WithLockAsync(() => HasPrevious ? MoveToAsync(_index - 1) : Task.CompletedTask);
 
     public Task JumpToAsync(Guid itemId) => WithLockAsync(() =>
@@ -242,19 +304,14 @@ public class PlayerState
         Changed?.Invoke();
     });
 
-    // Called when the <audio> element actually starts or resumes playing (not
+    // Called when an <audio> element actually starts or resumes playing (not
     // when a track is merely loaded, e.g. restored without autoplay). The
     // server ignores this unless the user has linked Last.fm.
-    public async Task ReportNowPlayingAsync()
+    public async Task ReportNowPlayingAsync(Guid trackId)
     {
-        if (CurrentTrack is null)
-        {
-            return;
-        }
-
         try
         {
-            await _apiClient.UpdateLastFmNowPlayingAsync(CurrentTrack.Id);
+            await _apiClient.UpdateLastFmNowPlayingAsync(trackId);
         }
         catch
         {
@@ -262,18 +319,14 @@ public class PlayerState
         }
     }
 
-    // Records a play in the user's listening history once the player has
-    // heard enough of the current track (see wwwroot/js/listenTracker.js).
-    public async Task RecordListenAsync(DateTimeOffset startedAt, TimeSpan listenedFor)
+    // Records a play in the user's listening history once the player has heard
+    // enough of a track (see wwwroot/js/listenTracker.js). It names the track
+    // because a track fading out is no longer the current one.
+    public async Task RecordListenAsync(Guid trackId, DateTimeOffset startedAt, TimeSpan listenedFor)
     {
-        if (CurrentTrack is null)
-        {
-            return;
-        }
-
         try
         {
-            await _apiClient.RecordPlayAsync(CurrentTrack.Id, startedAt, listenedFor);
+            await _apiClient.RecordPlayAsync(trackId, startedAt, listenedFor);
         }
         catch
         {
@@ -409,6 +462,7 @@ public class PlayerState
         AutoPlay = autoPlay;
         ErrorMessage = null;
         StreamUrl = null;
+        LoadVersion++;
         Changed?.Invoke();
 
         try

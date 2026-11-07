@@ -3,15 +3,18 @@
 //   - PlayerBar.razor registers the <audio> element (registerAudio)
 //   - VisualizerModule.razor mounts the canvas on the library page (mount)
 //
-// Analysis uses the Web Audio API (BaseAudioContext): the <audio> element is
-// routed through one shared AudioContext, and Butterchurn - the WebGL 2 port
-// of MilkDrop, vendored in wwwroot/lib/butterchurn - reads that node with
-// connectAudio() and renders MilkDrop presets to a WebGL canvas.
+// Analysis uses the Web Audio API (BaseAudioContext): the player's decks are
+// routed through one shared graph (audioGraph.js), and Butterchurn - the WebGL 2
+// port of MilkDrop, vendored in wwwroot/lib/butterchurn - reads its mix node
+// with connectAudio(), so it sees both tracks during a crossfade, and renders
+// MilkDrop presets to a WebGL canvas.
 //
 // Nothing heavy happens until music actually plays with a view mounted: the
 // ~850 KB of Butterchurn and presets loads then, the audio graph is built in
 // that "play" (so the AudioContext may start), and frames are only drawn while
 // audio is playing. Paused leaves the last frame on screen and costs nothing.
+
+import { getContext, getMix, route } from "./audioGraph.js";
 
 const LIB = "./lib/butterchurn/";
 const CYCLE_SECONDS = 20;
@@ -21,10 +24,6 @@ const IDLE_MS = 2500;
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-// One AudioContext per page; createMediaElementSource can only be called once
-// per element (and can't be undone), so remember each element's source node.
-let audioContext = null;
-const sources = new WeakMap();
 const listening = new WeakSet();
 let currentAudio = null;
 let libraries = null;
@@ -182,8 +181,9 @@ async function onPlay(audio) {
     }
 
     // Build the graph inside the "play" event, before any await.
-    const source = sourceFor(audio);
-    audioContext.resume();
+    route(audio);
+    const source = getMix();
+    getContext().resume();
 
     if (!v.visualizer) {
         if (v.status === "loading") {
@@ -233,7 +233,7 @@ function onStop(audio) {
 function create(v, libs) {
     v.pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
     // Sizes are in device pixels with pixelRatio 1 (see resize).
-    v.visualizer = libs.butterchurn.createVisualizer(audioContext, v.canvas, {
+    v.visualizer = libs.butterchurn.createVisualizer(getContext(), v.canvas, {
         width: Math.round((v.canvas.clientWidth || 400) * v.pixelRatio),
         height: Math.round((v.canvas.clientHeight || 300) * v.pixelRatio),
         pixelRatio: 1
@@ -257,18 +257,6 @@ function startLoop(v) {
         v.frame = requestAnimationFrame(loop);
     };
     v.frame = requestAnimationFrame(loop);
-}
-
-function sourceFor(audio) {
-    audioContext ??= new AudioContext();
-    let source = sources.get(audio);
-    if (!source) {
-        source = audioContext.createMediaElementSource(audio);
-        // The element now plays through the graph, so keep it audible.
-        source.connect(audioContext.destination);
-        sources.set(audio, source);
-    }
-    return source;
 }
 
 function loadLibraries() {

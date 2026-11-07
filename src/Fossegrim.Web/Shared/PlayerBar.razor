@@ -1,17 +1,30 @@
 @implements IAsyncDisposable
 @inject PlayerState PlayerState
+@inject AppearanceService Appearance
 @inject IJSRuntime JS
 
 @if (PlayerState.CurrentTrack is not null)
 {
-    @if (_showQueue)
+    @if (_panel == Panel.Queue)
     {
         <div class="up-next-panel" role="dialog" aria-label="Up next">
             <div class="up-next-header">
                 <span>Up next</span>
-                <button type="button" class="player-button" @onclick="() => _showQueue = false" aria-label="Close">✕</button>
+                <button type="button" class="player-button" @onclick="() => _panel = Panel.None" aria-label="Close">✕</button>
             </div>
             <UpNextList />
+        </div>
+    }
+    else if (_panel == Panel.Transitions)
+    {
+        <div class="up-next-panel" role="dialog" aria-label="Track transitions">
+            <div class="up-next-header">
+                <span>Track transitions</span>
+                <button type="button" class="player-button" @onclick="() => _panel = Panel.None" aria-label="Close">✕</button>
+            </div>
+            <div class="transitions-panel-body">
+                <PlaybackTransitionSettings />
+            </div>
         </div>
     }
 
@@ -30,87 +43,179 @@
         {
             <span class="player-error">@PlayerState.ErrorMessage</span>
         }
-        else if (PlayerState.StreamUrl is not null)
-        {
-            @* crossorigin lets the visualizer read samples when the API is on another origin (local dev);
-               without it Web Audio would see a tainted source and output silence. *@
-            <audio @ref="_audio" controls autoplay="@PlayerState.AutoPlay" preload="metadata" crossorigin="anonymous" src="@PlayerState.StreamUrl" class="player-audio" @onplay="OnPlay" @onended="OnTrackEnded">
-                Your browser does not support the audio element.
-            </audio>
-        }
 
-        <button type="button" class="player-button up-next-toggle @(_showQueue ? "active" : "")" @onclick="() => _showQueue = !_showQueue"
-                aria-expanded="@_showQueue" title="Up next">☰ @UpNextCount</button>
+        @* player.js puts its two <audio> decks in here; Blazor never touches them. *@
+        <div @ref="_decks" class="player-decks" hidden="@(PlayerState.ErrorMessage is not null)"></div>
+
+        <button type="button" class="player-button up-next-toggle @(_panel == Panel.Transitions ? "active" : "")" @onclick="() => Toggle(Panel.Transitions)"
+                aria-expanded="@(_panel == Panel.Transitions)" aria-label="Track transitions" title="Track transitions: gapless and crossfade">⇄ @TransitionLabel</button>
+        <button type="button" class="player-button up-next-toggle @(_panel == Panel.Queue ? "active" : "")" @onclick="() => Toggle(Panel.Queue)"
+                aria-expanded="@(_panel == Panel.Queue)" title="Up next">☰ @UpNextCount</button>
     </div>
 }
 
 @code {
+    private enum Panel { None, Queue, Transitions }
+
     // Past this point, Previous restarts the track instead of going back one.
     private const double RestartThresholdSeconds = 3;
 
-    private ElementReference _audio;
-    private bool _showQueue;
+    private ElementReference _decks;
+    private Panel _panel;
     private IJSObjectReference? _playerModule;
-    // The <audio> element is recreated when the track changes, so the
-    // listen tracker and visualizer are given each new one (identified by its Id).
-    private string? _trackedAudioId;
-    private IJSObjectReference? _listenTracker;
-    private IJSObjectReference? _visualizer;
+    private IJSObjectReference? _player;
     private DotNetObjectReference<PlayerBar>? _selfReference;
+
+    // What the JS player was last told, so a render only sends what changed.
+    private int? _loadedVersion;
+    private string? _nextSent;
+
+    // Renders can arrive while a sync is awaiting JS; they ask for another pass.
+    private bool _syncing;
+    private bool _syncAgain;
+    private bool _disposed;
 
     protected override void OnInitialized()
     {
         PlayerState.Changed += OnChanged;
+        Appearance.Changed += OnChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (PlayerState.StreamUrl is null || _audio.Id is null || _audio.Id == _trackedAudioId)
+        if (_syncing)
+        {
+            _syncAgain = true;
+            return;
+        }
+
+        _syncing = true;
+        try
+        {
+            do
+            {
+                _syncAgain = false;
+                await SyncPlayerAsync();
+            }
+            while (_syncAgain && !_disposed);
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page is going away.
+        }
+        finally
+        {
+            _syncing = false;
+        }
+    }
+
+    // Brings the JS player in line with PlayerState.
+    private async Task SyncPlayerAsync()
+    {
+        if (_disposed)
         {
             return;
         }
 
-        _trackedAudioId = _audio.Id;
-        _listenTracker ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/listenTracker.js");
-        _selfReference ??= DotNetObjectReference.Create(this);
-        await _listenTracker.InvokeVoidAsync("attach", _audio, _selfReference);
+        if (PlayerState.CurrentTrack is not { } track)
+        {
+            await DisposePlayerAsync();
+            return;
+        }
 
-        try
+        if (_decks.Id is null)
         {
-            // The visualizer module (Library page) draws from whichever <audio> is registered.
-            _visualizer ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/visualizer.js");
-            await _visualizer.InvokeVoidAsync("registerAudio", _audio);
+            return;
         }
-        catch (JSException)
+
+        if (_player is null)
         {
-            // The visualizer is decoration; never let it break playback.
+            _selfReference ??= DotNetObjectReference.Create(this);
+            _playerModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/player.js");
+            _player = await _playerModule.InvokeAsync<IJSObjectReference>("createPlayer", _decks, _selfReference);
+            _loadedVersion = null;
+            _nextSent = null;
         }
+
+        if (_loadedVersion != PlayerState.LoadVersion)
+        {
+            if (PlayerState.StreamUrl is { } url)
+            {
+                await _player.InvokeVoidAsync("load", url, track.Id.ToString(), PlayerState.AutoPlay);
+            }
+            else if (PlayerState.ErrorMessage is not null)
+            {
+                await _player.InvokeVoidAsync("stop");
+            }
+            else
+            {
+                return; // the URL is on its way, and its Changed brings us back
+            }
+
+            _loadedVersion = PlayerState.LoadVersion;
+            _nextSent = null;
+        }
+
+        await SyncNextAsync(track);
     }
 
-    // Called by listenTracker.js once enough of the current track has been heard.
+    private async Task SyncNextAsync(MediaItemDto track)
+    {
+        var next = PlayerState.NextTrack;
+        var overlap = next is null ? null : PlaybackTransitions.OverlapSeconds(track, next, Appearance.Current.Player);
+        // The index is included so a queue like A, B, A, B tells the player again after each move.
+        var loadVersion = PlayerState.LoadVersion;
+        var signature = $"{loadVersion}|{PlayerState.CurrentIndex}|{next?.Id}|{overlap}";
+        if (signature == _nextSent)
+        {
+            return;
+        }
+
+        // If the queue moves during this await, its Changed brings another sync.
+        var url = overlap is null ? null : await PlayerState.TryGetStreamUrlAsync(next!.Id);
+        _nextSent = signature;
+        await _player!.InvokeVoidAsync("setNext", url is null
+            ? null
+            : new { url, trackId = next!.Id.ToString(), loadVersion, overlap });
+    }
+
+    private void Toggle(Panel panel) => _panel = _panel == panel ? Panel.None : panel;
+
+    private string TransitionLabel => Appearance.Current.Player.Crossfade ? $"{Appearance.Current.Player.CrossfadeSeconds}s" : "";
+
+    // Called by listenTracker.js once enough of a track has been heard.
     [JSInvokable]
-    public Task OnListened(string startedAt, double listenedSeconds) =>
-        PlayerState.RecordListenAsync(DateTimeOffset.Parse(startedAt, System.Globalization.CultureInfo.InvariantCulture), TimeSpan.FromSeconds(listenedSeconds));
+    public Task OnListened(string trackId, string startedAt, double listenedSeconds) =>
+        PlayerState.RecordListenAsync(Guid.Parse(trackId), DateTimeOffset.Parse(startedAt, System.Globalization.CultureInfo.InvariantCulture), TimeSpan.FromSeconds(listenedSeconds));
+
+    // Called by player.js when the active deck starts or resumes.
+    [JSInvokable]
+    public Task OnPlaying(string trackId) => PlayerState.ReportNowPlayingAsync(Guid.Parse(trackId));
+
+    // Called by player.js when the active track ended with nothing ready to take over.
+    [JSInvokable]
+    public Task OnEnded() => PlayerState.PlayNextAsync();
+
+    // Called by player.js when the idle deck has taken over from the active one.
+    [JSInvokable]
+    public Task OnTransition(int loadVersion, string trackId) => PlayerState.AdvanceToNextAsync(loadVersion, Guid.Parse(trackId));
 
     private void OnChanged()
     {
         InvokeAsync(StateHasChanged);
     }
 
-    private Task OnPlay() => PlayerState.ReportNowPlayingAsync();
-
     // Tracks after the one playing.
     private int UpNextCount => Math.Max(0, PlayerState.Queue.Count - PlayerState.CurrentIndex - 1);
 
     private async Task OnPreviousAsync()
     {
-        if (PlayerState.StreamUrl is not null && _audio.Id is not null)
+        if (_player is not null && PlayerState.StreamUrl is not null)
         {
-            _playerModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/player.js");
-            var position = await _playerModule.InvokeAsync<double>("getCurrentTime", _audio);
+            var position = await _player.InvokeAsync<double>("position");
             if (position > RestartThresholdSeconds || !PlayerState.HasPrevious)
             {
-                await _playerModule.InvokeVoidAsync("restart", _audio);
+                await _player.InvokeVoidAsync("restart");
                 return;
             }
         }
@@ -118,27 +223,36 @@
         await PlayerState.PlayPreviousAsync();
     }
 
-    private Task OnTrackEnded() => PlayerState.PlayNextAsync();
+    private async Task DisposePlayerAsync()
+    {
+        if (_player is null)
+        {
+            return;
+        }
+
+        var player = _player;
+        _player = null;
+        await player.InvokeVoidAsync("dispose");
+        await player.DisposeAsync();
+    }
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         PlayerState.Changed -= OnChanged;
-        _selfReference?.Dispose();
-        foreach (var module in new[] { _listenTracker, _playerModule, _visualizer })
+        Appearance.Changed -= OnChanged;
+        try
         {
-            if (module is null)
+            await DisposePlayerAsync();
+            if (_playerModule is not null)
             {
-                continue;
-            }
-
-            try
-            {
-                await module.DisposeAsync();
-            }
-            catch (JSDisconnectedException)
-            {
-                // The page is going away; nothing to clean up.
+                await _playerModule.DisposeAsync();
             }
         }
+        catch (JSDisconnectedException)
+        {
+            // The page is going away; nothing to clean up.
+        }
+        _selfReference?.Dispose();
     }
 }

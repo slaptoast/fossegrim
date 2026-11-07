@@ -1,0 +1,66 @@
+@* Gapless and crossfade controls, shown in the player bar's popover and on the Profile page. *@
+@implements IDisposable
+@inject AppearanceService Appearance
+
+<div class="playback-transitions">
+    <label class="checkbox-row">
+        <input type="checkbox" checked="@Player.Gapless" @onchange="SetGaplessAsync" />
+        Gapless playback
+    </label>
+    <p class="backup-hint">Starts the next track right as this one ends, so albums meant to flow together don't pause between tracks.</p>
+
+    <label class="checkbox-row">
+        <input type="checkbox" checked="@Player.Crossfade" @onchange="SetCrossfadeAsync" />
+        Crossfade between tracks
+    </label>
+    <label class="crossfade-length">
+        <span>Length</span>
+        <input type="range" min="@PlaybackTransitions.MinCrossfadeSeconds" max="@PlaybackTransitions.MaxCrossfadeSeconds" step="1"
+               value="@Seconds" disabled="@(!Player.Crossfade)" @oninput="PreviewSeconds" @onchange="SetSecondsAsync" />
+        <output>@Seconds s</output>
+    </label>
+    <p class="backup-hint">Blends tracks from different albums. Tracks from the same album never fade: they follow the gapless setting.</p>
+</div>
+
+@code {
+    // The slider's value while it's being dragged; saved on release.
+    private int? _dragging;
+
+    private PlayerSettings Player => Appearance.Current.Player;
+    private int Seconds => _dragging ?? Player.CrossfadeSeconds;
+
+    protected override void OnInitialized()
+    {
+        Appearance.Changed += OnChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private Task SetGaplessAsync(ChangeEventArgs e) =>
+        Appearance.UpdateAsync(p => p.Player.Gapless = e.Value is true);
+
+    private Task SetCrossfadeAsync(ChangeEventArgs e) =>
+        Appearance.UpdateAsync(p => p.Player.Crossfade = e.Value is true);
+
+    private void PreviewSeconds(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var seconds))
+        {
+            _dragging = seconds;
+        }
+    }
+
+    private async Task SetSecondsAsync(ChangeEventArgs e)
+    {
+        _dragging = null;
+        if (int.TryParse(e.Value?.ToString(), out var seconds))
+        {
+            await Appearance.UpdateAsync(p => p.Player.CrossfadeSeconds = seconds);
+        }
+    }
+
+    public void Dispose()
+    {
+        Appearance.Changed -= OnChanged;
+    }
+}

@@ -3,14 +3,16 @@
 // 30 seconds) has played for 90% of its length. Must match ListenRule.cs on
 // the server. Only normal playback counts, so seeking ahead can't fake a
 // listen and skipping a track never reaches the threshold.
-// Calls dotnet.invokeMethodAsync('OnListened', startedAtIso, listenedSeconds).
+// Calls dotnet.invokeMethodAsync('OnListened', trackId, startedAtIso, listenedSeconds).
+// The track comes from getTrackId, as during a crossfade the element still
+// playing out is no longer the player's current track.
 
 const MIN_TRACK_SECONDS = 30;
 const REQUIRED_FRACTION = 0.9;
 // timeupdate fires every ~250ms; a bigger jump between two of them is a seek.
 const MAX_STEP_SECONDS = 2;
 
-export function attach(audio, dotnet) {
+export function attach(audio, dotnet, getTrackId) {
     let listened = 0;
     let lastTime = null;
     let startedAt = null;
@@ -51,7 +53,7 @@ export function attach(audio, dotnet) {
         if (!reported && Number.isFinite(duration) && duration > MIN_TRACK_SECONDS &&
             listened >= duration * REQUIRED_FRACTION) {
             reported = true;
-            dotnet.invokeMethodAsync('OnListened', startedAt.toISOString(), listened);
+            dotnet.invokeMethodAsync('OnListened', getTrackId(), startedAt.toISOString(), listened);
         }
     });
 }

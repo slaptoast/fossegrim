@@ -3,6 +3,7 @@ using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Enums;
 using Fossegrim.Lib.Models;
+using Fossegrim.Lib.Services.Library;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -645,14 +646,14 @@ public static class Playlists
         db.Playlists
             .Include(p => p.Owner)
             .Include(p => p.Shares).ThenInclude(s => s.User)
-            .Include(p => p.Items).ThenInclude(i => i.MediaItem)
+            .Include(p => p.Items).ThenInclude(i => i.MediaItem).ThenInclude(m => m!.Albums)
             .FirstOrDefaultAsync(p => p.Id == id);
 
     private static IQueryable<Playlist> QueueQuery(FossegrimDbContext db, string userId) =>
         db.Playlists
             .Include(p => p.Owner)
             .Include(p => p.Shares).ThenInclude(s => s.User)
-            .Include(p => p.Items).ThenInclude(i => i.MediaItem)
+            .Include(p => p.Items).ThenInclude(i => i.MediaItem).ThenInclude(m => m!.Albums)
             .Where(p => p.OwnerId == userId && p.Type == PlaylistType.Queue);
 
     private static async Task<Playlist> GetOrCreateQueueAsync(FossegrimDbContext db, string userId)
@@ -739,6 +740,19 @@ public static class Playlists
                 i.Id,
                 i.Position,
                 i.DateAdded,
-                new PlaylistTrackDto(i.MediaItem!.Id, i.MediaItem.Title, i.MediaItem.ArtistName, i.MediaItem.Album, i.MediaItem.Duration))),
+                ToPlaylistTrackDto(i.MediaItem!))),
         p.Shares.Select(s => new PlaylistShareDto(s.UserId, s.User?.DisplayName, s.ShareType.ToString())));
+
+    // Needs the item's Albums loaded (LoadPlaylistAsync and QueueQuery include them).
+    private static PlaylistTrackDto ToPlaylistTrackDto(MediaItem m) => new(
+        m.Id,
+        m.Title,
+        m.ArtistName,
+        m.Album,
+        m.Duration,
+        m.Albums.Select(al => (Guid?)al.Id).FirstOrDefault(),
+        m.Track,
+        m.Disc,
+        m.FileSize,
+        m.FileLocation is null ? null : AudioFormats.ContentType(m.FileLocation));
 }

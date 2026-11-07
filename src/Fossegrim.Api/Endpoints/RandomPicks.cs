@@ -75,20 +75,7 @@ public static class RandomPicks
 
         var tracks = await db.MediaItems
             .Where(m => picked.Contains(m.Id))
-            .Select(m => new MediaItemDto(
-                m.Id,
-                m.Title,
-                m.ArtistName,
-                m.Album,
-                m.DateAdded,
-                m.LastModified,
-                m.Year,
-                m.Track,
-                m.Genre,
-                m.Duration,
-                m.Bitrate,
-                m.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name)),
-                m.Albums.Select(al => new AlbumSummaryDto(al.Id, al.Name, al.Year))))
+            .Select(MediaItemMapping.ToDto)
             .ToListAsync();
         return Results.Ok(tracks.OrderBy(t => picked.IndexOf(t.Id)));
     }
@@ -138,7 +125,7 @@ public static class RandomPicks
                 al.CoverImageUrl,
                 al.DateAdded,
                 al.LastModified,
-                al.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration)),
+                al.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration, m.Track, m.Disc)),
                 al.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name))))
             .ToListAsync();
         return Results.Ok(result.OrderBy(al => picked.IndexOf(al.Id)));

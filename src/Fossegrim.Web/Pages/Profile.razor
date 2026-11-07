@@ -94,6 +94,59 @@
                 <button class="button-secondary" disabled="@_lastFmBusy" @onclick="ConnectLastFmAsync">Connect Last.fm</button>
             }
         }
+
+        <h3 class="section-header">Signed-in devices</h3>
+        <p class="backup-hint">Browsers and apps signed in to your account. They stay signed in until you sign them out here, log out on them, or change your password.</p>
+
+        @if (_sessionsError is not null)
+        {
+            <div class="error-message">@_sessionsError</div>
+        }
+
+        @if (_sessions is { Count: > 0 })
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>App</th>
+                        <th>Signed in</th>
+                        <th>Last used</th>
+                        <th class="actions-cell">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var session in _sessions)
+                    {
+                        <tr>
+                            <td class="title-cell">
+                                @(session.ClientName ?? session.Device ?? "Unknown app")
+                                @if (session.ClientName is not null && session.Device is not null)
+                                {
+                                    <span class="backup-hint"> · @session.Device</span>
+                                }
+                                @if (session.IsCurrent)
+                                {
+                                    <span class="backup-hint"> · this device</span>
+                                }
+                            </td>
+                            <td>@Local(session.SignedInAt)</td>
+                            <td>@Local(session.LastUsedAt)</td>
+                            <td class="actions-cell">
+                                @if (!session.IsCurrent)
+                                {
+                                    <button class="button-danger" disabled="@_sessionsBusy" @onclick="() => RevokeSessionAsync(session)">Sign out</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (_sessions.Any(s => !s.IsCurrent))
+            {
+                <button class="button-secondary" disabled="@_sessionsBusy" @onclick="RevokeOtherSessionsAsync">Sign out everywhere else</button>
+            }
+        }
     </div>
 </div>
 
@@ -105,6 +158,9 @@
     private LastFmStatusDto? _lastFm;
     private string? _lastFmError;
     private bool _lastFmBusy;
+    private List<SessionDto>? _sessions;
+    private string? _sessionsError;
+    private bool _sessionsBusy;
 
     protected override async Task OnInitializedAsync()
     {
@@ -114,6 +170,8 @@
         {
             LoadFrom(profile);
         }
+
+        await LoadSessionsAsync();
 
         try
         {
@@ -165,6 +223,45 @@
             _lastFmBusy = false;
         }
     }
+
+    private async Task LoadSessionsAsync()
+    {
+        try
+        {
+            _sessions = (await ApiClient.GetSessionsAsync()).ToList();
+            _sessionsError = null;
+        }
+        catch (Exception ex)
+        {
+            _sessionsError = $"Could not load your signed-in devices: {ex.Message}";
+        }
+    }
+
+    private Task RevokeSessionAsync(SessionDto session) =>
+        ChangeSessionsAsync(() => ApiClient.RevokeSessionAsync(session.Id), "Could not sign that device out");
+
+    private Task RevokeOtherSessionsAsync() =>
+        ChangeSessionsAsync(ApiClient.RevokeOtherSessionsAsync, "Could not sign out your other devices");
+
+    private async Task ChangeSessionsAsync(Func<Task> change, string failure)
+    {
+        _sessionsBusy = true;
+        try
+        {
+            await change();
+            await LoadSessionsAsync();
+        }
+        catch (Exception ex)
+        {
+            _sessionsError = $"{failure}: {ex.Message}";
+        }
+        finally
+        {
+            _sessionsBusy = false;
+        }
+    }
+
+    private static string Local(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime().ToString("g");
 
     private async Task SaveAsync()
     {

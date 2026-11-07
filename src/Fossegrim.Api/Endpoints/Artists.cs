@@ -23,7 +23,7 @@ public static class Artists
                     a.ImageUrl,
                     a.DateAdded,
                     a.LastModified,
-                    a.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration)),
+                    a.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration, m.Track, m.Disc)),
                     a.Albums.Select(al => new AlbumSummaryDto(al.Id, al.Name, al.Year))))
                 .ToListAsync();
             return Results.Ok(artists);
@@ -43,7 +43,7 @@ public static class Artists
                     a.ImageUrl,
                     a.DateAdded,
                     a.LastModified,
-                    a.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration)),
+                    a.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration, m.Track, m.Disc)),
                     a.Albums.Select(al => new AlbumSummaryDto(al.Id, al.Name, al.Year))))
                 .FirstOrDefaultAsync();
 

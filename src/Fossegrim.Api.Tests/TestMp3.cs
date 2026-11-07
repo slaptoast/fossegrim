@@ -1,6 +1,6 @@
 namespace Fossegrim.Api.Tests;
 
-public record Mp3Tags(string? Title, string[] Performers, string? Album, uint Year, uint Track, string[] Genres);
+public record Mp3Tags(string? Title, string[] Performers, string? Album, uint Year, uint Track, string[] Genres, uint Disc = 0);
 
 /// <summary>
 /// Writes small silent MP3 files that TagLib can read and tag, so tag
@@ -33,6 +33,7 @@ public static class TestMp3
         file.Tag.Album = tags.Album;
         file.Tag.Year = tags.Year;
         file.Tag.Track = tags.Track;
+        file.Tag.Disc = tags.Disc;
         file.Tag.Genres = tags.Genres;
         file.Save();
         return path;

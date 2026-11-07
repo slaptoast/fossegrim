@@ -17,4 +17,5 @@
 - [x] library health: ID3v1/ID3v2 disagreements and files not named as the template says
 - [x] random albums and tracks on the front page, fully random or adjusted (favours what you haven't played recently, or ever); playing from them keeps going with more random tracks or albums, and the preferred kind of random is a per-user setting
 - [x] optional auto-fill when the queue ends (per-user setting): another random album after an album, more random tracks after a track
+- [x] groundwork for apps: sign-ins that renew themselves and can be signed out from Profile -> Signed-in devices, disc numbers (albums play disc by disc), album and file details on every track, and resized, cached covers (`/cover/{id}?size=256`)
 - [x] gapless playback and crossfade (1-12 s), per-user settings in the player bar and on the Profile page; tracks from the same album stay gapless

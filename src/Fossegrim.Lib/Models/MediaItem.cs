@@ -23,6 +23,8 @@ namespace Fossegrim.Lib.Models
         // Additional metadata
         public int? Year { get; set; }
         public int? Track { get; set; }
+        // Albums play in disc order, then track order; null means a single disc.
+        public int? Disc { get; set; }
         public string? Genre { get; set; }
         public TimeSpan? Duration { get; set; }
         public int? Bitrate { get; set; }

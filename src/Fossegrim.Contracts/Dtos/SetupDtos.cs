@@ -7,7 +7,7 @@ namespace Fossegrim.Contracts.Dtos;
 // predates it); until then an admin is sent back to it after signing in.
 public record SetupStatusDto(bool SetupRequired, bool SetupComplete, bool RegistrationOpen);
 
-public record CreateFirstAdminRequest(string Email, string DisplayName, string Password);
+public record CreateFirstAdminRequest(string Email, string DisplayName, string Password, string? ClientName = null);
 
 public record RegistrationSettingsRequest(bool Open);
 

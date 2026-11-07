@@ -17,10 +17,12 @@ public class JwtAuthenticationStateProvider : AuthenticationStateProvider
     private static readonly AuthenticationState Anonymous = new(new ClaimsPrincipal(new ClaimsIdentity()));
 
     private readonly TokenStore _tokenStore;
+    private readonly SessionRefresher _refresher;
 
-    public JwtAuthenticationStateProvider(TokenStore tokenStore)
+    public JwtAuthenticationStateProvider(TokenStore tokenStore, SessionRefresher refresher)
     {
         _tokenStore = tokenStore;
+        _refresher = refresher;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
@@ -31,8 +33,12 @@ public class JwtAuthenticationStateProvider : AuthenticationStateProvider
             return Anonymous;
         }
 
+        // Renews a token that's expired (or about to), e.g. after a week away.
+        await _refresher.EnsureFreshAsync();
+        token = await _tokenStore.GetTokenAsync();
+
         var handler = new JwtSecurityTokenHandler();
-        if (!handler.CanReadToken(token))
+        if (string.IsNullOrEmpty(token) || !handler.CanReadToken(token))
         {
             return Anonymous;
         }

@@ -245,6 +245,7 @@ public class LibraryScanner
         item.Album = file.Tags.Album;
         item.Year = file.Tags.Year;
         item.Track = file.Tags.Track;
+        item.Disc = file.Tags.Disc;
         item.Genre = file.Tags.Genre;
         item.Duration = file.Tags.Duration;
         item.Bitrate = file.Tags.Bitrate;

@@ -16,20 +16,7 @@ public static class MediaItems
         mediaItemGroup.MapGet("/", async (FossegrimDbContext db) =>
         {
             var mediaItems = await db.MediaItems
-                .Select(m => new MediaItemDto(
-                    m.Id,
-                    m.Title,
-                    m.ArtistName,
-                    m.Album,
-                    m.DateAdded,
-                    m.LastModified,
-                    m.Year,
-                    m.Track,
-                    m.Genre,
-                    m.Duration,
-                    m.Bitrate,
-                    m.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name)),
-                    m.Albums.Select(al => new AlbumSummaryDto(al.Id, al.Name, al.Year))))
+                .Select(MediaItemMapping.ToDto)
                 .ToListAsync();
             return Results.Ok(mediaItems);
         })
@@ -40,20 +27,7 @@ public static class MediaItems
         {
             var mediaItem = await db.MediaItems
                 .Where(m => m.Id == id)
-                .Select(m => new MediaItemDto(
-                    m.Id,
-                    m.Title,
-                    m.ArtistName,
-                    m.Album,
-                    m.DateAdded,
-                    m.LastModified,
-                    m.Year,
-                    m.Track,
-                    m.Genre,
-                    m.Duration,
-                    m.Bitrate,
-                    m.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name)),
-                    m.Albums.Select(al => new AlbumSummaryDto(al.Id, al.Name, al.Year))))
+                .Select(MediaItemMapping.ToDto)
                 .FirstOrDefaultAsync();
 
             return mediaItem is not null ? Results.Ok(mediaItem) : Results.NotFound();

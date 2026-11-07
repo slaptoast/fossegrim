@@ -104,7 +104,7 @@ public class AppearanceServiceTests : IClassFixture<FossegrimApiFactory>
     private (AppearanceService Service, RecordingJs Js) Create(TestUser user, HttpClient? client = null, List<string>? toasts = null, bool signedIn = true)
     {
         var js = new RecordingJs();
-        var api = new FossegrimApiClient(client ?? user.Client, new TokenStore(js));
+        var api = WebClients.Create(client ?? user.Client, new TokenStore(js));
         var toastService = new ToastService();
         if (toasts is not null)
         {

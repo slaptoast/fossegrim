@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Models;
 using Fossegrim.Web.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.JSInterop;
 
 namespace Fossegrim.Api.Tests;
@@ -29,6 +30,27 @@ public class QueueTests : IClassFixture<FossegrimApiFactory>
         var items = queue.Items.OrderBy(i => i.Position).ToList();
         Assert.Equal(["A", "B", "A"], items.Select(i => i.MediaItem.Title));
         Assert.Equal(items[2].Id, queue.CurrentItemId);
+    }
+
+    // An app can show each entry's cover and download it without fetching every track.
+    [Fact]
+    public async Task QueueEntries_CarryTheirAlbumAndFileDetails()
+    {
+        var user = await _factory.CreateUserAsync();
+        var track = await _factory.AddMediaItemAsync("Song", linkedAlbumLabel: "Label");
+        Guid albumId = default;
+        await _factory.WithDbAsync(async db =>
+        {
+            var item = await db.MediaItems.Include(m => m.Albums).SingleAsync(m => m.Id == track.Id);
+            (item.Track, item.Disc, item.FileSize) = (3, 2, 12345);
+            albumId = item.Albums.Single().Id;
+            await db.SaveChangesAsync();
+        });
+
+        var queue = await SetQueueAsync(user, [track.Id], currentIndex: 0);
+
+        var entry = Assert.Single(queue.Items).MediaItem;
+        Assert.Equal((albumId, 3, 2, 12345L, "audio/mpeg"), (entry.AlbumId!.Value, entry.Track!.Value, entry.Disc!.Value, entry.FileSize!.Value, entry.ContentType));
     }
 
     [Fact]
@@ -230,7 +252,7 @@ public class QueueTests : IClassFixture<FossegrimApiFactory>
         }
 
         var token = user.Client.DefaultRequestHeaders.Authorization!.Parameter!;
-        var api = new FossegrimApiClient(client, new TokenStore(new FakeLocalStorage(token)));
+        var api = WebClients.Create(client, new TokenStore(new FakeLocalStorage(token)));
         var toastService = new ToastService();
         if (toasts is not null)
         {

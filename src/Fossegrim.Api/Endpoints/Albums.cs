@@ -1,5 +1,6 @@
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
+using Fossegrim.Lib.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Fossegrim.Api.Endpoints;
@@ -24,7 +25,7 @@ public static class Albums
                     al.CoverImageUrl,
                     al.DateAdded,
                     al.LastModified,
-                    al.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration)),
+                    al.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration, m.Track, m.Disc)),
                     al.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name))))
                 .ToListAsync();
             return Results.Ok(albums);
@@ -45,7 +46,7 @@ public static class Albums
                     al.CoverImageUrl,
                     al.DateAdded,
                     al.LastModified,
-                    al.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration)),
+                    al.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration, m.Track, m.Disc)),
                     al.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name))))
                 .FirstOrDefaultAsync();
 
@@ -54,7 +55,7 @@ public static class Albums
         .WithName("GetAlbumById")
         .WithOpenApi();
 
-        // The album's tracks in play order: by track number, then title.
+        // The album's tracks in play order: by disc, track number, then title.
         albumGroup.MapGet("/{id:guid}/tracks", async (Guid id, FossegrimDbContext db) =>
         {
             if (!await db.Albums.AnyAsync(al => al.Id == id))
@@ -64,24 +65,9 @@ public static class Albums
 
             var tracks = await db.MediaItems
                 .Where(m => m.Albums.Any(al => al.Id == id))
-                .Select(m => new MediaItemDto(
-                    m.Id,
-                    m.Title,
-                    m.ArtistName,
-                    m.Album,
-                    m.DateAdded,
-                    m.LastModified,
-                    m.Year,
-                    m.Track,
-                    m.Genre,
-                    m.Duration,
-                    m.Bitrate,
-                    m.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name)),
-                    m.Albums.Select(al => new AlbumSummaryDto(al.Id, al.Name, al.Year))))
+                .Select(MediaItemMapping.ToDto)
                 .ToListAsync();
-            return Results.Ok(tracks
-                .OrderBy(m => m.Track ?? int.MaxValue)
-                .ThenBy(m => m.Title, StringComparer.OrdinalIgnoreCase));
+            return Results.Ok(tracks.InPlayOrder());
         })
         .WithName("GetAlbumTracks")
         .WithOpenApi();

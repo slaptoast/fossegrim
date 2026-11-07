@@ -7,6 +7,7 @@ using Fossegrim.Lib.Services.Library;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using SkiaSharp;
 
 namespace Fossegrim.Api.Tests;
 
@@ -360,6 +361,71 @@ public sealed class AlbumCoverEndpointTests : IClassFixture<FossegrimApiFactory>
     }
 
     // Two scanned tracks in one album; the first can start with a back cover.
+    [Fact]
+    public async Task Size_ShrinksTheCoverToTheNextSizeUp_KeepingItsShape()
+    {
+        var (albumId, _, _) = await CreateAlbumAsync();
+        var admin = await _factory.CreateAdminAsync();
+        await admin.Client.PutAsync($"/api/covers/albums/{albumId}", new ByteArrayContent(Image(800, 600, SKEncodedImageFormat.Jpeg)));
+
+        var response = await admin.Client.GetAsync($"/cover/{albumId}?size=200");
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("image/jpeg", response.Content.Headers.ContentType!.MediaType);
+        using var resized = SKBitmap.Decode(await response.Content.ReadAsByteArrayAsync());
+        Assert.Equal((256, 192), (resized.Width, resized.Height));
+
+        // Larger than the original: served as it is.
+        using var full = SKBitmap.Decode(await admin.Client.GetByteArrayAsync($"/cover/{albumId}?size=1024"));
+        Assert.Equal((800, 600), (full.Width, full.Height));
+    }
+
+    [Fact]
+    public async Task Cover_CanBeRevalidatedWithItsETag_UntilItChanges()
+    {
+        var (albumId, _, _) = await CreateAlbumAsync();
+        var admin = await _factory.CreateAdminAsync();
+        await admin.Client.PutAsync($"/api/covers/albums/{albumId}", new ByteArrayContent(CoverFixtures.Png));
+
+        var first = await admin.Client.GetAsync($"/cover/{albumId}?size=128");
+        var etag = first.Headers.ETag!;
+        Assert.Equal((true, true), (first.Headers.CacheControl!.Private, first.Headers.CacheControl.NoCache));
+
+        Assert.Equal(HttpStatusCode.NotModified, (await GetIfNoneMatchAsync(admin.Client, $"/cover/{albumId}?size=128", etag)).StatusCode);
+        // Each size is a different image.
+        Assert.Equal(HttpStatusCode.OK, (await GetIfNoneMatchAsync(admin.Client, $"/cover/{albumId}", etag)).StatusCode);
+
+        await admin.Client.PutAsync($"/api/covers/albums/{albumId}", new ByteArrayContent(CoverFixtures.Jpeg));
+        var changed = await GetIfNoneMatchAsync(admin.Client, $"/cover/{albumId}?size=128", etag);
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        Assert.Equal(CoverFixtures.Jpeg, await changed.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task Size_MustBePositive()
+    {
+        var (albumId, _, _) = await CreateAlbumAsync();
+        var user = await _factory.CreateUserAsync();
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await user.Client.GetAsync($"/cover/{albumId}?size=0")).StatusCode);
+    }
+
+    private static Task<HttpResponseMessage> GetIfNoneMatchAsync(HttpClient client, string url, EntityTagHeaderValue etag)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.IfNoneMatch.Add(etag);
+        return client.SendAsync(request);
+    }
+
+    private static byte[] Image(int width, int height, SKEncodedImageFormat format)
+    {
+        using var bitmap = new SKBitmap(width, height);
+        bitmap.Erase(SKColors.Teal);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(format, 90);
+        return data.ToArray();
+    }
+
     private async Task<(Guid AlbumId, string First, string Second)> CreateAlbumAsync(bool firstHasBackCover = false)
     {
         var first = TestMp3.Create(_musicFolder, $"{Guid.NewGuid():N}-01.mp3", new Mp3Tags("One", ["Band"], _album, 2001, 1, []));

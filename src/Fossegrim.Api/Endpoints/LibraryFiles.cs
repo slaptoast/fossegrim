@@ -91,7 +91,7 @@ public static class LibraryFiles
             {
                 var items = await db.MediaItems.AsNoTracking()
                     .Where(m => m.TagVersionMismatch != null)
-                    .OrderBy(m => m.ArtistName).ThenBy(m => m.Album).ThenBy(m => m.Track).ThenBy(m => m.FileLocation)
+                    .OrderBy(m => m.ArtistName).ThenBy(m => m.Album).ThenBy(m => m.Disc).ThenBy(m => m.Track).ThenBy(m => m.FileLocation)
                     .Select(m => new { m.Id, m.Title, m.ArtistName, m.Album, m.FileLocation, m.TagVersionMismatch })
                     .ToListAsync();
                 return Results.Ok(items.Select(m => new TagVersionMismatchDto(

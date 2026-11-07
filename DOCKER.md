@@ -141,8 +141,8 @@ Loaded JWT signing key from /data/jwt.key
 **Keep `/data` on a persistent volume.** The compose file uses the
 `fossegrim-data` named volume. With plain `docker run`, mount one yourself
 (`-v fossegrim-data:/data`). Otherwise a recreated container gets an empty
-`/data`, makes a new key, and everyone is signed out (and the database is
-lost too).
+`/data`, makes a new key, and the database is lost with it, so everyone has
+to sign in again.
 
 **Supplying your own key.** Generate one and put it in `.env`:
 
@@ -157,8 +157,7 @@ JWT_KEY=<paste output here>
 Use at least 32 characters. Once `JWT_KEY` is set, `/data/jwt.key` is
 ignored (not deleted).
 
-**Rotating the key** (e.g. if you think it leaked, or to force everyone to
-sign in again):
+**Rotating the key** (e.g. if you think it leaked):
 
 - Auto-generated key: delete the file and restart.
   ```bash
@@ -167,9 +166,18 @@ sign in again):
   ```
 - Your own key: set `JWT_KEY` to a new value and run `docker compose up -d`.
 
-Either way, every existing session ends and users have to sign in again.
-Nothing else is affected: accounts, passwords, and the library are stored
-separately.
+Either way, every token signed with the old key stops working, including
+any forged with it. Signed-in browsers and apps don't notice: they swap
+their refresh token (stored in the database, not signed with the key) for
+new tokens and carry on. To sign a device out, use **Profile -> Signed-in
+devices**; changing your password signs out all your other devices.
+
+**Signed-in devices.** Each sign-in (a browser, or an app that sends a
+`ClientName` to `/api/auth/login`) is a session that never expires on its
+own. It ends when the user signs it out from their Profile page, logs out
+on that device, or changes their password, and a signed-out device's
+tokens stop working immediately. Tokens issued before this feature existed
+have no session; they keep working until they expire (at most 7 days).
 
 **Moving the key file.** `Jwt__KeyFile` controls where the generated key
 lives (default `/data/jwt.key`). To keep it outside the data volume, e.g. on
@@ -177,7 +185,16 @@ a separate secrets mount, set this in the compose `environment:` section.
 
 **Backups.** A backup of the `fossegrim-data` volume includes `jwt.key`, so
 store backups as securely as the key itself. Restoring without the key file
-is fine: a new one is generated and users just sign in again.
+is fine: a new one is generated, and signed-in devices refresh their
+tokens as after a rotation.
+
+### Cover cache
+
+Album covers are read from the audio files (or a `cover.jpg`/`cover.png`
+beside them), and resized when a client asks for a smaller one
+(`/cover/{albumId}?size=256`). Both are cached in `/data/cover-cache` (set
+by `Covers__CacheDirectory`). The cache is never backed up and can be
+deleted at any time; covers are re-extracted as they're requested.
 
 ### Last.fm
 

@@ -393,7 +393,7 @@ public class RandomPlaybackTests : IAsyncLifetime
     private async Task<PlayerState> CreatePlayerAsync(TestUser user, IPlaybackSettings? settings = null)
     {
         var token = user.Client.DefaultRequestHeaders.Authorization!.Parameter!;
-        var player = new PlayerState(new FossegrimApiClient(user.Client, new TokenStore(new QueueTests.FakeLocalStorage(token))), new ToastService(), settings);
+        var player = new PlayerState(WebClients.Create(user.Client, new TokenStore(new QueueTests.FakeLocalStorage(token))), new ToastService(), settings);
         await player.Initialized;
         return player;
     }

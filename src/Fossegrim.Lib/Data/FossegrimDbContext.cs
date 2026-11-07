@@ -18,6 +18,7 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PlayEvent> PlayEvents { get; set; }
     public DbSet<AppSetting> AppSettings { get; set; }
     public DbSet<UserPreferences> UserPreferences { get; set; }
+    public DbSet<UserSession> UserSessions { get; set; }
 
     public FossegrimDbContext(DbContextOptions<FossegrimDbContext> options)
         : base(options)
@@ -213,6 +214,19 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
             entity.HasOne(pe => pe.MediaItem)
                   .WithMany()
                   .HasForeignKey(pe => pe.MediaItemId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Signed-in devices; deleted along with the user
+        modelBuilder.Entity<UserSession>(entity =>
+        {
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.RefreshTokenHash).IsUnique();
+            entity.HasIndex(e => e.PreviousRefreshTokenHash);
+
+            entity.HasOne(s => s.User)
+                  .WithMany()
+                  .HasForeignKey(s => s.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
 

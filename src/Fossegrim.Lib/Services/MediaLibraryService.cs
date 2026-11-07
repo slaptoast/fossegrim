@@ -203,20 +203,7 @@ public class MediaLibraryService
         await _db.SaveChangesAsync();
         await RemoveEmptyArtistsAndAlbumsAsync(unlinkedArtistIds, unlinkedAlbumIds);
 
-        var updatedDtos = updatedItems.Select(m => new MediaItemDto(
-            m.Id,
-            m.Title,
-            m.ArtistName,
-            m.Album,
-            m.DateAdded,
-            m.LastModified,
-            m.Year,
-            m.Track,
-            m.Genre,
-            m.Duration,
-            m.Bitrate,
-            m.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name)),
-            m.Albums.Select(a => new AlbumSummaryDto(a.Id, a.Name, a.Year))));
+        var updatedDtos = updatedItems.Select(MediaItemMapping.Map).ToList();
 
         return new UpdateMediaItemTagsResponse(updatedDtos, errors);
     }
@@ -263,17 +250,7 @@ public class MediaLibraryService
     /// </summary>
     public async Task<(byte[] Data, string ContentType)?> GetAlbumCoverAsync(Guid albumId)
     {
-        var fileLocations = await _db.Albums
-            .Where(a => a.Id == albumId)
-            .SelectMany(a => a.MediaItems)
-            .OrderBy(m => m.Track ?? int.MaxValue)
-            .ThenBy(m => m.FileLocation)
-            .Select(m => m.FileLocation)
-            .ToListAsync();
-
-        var validFiles = fileLocations
-            .Where(f => !string.IsNullOrWhiteSpace(f) && File.Exists(f))
-            .ToList();
+        var validFiles = await CoverSourceFilesAsync(albumId);
 
         foreach (var fileLocation in validFiles)
         {
@@ -376,6 +353,62 @@ public class MediaLibraryService
         }
 
         return new SetAlbumCoverResponse(updated, errors);
+    }
+
+    /// <summary>
+    /// A short hash that changes whenever the album's cover may have: when
+    /// any of its audio files, or a cover.jpg/cover.png beside them, is
+    /// replaced or rewritten. It doesn't open the files, so it's cheap
+    /// enough to check on every request. Null when the album has no
+    /// readable tracks (and so no cover).
+    /// </summary>
+    public async Task<string?> GetAlbumCoverVersionAsync(Guid albumId)
+    {
+        var files = await CoverSourceFilesAsync(albumId);
+        if (files.Count == 0)
+        {
+            return null;
+        }
+
+        var sources = new System.Text.StringBuilder();
+        void Add(string path)
+        {
+            var info = new FileInfo(path);
+            sources.Append(path).Append('|').Append(info.Length).Append('|').Append(info.LastWriteTimeUtc.Ticks).Append('\n');
+        }
+
+        foreach (var file in files)
+        {
+            Add(file);
+        }
+        foreach (var directory in files.Select(Path.GetDirectoryName).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var coverFile in Directory.EnumerateFiles(directory).Where(IsCoverFileName).Order(StringComparer.Ordinal))
+            {
+                Add(coverFile);
+            }
+        }
+
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sources.ToString()));
+        return Convert.ToHexStringLower(hash)[..16];
+    }
+
+    // The album's audio files that exist, in the order their art is tried.
+    private async Task<List<string>> CoverSourceFilesAsync(Guid albumId)
+    {
+        var fileLocations = await _db.Albums
+            .Where(a => a.Id == albumId)
+            .SelectMany(a => a.MediaItems)
+            .OrderBy(m => m.Disc ?? 1)
+            .ThenBy(m => m.Track ?? int.MaxValue)
+            .ThenBy(m => m.FileLocation)
+            .Select(m => m.FileLocation)
+            .ToListAsync();
+
+        return fileLocations
+            .Where(f => !string.IsNullOrWhiteSpace(f) && File.Exists(f))
+            .Select(f => f!)
+            .ToList();
     }
 
     private static bool IsCoverFileName(string filePath)

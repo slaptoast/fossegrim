@@ -20,6 +20,8 @@ namespace Fossegrim.Api.Tests;
 /// </summary>
 public class FossegrimApiFactory : WebApplicationFactory<Program>
 {
+    public const string JwtKey = "test-signing-key-that-is-long-enough-for-hmac-sha256";
+
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "fossegrim-tests", Guid.NewGuid().ToString("N"));
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -27,7 +29,7 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         Directory.CreateDirectory(_directory);
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:DefaultConnection", $"Data Source={Path.Combine(_directory, "fossegrim.db")}");
-        builder.UseSetting("Jwt:Key", "test-signing-key-that-is-long-enough-for-hmac-sha256");
+        builder.UseSetting("Jwt:Key", JwtKey);
         builder.UseSetting("DataProtection:KeysDirectory", Path.Combine(_directory, "dataprotection-keys"));
         // Tests drive Scrobbler directly, with a controlled clock.
         builder.UseSetting("Scrobbling:Enabled", "false");
@@ -36,6 +38,7 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         // Tests run backups on demand, into this factory's own folder.
         builder.UseSetting("Backup:WorkerEnabled", "false");
         builder.UseSetting("Backup:Directory", BackupDirectory);
+        builder.UseSetting("Covers:CacheDirectory", Path.Combine(_directory, "cover-cache"));
 
         builder.ConfigureTestServices(services =>
         {
@@ -91,7 +94,7 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         response.EnsureSuccessStatusCode();
         var login = await response.Content.ReadFromJsonAsync<LoginResponse>();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
-        return new TestUser(client, userId);
+        return new TestUser(client, userId, email, password);
     }
 
     public async Task<MediaItem> AddMediaItemAsync(
@@ -155,4 +158,5 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
     }
 }
 
-public record TestUser(HttpClient Client, string UserId);
+// Email and Password sign in as the same user again, e.g. as a second device.
+public record TestUser(HttpClient Client, string UserId, string Email, string Password);

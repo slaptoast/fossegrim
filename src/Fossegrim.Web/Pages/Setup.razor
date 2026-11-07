@@ -209,8 +209,8 @@
                 return;
             }
 
-            await TokenStore.SetTokenAsync(result.Response!.Token);
-            AuthStateProvider.MarkUserAsAuthenticated(result.Response);
+            await TokenStore.SetSessionAsync(result.Response!);
+            AuthStateProvider.MarkUserAsAuthenticated(result.Response!);
             // The account can't be created twice, so there's no going back to this step.
             _steps = [.. SettingSteps];
             _index = 0;

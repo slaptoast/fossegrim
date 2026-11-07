@@ -12,12 +12,17 @@ namespace Fossegrim.Web.Services;
 public class FossegrimApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly TokenStore _tokenStore;
+    // How this app is listed under the user's signed-in devices.
+    public const string ClientName = "Fossegrim Web";
 
-    public FossegrimApiClient(HttpClient httpClient, TokenStore tokenStore)
+    private readonly TokenStore _tokenStore;
+    private readonly SessionRefresher _refresher;
+
+    public FossegrimApiClient(HttpClient httpClient, TokenStore tokenStore, SessionRefresher refresher)
     {
         _httpClient = httpClient;
         _tokenStore = tokenStore;
+        _refresher = refresher;
     }
 
     // Where the Api is, e.g. for showing other applications which URL to call.
@@ -55,7 +60,7 @@ public class FossegrimApiClient
 
     public async Task<AuthResult> CreateFirstAdminAsync(string email, string displayName, string password)
     {
-        var response = await _httpClient.PostAsJsonAsync("/api/setup/admin", new CreateFirstAdminRequest(email, displayName, password));
+        var response = await _httpClient.PostAsJsonAsync("/api/setup/admin", new CreateFirstAdminRequest(email, displayName, password, ClientName));
         if (response.StatusCode == HttpStatusCode.Forbidden)
         {
             return new AuthResult(false, null, [await ReadProblemDetailAsync(response) ?? "Setup has already been done."]);
@@ -120,6 +125,8 @@ public class FossegrimApiClient
 
     public async Task<string> GetStreamUrlAsync(Guid mediaItemId)
     {
+        // The <audio> element can't refresh the token in its URL itself.
+        await _refresher.EnsureFreshAsync();
         var token = await _tokenStore.GetTokenAsync()
             ?? throw new InvalidOperationException("Cannot build a stream URL without a stored access token.");
         return $"{_httpClient.BaseAddress}stream/{mediaItemId}?access_token={Uri.EscapeDataString(token)}";
@@ -158,6 +165,7 @@ public class FossegrimApiClient
 
     public async Task<string> GetAlbumCoverUrl(Guid albumId)
     {
+        await _refresher.EnsureFreshAsync();
         var token = await _tokenStore.GetTokenAsync()
             ?? throw new InvalidOperationException("Cannot build a cover URL without a stored access token.");
         return $"{_httpClient.BaseAddress}cover/{albumId}?access_token={Uri.EscapeDataString(token)}";
@@ -428,13 +436,13 @@ public class FossegrimApiClient
 
     public async Task<AuthResult> LoginAsync(string email, string password)
     {
-        var response = await _httpClient.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
+        var response = await _httpClient.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password, ClientName));
         return await ReadAuthResultAsync(response, unauthorizedMessage: "Invalid login attempt.");
     }
 
     public async Task<AuthResult> RegisterAsync(string email, string displayName, string password)
     {
-        var response = await _httpClient.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, displayName, password));
+        var response = await _httpClient.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, displayName, password, ClientName));
         if (response.StatusCode == HttpStatusCode.Forbidden)
         {
             return new AuthResult(false, null, [await ReadProblemDetailAsync(response) ?? "Registration is closed."]);
@@ -453,6 +461,41 @@ public class FossegrimApiClient
 
         var errors = await response.Content.ReadFromJsonAsync<IdentityErrorsResponse>();
         return errors?.Errors ?? ["Failed to change password."];
+    }
+
+    // Ends this browser's session on the Api. Best effort: signing out
+    // locally goes ahead even if the Api can't be reached.
+    public async Task LogoutAsync()
+    {
+        try
+        {
+            await _httpClient.PostAsync("/api/auth/logout", null);
+        }
+        catch (HttpRequestException)
+        {
+        }
+    }
+
+    public async Task<IReadOnlyList<SessionDto>> GetSessionsAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/auth/sessions");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<List<SessionDto>>() ?? [];
+    }
+
+    public async Task RevokeSessionAsync(Guid sessionId)
+    {
+        var response = await _httpClient.DeleteAsync($"/api/auth/sessions/{sessionId}");
+        if (response.StatusCode != HttpStatusCode.NotFound)
+        {
+            response.EnsureSuccessStatusCode();
+        }
+    }
+
+    public async Task RevokeOtherSessionsAsync()
+    {
+        var response = await _httpClient.DeleteAsync("/api/auth/sessions");
+        response.EnsureSuccessStatusCode();
     }
 
     public async Task<ProfileDto?> GetProfileAsync()

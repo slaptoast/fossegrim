@@ -82,11 +82,13 @@ an empty database, or re-run it from the Admin page.
 ### Auth signing key
 
 There's no JWT key in `appsettings.json`. Locally, with no key configured,
-the Api makes a new random key every time it starts, so **every restart
-(including `dotnet watch` rebuilds) signs you out**. The Web app handles the
-resulting 401 by sending you back to the login page.
+the Api makes a new random key every time it starts, so every restart
+(including `dotnet watch` rebuilds) invalidates your access token. The Web
+app handles the resulting 401 by refreshing its session (refresh tokens are
+kept in the database, not signed with the key), so you stay signed in.
 
-To stay signed in across restarts, give the Api a key file or a fixed key:
+To avoid the refresh after every restart, give the Api a key file or a
+fixed key:
 
 ```bash
 cd src/Fossegrim.Api

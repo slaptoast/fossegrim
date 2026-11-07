@@ -36,7 +36,13 @@ public record PlaylistTrackDto(
     string? Title,
     string? ArtistName,
     string? Album,
-    TimeSpan? Duration);
+    TimeSpan? Duration,
+    // The track's album, for /cover/{AlbumId}.
+    Guid? AlbumId = null,
+    int? Track = null,
+    int? Disc = null,
+    long? FileSize = null,
+    string? ContentType = null);
 
 public record PlaylistShareDto(
     string UserId,

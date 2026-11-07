@@ -13,13 +13,17 @@ COPY src/Fossegrim.Api/Fossegrim.Api.csproj src/Fossegrim.Api/
 COPY src/Fossegrim.Web/Fossegrim.Web.csproj src/Fossegrim.Web/
 COPY src/Fossegrim.Lib/Fossegrim.Lib.csproj src/Fossegrim.Lib/
 COPY src/Fossegrim.Contracts/Fossegrim.Contracts.csproj src/Fossegrim.Contracts/
-RUN dotnet restore src/Fossegrim.Api/Fossegrim.Api.csproj
+# Built for this SDK image's own platform (linux-musl-x64 or -arm64), so only
+# that platform's native libraries (SkiaSharp, SQLite) go into the image.
+# See ApiRuntimeIdentifier in Fossegrim.Api.csproj.
+RUN dotnet --info | awk '$1 == "RID:" { print $2; exit }' > /tmp/rid \
+    && dotnet restore src/Fossegrim.Api/Fossegrim.Api.csproj -p:ApiRuntimeIdentifier=$(cat /tmp/rid)
 
 COPY src/Fossegrim.Api/ src/Fossegrim.Api/
 COPY src/Fossegrim.Web/ src/Fossegrim.Web/
 COPY src/Fossegrim.Lib/ src/Fossegrim.Lib/
 COPY src/Fossegrim.Contracts/ src/Fossegrim.Contracts/
-RUN dotnet publish src/Fossegrim.Api/Fossegrim.Api.csproj -c Release -o /app --no-restore
+RUN dotnet publish src/Fossegrim.Api/Fossegrim.Api.csproj -c Release -o /app --no-restore -p:ApiRuntimeIdentifier=$(cat /tmp/rid)
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 WORKDIR /app
@@ -43,6 +47,7 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     ConnectionStrings__DefaultConnection="Data Source=/data/fossegrim.db" \
     Jwt__KeyFile=/data/jwt.key \
     DataProtection__KeysDirectory=/data/dataprotection-keys \
+    Covers__CacheDirectory=/data/cover-cache \
     Backup__Directory=/backups \
     APP_VERSION=$VERSION
 

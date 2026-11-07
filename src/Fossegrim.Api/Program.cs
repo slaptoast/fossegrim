@@ -72,6 +72,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     context.Token = token;
                 }
                 return Task.CompletedTask;
+            },
+            // A signed-out device's token stops working at once, not when it
+            // expires. Tokens from before sessions existed have no session id
+            // and stay valid until they expire.
+            OnTokenValidated = async context =>
+            {
+                if (context.Principal?.FindFirst(JwtTokenService.SessionClaim) is not { } claim)
+                {
+                    return;
+                }
+
+                var sessions = context.HttpContext.RequestServices.GetRequiredService<SessionService>();
+                if (!Guid.TryParse(claim.Value, out var sessionId) || !await sessions.IsActiveAsync(sessionId))
+                {
+                    context.Fail("This device has been signed out.");
+                }
             }
         };
     })
@@ -82,6 +98,8 @@ builder.Services.AddAuthorization();
 
 // Register application services
 builder.Services.AddScoped<MediaLibraryService>();
+builder.Services.AddScoped<SessionService>();
+builder.Services.AddScoped<CoverCache>();
 
 // Library scans run in the background, one at a time (see Endpoints/Scans.cs);
 // renames share the lock so they never overlap a scan.

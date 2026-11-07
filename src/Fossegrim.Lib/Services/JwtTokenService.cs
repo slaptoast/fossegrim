@@ -8,13 +8,18 @@ namespace Fossegrim.Lib.Services;
 
 public static class JwtTokenService
 {
+    // The UserSession a token belongs to. Not "sid", which the bearer
+    // handler would remap to ClaimTypes.Sid.
+    public const string SessionClaim = "fsg_sid";
+
     public static (string Token, DateTime ExpiresAt) GenerateToken(
         ApplicationUser user,
         IEnumerable<string> roles,
         string issuer,
         string audience,
         string signingKey,
-        int expiryMinutes)
+        int expiryMinutes,
+        Guid sessionId)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
         var expiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes);
@@ -24,6 +29,7 @@ public static class JwtTokenService
             new(JwtRegisteredClaimNames.Sub, user.Id),
             new(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
             new(ClaimTypes.Name, user.UserName ?? string.Empty),
+            new(SessionClaim, sessionId.ToString()),
         };
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 

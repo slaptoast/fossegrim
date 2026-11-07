@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services.Library;
@@ -69,6 +70,26 @@ public sealed class LibraryScannerTests : IClassFixture<FossegrimApiFactory>, ID
         var full = await ScanAsync(full: true);
         Assert.Equal((2, 0), (full.Updated, full.Unchanged));
         Assert.All(await ItemsAsync(), i => Assert.Null(i.Genre));
+    }
+
+    [Fact]
+    public async Task DiscNumbers_AreRead_AndAlbumsPlayDiscByDisc()
+    {
+        TestMp3.Create(_music, "d1-01.mp3", Tags("Disc one, first", 1) with { Disc = 1 });
+        TestMp3.Create(_music, "d1-02.mp3", Tags("Disc one, second", 2) with { Disc = 1 });
+        TestMp3.Create(_music, "d2-01.mp3", Tags("Disc two, first", 1) with { Disc = 2 });
+        await ScanAsync();
+        var albumId = Guid.Empty;
+        await _factory.WithDbAsync(async db => albumId = await db.Albums.Where(a => a.Name == $"Album {_tag}").Select(a => a.Id).SingleAsync());
+
+        var client = await _factory.CreateUserClientAsync();
+        var tracks = await client.GetFromJsonAsync<List<MediaItemDto>>($"/api/albums/{albumId}/tracks");
+
+        Assert.Equal(
+            [("Disc one, first", 1), ("Disc one, second", 1), ("Disc two, first", 2)],
+            tracks!.Select(t => (t.Title!, t.Disc ?? 0)));
+        Assert.All(tracks!, t => Assert.Equal("audio/mpeg", t.ContentType));
+        Assert.All(tracks!, t => Assert.NotNull(t.FileSize));
     }
 
     [Fact]

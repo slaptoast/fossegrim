@@ -22,9 +22,9 @@ public static class Setup
 
         setupGroup.MapPost("/admin", async (
             CreateFirstAdminRequest request,
+            HttpRequest http,
             SetupService setup,
-            UserManager<ApplicationUser> userManager,
-            IConfiguration configuration) =>
+            SessionService sessions) =>
         {
             if (!await setup.IsSetupRequiredAsync())
             {
@@ -37,8 +37,7 @@ public static class Setup
                 return Results.BadRequest(new IdentityErrorsResponse(result.Errors.Select(e => e.Description).ToList()));
             }
 
-            var roles = await userManager.GetRolesAsync(user);
-            return Results.Ok(Auth.IssueLoginResponse(user, roles, configuration));
+            return Results.Ok(await sessions.SignInAsync(user, request.ClientName, Auth.UserAgentOf(http)));
         })
         .WithName("CreateFirstAdmin")
         .WithOpenApi();

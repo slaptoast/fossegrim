@@ -110,8 +110,7 @@
 
     private List<MediaItemDto> AlbumTracks(AlbumDto album) => AllMediaItems
         .Where(m => m.Albums.Any(a => a.Id == album.Id))
-        .OrderBy(m => m.Track ?? int.MaxValue)
-        .ThenBy(m => m.Title, StringComparer.OrdinalIgnoreCase)
+        .InPlayOrder()
         .ToList();
 
     private Task PlayAlbumAsync(AlbumDto album)

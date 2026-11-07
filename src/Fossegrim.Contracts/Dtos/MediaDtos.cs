@@ -36,13 +36,27 @@ public record MediaItemDto(
     TimeSpan? Duration,
     int? Bitrate,
     IEnumerable<ArtistSummaryDto> Artists,
-    IEnumerable<AlbumSummaryDto> Albums);
+    IEnumerable<AlbumSummaryDto> Albums,
+    // Null means a single-disc album.
+    int? Disc = null,
+    // The file as /stream serves it, e.g. for offline downloads.
+    long? FileSize = null,
+    string? ContentType = null);
+
+public static class MediaItemOrder
+{
+    /// <summary>An album's play order: disc (none counts as disc 1), track number, then title.</summary>
+    public static IOrderedEnumerable<MediaItemDto> InPlayOrder(this IEnumerable<MediaItemDto> tracks) => tracks
+        .OrderBy(m => m.Disc ?? 1)
+        .ThenBy(m => m.Track ?? int.MaxValue)
+        .ThenBy(m => m.Title, StringComparer.OrdinalIgnoreCase);
+}
 
 public record ArtistSummaryDto(Guid Id, string Name);
 
 public record AlbumSummaryDto(Guid Id, string Name, int? Year);
 
-public record MediaItemSummaryDto(Guid Id, string? Title, TimeSpan? Duration);
+public record MediaItemSummaryDto(Guid Id, string? Title, TimeSpan? Duration, int? Track = null, int? Disc = null);
 
 // The desired final tag values for one media item - always a full replace, not a sparse patch.
 public record MediaItemTagUpdate(

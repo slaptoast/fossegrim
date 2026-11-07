@@ -1,7 +1,12 @@
 namespace Fossegrim.Contracts.Dtos;
 
-public record LoginRequest(string Email, string Password);
+// ClientName is how the app is listed under the user's signed-in devices,
+// e.g. "Fossegrim for iOS". Without one, the list describes the user agent.
+public record LoginRequest(string Email, string Password, string? ClientName = null);
 
+// Token is the access token (a JWT, valid until ExpiresAt). Swap
+// RefreshToken for new tokens at /api/auth/refresh; it doesn't expire, but
+// each refresh returns a new one to use next time.
 public record LoginResponse(
     string Token,
     DateTime ExpiresAt,
@@ -9,9 +14,16 @@ public record LoginResponse(
     string UserName,
     string Email,
     string? DisplayName,
-    IReadOnlyList<string> Roles);
+    IReadOnlyList<string> Roles,
+    string? RefreshToken = null,
+    Guid? SessionId = null);
 
-public record RegisterRequest(string Email, string DisplayName, string Password);
+public record RefreshRequest(string RefreshToken);
+
+// A signed-in app or browser. Device describes its user agent, when it sent a recognisable one.
+public record SessionDto(Guid Id, string? ClientName, string? Device, DateTime SignedInAt, DateTime LastUsedAt, bool IsCurrent);
+
+public record RegisterRequest(string Email, string DisplayName, string Password, string? ClientName = null);
 
 public record ChangePasswordRequest(string OldPassword, string NewPassword);
 

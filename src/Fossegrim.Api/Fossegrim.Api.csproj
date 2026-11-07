@@ -7,11 +7,22 @@
     <UserSecretsId>0409d074-fc3a-40f4-ba38-2a4242bf20f9</UserSecretsId>
   </PropertyGroup>
 
+  <!-- The Dockerfile passes -p:ApiRuntimeIdentifier=linux-musl-x64 (or -arm64)
+       so the image gets SkiaSharp's native library for that platform only,
+       instead of every platform's (~470 MB). Set here, not with -r, which
+       would also reach the Blazor WebAssembly project. -->
+  <PropertyGroup Condition="'$(ApiRuntimeIdentifier)' != ''">
+    <RuntimeIdentifier>$(ApiRuntimeIdentifier)</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
+    <PackageReference Include="SkiaSharp" Version="4.155.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.155.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
   </ItemGroup>
 

@@ -98,8 +98,8 @@
         var result = await ApiClient.LoginAsync(_input.Email, _input.Password);
         if (result.Success)
         {
-            await TokenStore.SetTokenAsync(result.Response!.Token);
-            AuthStateProvider.MarkUserAsAuthenticated(result.Response);
+            await TokenStore.SetSessionAsync(result.Response!);
+            AuthStateProvider.MarkUserAsAuthenticated(result.Response!);
             Navigation.NavigateTo(string.IsNullOrEmpty(ReturnUrl) ? "/" : ReturnUrl);
         }
         else

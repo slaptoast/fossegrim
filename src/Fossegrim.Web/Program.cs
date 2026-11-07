@@ -24,6 +24,7 @@ builder.Services.AddAuthorizationCore();
 // Scoped registration here would silently resolve a second, never-populated
 // TokenStore/JwtAuthenticationStateProvider inside the handler.
 builder.Services.AddSingleton<TokenStore>();
+builder.Services.AddSingleton<SessionRefresher>();
 builder.Services.AddSingleton<JwtAuthenticationStateProvider>();
 builder.Services.AddSingleton<AuthenticationStateProvider>(sp => sp.GetRequiredService<JwtAuthenticationStateProvider>());
 builder.Services.AddScoped<ToastService>();
@@ -39,5 +40,11 @@ builder.Services.AddHttpClient<FossegrimApiClient>(client =>
     client.BaseAddress = new Uri(apiBaseUrl);
 })
 .AddHttpMessageHandler<AuthorizedHttpMessageHandler>();
+
+// Refreshes go out without AuthorizedHttpMessageHandler (see SessionRefresher).
+builder.Services.AddHttpClient(SessionRefresher.HttpClientName, client =>
+{
+    client.BaseAddress = new Uri(apiBaseUrl);
+});
 
 await builder.Build().RunAsync();

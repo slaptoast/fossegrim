@@ -238,7 +238,10 @@ body {
 .player-track-info { display: flex; flex-direction: column; min-width: 160px; }
 .player-title { font-weight: 600; }
 .player-artist { font-size: 0.75rem; line-height: 16px; color: var(--chrome-muted); }
-.player-audio { flex: 1; min-width: 240px; height: 32px; }
+.player-decks { flex: 1; min-width: 240px; display: flex; }
+.player-decks[hidden] { display: none; }
+.player-audio { flex: 1; min-width: 0; height: 32px; }
+.player-audio[hidden] { display: none; }
 .player-error { color: var(--player-error); }
 .player-controls { display: flex; gap: var(--space-4); }
 .player-button {
@@ -272,6 +275,10 @@ body {
     z-index: 600;
     overflow: hidden;
 }
+.transitions-panel-body { padding: var(--space-8) var(--space-12); overflow-y: auto; color: var(--ink); }
+.crossfade-length { display: flex; align-items: center; gap: var(--space-8); margin: var(--space-8) 0; font-size: 0.8125rem; color: var(--text-secondary); }
+.crossfade-length input[type="range"] { flex: 1; min-width: 0; width: auto; margin: 0; padding: 0; }
+.crossfade-length output { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
 /* Player bar at the top (Appearance setting): it sticks under the top bar, and the
    Up next panel and toasts drop down from it instead of rising above it. */
 .player-top .player-bar { top: 0; bottom: auto; }

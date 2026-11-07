@@ -65,6 +65,11 @@ public sealed class PlayerSettings
 
     // When the queue runs out, keep going with random picks (see PlayerState).
     public bool AutoFill { get; set; }
+
+    // How tracks lead into each other (see PlaybackTransitions).
+    public bool Gapless { get; set; } = true;
+    public bool Crossfade { get; set; }
+    public int CrossfadeSeconds { get; set; } = PlaybackTransitions.DefaultCrossfadeSeconds;
 }
 
 public sealed class VisualizerSettings
@@ -255,6 +260,12 @@ public static partial class AppearancePreferencesFile
             {
                 Position = preferences.Player?.Position == "top" ? "top" : "bottom",
                 AutoFill = preferences.Player?.AutoFill ?? false,
+                Gapless = preferences.Player?.Gapless ?? true,
+                Crossfade = preferences.Player?.Crossfade ?? false,
+                CrossfadeSeconds = Math.Clamp(
+                    preferences.Player?.CrossfadeSeconds ?? PlaybackTransitions.DefaultCrossfadeSeconds,
+                    PlaybackTransitions.MinCrossfadeSeconds,
+                    PlaybackTransitions.MaxCrossfadeSeconds),
             },
             Visualizer = new VisualizerSettings
             {

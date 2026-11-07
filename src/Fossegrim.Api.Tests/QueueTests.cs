@@ -107,6 +107,84 @@ public class QueueTests : IClassFixture<FossegrimApiFactory>
     }
 
     [Fact]
+    public async Task Advance_MovesTheQueueWithoutAReload()
+    {
+        var user = await _factory.CreateUserAsync();
+        var (a, b) = (await TrackAsync("A"), await TrackAsync("B"));
+        var player = await CreatePlayerAsync(user);
+        await player.PlayQueueAsync([a, b, a]);
+        var version = player.LoadVersion;
+
+        await player.AdvanceToNextAsync(version, b.Id);
+
+        Assert.Equal(1, player.CurrentIndex);
+        Assert.Equal("B", player.CurrentTrack!.Title);
+        Assert.Contains(b.Id.ToString(), player.StreamUrl);
+        Assert.Equal(version, player.LoadVersion); // the audio is already playing
+        var queue = await GetQueueAsync(user);
+        Assert.Equal(queue.Items.OrderBy(i => i.Position).ElementAt(1).Id, queue.CurrentItemId);
+
+        // The same version keeps working along the queue, and NextTrack follows.
+        Assert.Equal(a.Id, player.NextTrack!.Id);
+        await player.AdvanceToNextAsync(version, a.Id);
+        Assert.Equal(2, player.CurrentIndex);
+        Assert.Null(player.NextTrack);
+    }
+
+    [Fact]
+    public async Task Advance_IsIgnoredAfterALoadReplacedWhatWasPlaying()
+    {
+        var user = await _factory.CreateUserAsync();
+        var (a, b, c) = (await TrackAsync("A"), await TrackAsync("B"), await TrackAsync("C"));
+        var player = await CreatePlayerAsync(user);
+        await player.PlayQueueAsync([a, b, c]);
+        var version = player.LoadVersion;
+
+        // The user pressed Next just as the player was starting B by itself.
+        await player.PlayNextAsync();
+        await player.AdvanceToNextAsync(version, b.Id);
+
+        Assert.Equal(1, player.CurrentIndex);
+        Assert.Equal("B", player.CurrentTrack!.Title);
+    }
+
+    [Fact]
+    public async Task Advance_WhenTheNextTrackChanged_LoadsTheRightOne()
+    {
+        var user = await _factory.CreateUserAsync();
+        var (a, b, c) = (await TrackAsync("A"), await TrackAsync("B"), await TrackAsync("C"));
+        var player = await CreatePlayerAsync(user);
+        await player.PlayQueueAsync([a, c]);
+        var version = player.LoadVersion;
+
+        // Started C, but "play next" put B in front of it a moment earlier.
+        await player.AddToQueueNextAsync([b.Id]);
+        await player.AdvanceToNextAsync(version, c.Id);
+
+        Assert.Equal(1, player.CurrentIndex);
+        Assert.Equal("B", player.CurrentTrack!.Title);
+        Assert.NotEqual(version, player.LoadVersion); // so the audio gets corrected
+    }
+
+    [Fact]
+    public async Task Advance_RefillsTheQueueWhenTheLastTrackStarts()
+    {
+        var user = await _factory.CreateUserAsync();
+        var a = await TrackAsync("A");
+        await TrackAsync("B");
+        var player = await CreatePlayerAsync(user);
+        await player.PlayRandomTracksAsync([a], RandomModes.Full);
+        var queued = player.Queue.Count;
+
+        while (player.CurrentIndex < queued - 1)
+        {
+            await player.AdvanceToNextAsync(player.LoadVersion, player.NextTrack!.Id);
+        }
+
+        Assert.True(player.Queue.Count > queued); // the last track starting brought more
+    }
+
+    [Fact]
     public async Task Player_RestoresTheSameEntryAfterAReload()
     {
         var user = await _factory.CreateUserAsync();

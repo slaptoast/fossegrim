@@ -1,9 +1,7 @@
 @page "/"
 @attribute [Authorize]
-@inject FossegrimApiClient ApiClient
 @inject AuthenticationStateProvider AuthStateProvider
 @inject AlbumArtEditorState AlbumArtEditor
-@inject ScanStatusService Scans
 @inject AppearanceService Appearance
 @implements IDisposable
 
@@ -45,11 +43,9 @@
     private bool _albumArtShown;
     private IReadOnlyList<ModuleGrid.ModuleDefinition> _modules = [];
 
-    private List<MediaItemDto> _mediaItems = [];
-    private List<ArtistDto> _artists = [];
-    private List<AlbumDto> _albums = [];
-    private bool _isLoading = true;
-    private string? _errorMessage;
+    // Each list loads its own pages; these are for reloading them after a tag edit.
+    private ArtistList? _artistList;
+    private AlbumList? _albumList;
 
     protected override void OnInitialized()
     {
@@ -58,24 +54,7 @@
         _modules = BuildModules(includeAlbumArt: false);
         AlbumArtEditor.Changed += OnEditorChanged;
         Appearance.Changed += OnAppearanceChanged;
-        Scans.ScanFinished += OnScanFinished;
     }
-
-    // A scan (e.g. a right-click rescan) can add, change or remove anything.
-    private void OnScanFinished(ScanJobDto job) => InvokeAsync(async () =>
-    {
-        try
-        {
-            _mediaItems = (await ApiClient.GetMediaItemsAsync()).ToList();
-            _artists = (await ApiClient.GetArtistsAsync()).OrderBy(a => a.Name).ToList();
-            _albums = (await ApiClient.GetAlbumsAsync()).OrderBy(a => a.Name).ToList();
-            StateHasChanged();
-        }
-        catch
-        {
-            // Best effort; the page still shows what it had.
-        }
-    });
 
     // Default layout on the 24-column grid; rows are 40px. Up next and album art start hidden.
     private IReadOnlyList<ModuleGrid.ModuleDefinition> BuildModules(bool includeAlbumArt)
@@ -123,16 +102,15 @@
     {
         AlbumArtEditor.Changed -= OnEditorChanged;
         Appearance.Changed -= OnAppearanceChanged;
-        Scans.ScanFinished -= OnScanFinished;
         AlbumArtEditor.IsAvailable = false;
         AlbumArtEditor.Close();
     }
 
-    private RenderFragment ArtistsModule => @<ArtistList Artists="_artists" />;
+    private RenderFragment ArtistsModule => @<ArtistList @ref="_artistList" />;
 
-    private RenderFragment AlbumsModule => @<AlbumList Albums="_albums" AllMediaItems="_mediaItems" />;
+    private RenderFragment AlbumsModule => @<AlbumList @ref="_albumList" />;
 
-    private RenderFragment RandomAlbumsModule => @<RandomAlbums AllMediaItems="_mediaItems" />;
+    private RenderFragment RandomAlbumsModule => @<RandomAlbums />;
 
     private RenderFragment RandomTracksModule => @<RandomTracks />;
 
@@ -140,20 +118,7 @@
 
     private RenderFragment AlbumArtModule => @<AlbumArtEditor />;
 
-    private RenderFragment TracksModule => @<text>
-        @if (_isLoading)
-        {
-            <div class="track-list-component"><div class="loading"><h2>Loading media library</h2></div></div>
-        }
-        else if (_errorMessage is not null)
-        {
-            <div class="track-list-component"><div class="error"><h3>Error</h3><p>@_errorMessage</p></div></div>
-        }
-        else
-        {
-            <TrackList MediaItems="_mediaItems" OnItemUpdated="HandleItemUpdated" />
-        }
-    </text>;
+    private RenderFragment TracksModule => @<TrackList FromServer="true" OnItemUpdated="HandleItemUpdated" />;
 
     private RenderFragment UpNextModule => @<div class="track-list-component up-next-module">
         <div class="up-next-module-header"><h2>Up next</h2></div>
@@ -170,42 +135,18 @@
             _modules = BuildModules(includeAlbumArt: true);
             AlbumArtEditor.IsAvailable = true;
         }
-
-        try
-        {
-            _mediaItems = (await ApiClient.GetMediaItemsAsync()).ToList();
-            _artists = (await ApiClient.GetArtistsAsync()).OrderBy(a => a.Name).ToList();
-            _albums = (await ApiClient.GetAlbumsAsync()).OrderBy(a => a.Name).ToList();
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = $"Error loading media library: {ex.Message}";
-        }
-        finally
-        {
-            _isLoading = false;
-        }
     }
 
+    // A tag edit can change which artist or album a track belongs to, or rename them.
     private async Task HandleItemUpdated(MediaItemDto updated)
     {
-        var index = _mediaItems.FindIndex(m => m.Id == updated.Id);
-        if (index >= 0)
+        if (_artistList is not null)
         {
-            _mediaItems[index] = updated;
+            await _artistList.ReloadAsync();
         }
-
-        // A tag edit can change which artist/album a track belongs to, so
-        // refresh the groupings those components derive their lists from.
-        try
+        if (_albumList is not null)
         {
-            _artists = (await ApiClient.GetArtistsAsync()).OrderBy(a => a.Name).ToList();
-            _albums = (await ApiClient.GetAlbumsAsync()).OrderBy(a => a.Name).ToList();
-        }
-        catch
-        {
-            // The track edit itself already succeeded; leave the stale groupings
-            // in place rather than surfacing an error for this best-effort refresh.
+            await _albumList.ReloadAsync();
         }
     }
 }

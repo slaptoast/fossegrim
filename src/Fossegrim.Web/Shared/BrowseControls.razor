@@ -1,0 +1,99 @@
+@implements IDisposable
+
+@* The search box, sort menu and direction button above a library list.
+   Typing waits a moment before searching. Changed fires when a choice
+   changes; the list then reloads its first page with Current(). *@
+<div class="browse-controls">
+    @if (ShowSearch)
+    {
+        <div class="search-box">
+            <input type="search" placeholder="@Placeholder" value="@_search" @oninput="OnSearchInput" aria-label="@Placeholder" />
+        </div>
+    }
+    <div class="filter-group">
+        <select aria-label="Sort by" value="@SelectedSort" @onchange="OnSortChanged">
+            @foreach (var (value, label) in Sorts.Where(s => s.Value != LibrarySorts.Relevance || Searching))
+            {
+                <option value="@value">@label</option>
+            }
+        </select>
+        <button type="button" class="button-secondary browse-order" title="@(Descending ? "Descending" : "Ascending")"
+                aria-label="@(Descending ? "Sorted descending; sort ascending" : "Sorted ascending; sort descending")"
+                @onclick="ToggleOrderAsync">@(Descending ? "↓" : "↑")</button>
+    </div>
+</div>
+
+@code {
+    private static readonly TimeSpan SearchDelay = TimeSpan.FromMilliseconds(300);
+
+    // Label for each of LibrarySorts' values this list offers. "relevance"
+    // only shows while there's a search.
+    [Parameter, EditorRequired]
+    public IReadOnlyList<(string Value, string Label)> Sorts { get; set; } = [];
+
+    [Parameter]
+    public bool ShowSearch { get; set; } = true;
+
+    [Parameter]
+    public string Placeholder { get; set; } = "🔍 Search...";
+
+    // A search from outside (the search page), used when ShowSearch is off.
+    [Parameter]
+    public string? Query { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback Changed { get; set; }
+
+    private string _search = "";
+    private string? _sort;
+    private string? _order;
+    private CancellationTokenSource? _searchDelay;
+
+    private string SearchText => ShowSearch ? _search : Query ?? "";
+
+    private bool Searching => !string.IsNullOrWhiteSpace(SearchText);
+
+    // What the Api will sort by: the chosen sort, or its default.
+    private string SelectedSort => _sort is { } sort && (sort != LibrarySorts.Relevance || Searching)
+        ? sort
+        : Searching && Sorts.Any(s => s.Value == LibrarySorts.Relevance) ? LibrarySorts.Relevance : Sorts[0].Value;
+
+    private bool Descending => (_order ?? LibrarySorts.DefaultOrder(SelectedSort)) == LibrarySorts.Descending;
+
+    /// <summary>The current choices, for the first load and reloads.</summary>
+    public BrowseQuery Current(int page, int pageSize) => new(SearchText, SelectedSort, Descending ? LibrarySorts.Descending : LibrarySorts.Ascending, page, pageSize);
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? "";
+        _searchDelay?.Cancel();
+        _searchDelay = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(SearchDelay, _searchDelay.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        await NotifyAsync();
+    }
+
+    private Task OnSortChanged(ChangeEventArgs e)
+    {
+        _sort = e.Value?.ToString();
+        // Each sort starts in its natural direction (A to Z, newest first).
+        _order = null;
+        return NotifyAsync();
+    }
+
+    private Task ToggleOrderAsync()
+    {
+        _order = Descending ? LibrarySorts.Ascending : LibrarySorts.Descending;
+        return NotifyAsync();
+    }
+
+    private Task NotifyAsync() => Changed.InvokeAsync();
+
+    public void Dispose() => _searchDelay?.Cancel();
+}

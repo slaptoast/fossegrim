@@ -1,5 +1,8 @@
+using System.Security.Claims;
+using Fossegrim.Api.Services;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
+using Fossegrim.Lib.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Fossegrim.Api.Endpoints;
@@ -12,23 +15,31 @@ public static class Artists
             .WithTags("Artists")
             .RequireAuthorization();
 
-        artistGroup.MapGet("/", async (FossegrimDbContext db) =>
+        // ?q= searches; sort= and order= see LibrarySorts.ForArtists; page= and pageSize= (max 500).
+        artistGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
+            Browse.ListAsync(q, sort, order, page, pageSize, LibrarySorts.ForArtists, principal, (request, userId) => browser.ArtistsAsync(request, userId, cancellationToken)))
+        .WithName("GetArtists")
+        .WithOpenApi();
+
+        // All the artist's tracks, album by album (oldest first), each in play order.
+        artistGroup.MapGet("/{id:guid}/tracks", async (Guid id, FossegrimDbContext db) =>
         {
-            var artists = await db.Artists
-                .Select(a => new ArtistDto(
-                    a.Id,
-                    a.Name,
-                    a.Bio,
-                    a.Country,
-                    a.ImageUrl,
-                    a.DateAdded,
-                    a.LastModified,
-                    a.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration, m.Track, m.Disc)),
-                    a.Albums.Select(al => new AlbumSummaryDto(al.Id, al.Name, al.Year))))
+            if (!await db.Artists.AnyAsync(a => a.Id == id))
+            {
+                return Results.NotFound();
+            }
+
+            var tracks = await db.MediaItems
+                .Where(m => m.Artists.Any(a => a.Id == id))
+                .Select(MediaItemMapping.ToDto)
                 .ToListAsync();
-            return Results.Ok(artists);
+            return Results.Ok(tracks
+                .GroupBy(t => t.Albums.FirstOrDefault())
+                .OrderBy(g => g.Key?.Year ?? int.MaxValue)
+                .ThenBy(g => g.Key?.Name, StringComparer.OrdinalIgnoreCase)
+                .SelectMany(g => g.InPlayOrder()));
         })
-        .WithName("GetAllArtists")
+        .WithName("GetArtistTracks")
         .WithOpenApi();
 
         artistGroup.MapGet("/{id:guid}", async (Guid id, FossegrimDbContext db) =>

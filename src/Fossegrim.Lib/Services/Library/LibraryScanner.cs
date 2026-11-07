@@ -231,6 +231,9 @@ public class LibraryScanner
         }
         await _db.SaveChangesAsync(cancellationToken);
 
+        // Tracks, albums and artists may all have changed.
+        await new SearchIndex(_db).RebuildAsync(cancellationToken);
+
         progress?.Report(new ScanProgress(ScanPhase.Done, total, total));
         return new ScanSummary(total, added.Count, changed.Count, unchanged, moves.Count, missing.Count, failed, warnings);
     }

@@ -106,6 +106,8 @@ builder.Services.AddScoped<CoverCache>();
 builder.Services.AddSingleton<LibraryLock>();
 builder.Services.AddSingleton<ScanQueue>();
 builder.Services.AddScoped<LibraryScanner>();
+builder.Services.AddScoped<SearchIndex>();
+builder.Services.AddScoped<LibraryBrowser>();
 builder.Services.AddScoped<ScanRequests>();
 builder.Services.AddScoped<FileRenamer>();
 builder.Services.AddScoped<ApiKeyService>();
@@ -193,6 +195,8 @@ switch (jwtKeySource)
 using (var scope = app.Services.CreateScope())
 {
     await scope.ServiceProvider.GetRequiredService<FossegrimDbContext>().Database.MigrateAsync();
+    // Fills the search indexes on first run, and if they've got out of step.
+    await scope.ServiceProvider.GetRequiredService<SearchIndex>().EnsureBuiltAsync();
     await RoleSeeder.SeedRolesAndAdminAsync(scope.ServiceProvider, seedDefaultAdmin: app.Environment.IsDevelopment());
     await scope.ServiceProvider.GetRequiredService<SetupService>().MarkExistingInstallCompleteAsync();
     await scope.ServiceProvider.GetRequiredService<LastFmSettingsStore>().LoadAsync();
@@ -241,6 +245,7 @@ app.MapScanEndpoints();
 app.MapApiKeyEndpoints();
 app.MapLibraryFileEndpoints();
 app.MapRandomEndpoints();
+app.MapSearchEndpoints();
 
 app.MapFallbackToFile("index.html");
 

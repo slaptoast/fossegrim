@@ -19,3 +19,4 @@
 - [x] optional auto-fill when the queue ends (per-user setting): another random album after an album, more random tracks after a track
 - [x] groundwork for apps: sign-ins that renew themselves and can be signed out from Profile -> Signed-in devices, disc numbers (albums play disc by disc), album and file details on every track, and resized, cached covers (`/cover/{id}?size=256`)
 - [x] gapless playback and crossfade (1-12 s), per-user settings in the player bar and on the Profile page; tracks from the same album stay gapless
+- [x] library search (ignores case and accents, matches the starts of words) from the top bar and in each list, plus sorting by name, artist, album, year, recently added, and your most or most recently played, in either direction; the API pages every list (`/api/albums?q=&sort=&order=&page=&pageSize=`) and searches everything at once (`/api/search?q=`)

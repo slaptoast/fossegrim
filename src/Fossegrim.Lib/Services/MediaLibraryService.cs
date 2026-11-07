@@ -202,6 +202,7 @@ public class MediaLibraryService
 
         await _db.SaveChangesAsync();
         await RemoveEmptyArtistsAndAlbumsAsync(unlinkedArtistIds, unlinkedAlbumIds);
+        await new SearchIndex(_db).RebuildAsync();
 
         var updatedDtos = updatedItems.Select(MediaItemMapping.Map).ToList();
 

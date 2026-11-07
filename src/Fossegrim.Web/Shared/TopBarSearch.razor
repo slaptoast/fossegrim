@@ -1,0 +1,41 @@
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<form class="topbar-search" role="search" @onsubmit="Search">
+    <input type="search" placeholder="🔍 Search the library" aria-label="Search the library" @bind="_text" @bind:event="oninput" />
+</form>
+
+@code {
+    private string _text = "";
+
+    protected override void OnInitialized()
+    {
+        ShowCurrentQuery();
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void Search()
+    {
+        if (!string.IsNullOrWhiteSpace(_text))
+        {
+            Navigation.NavigateTo($"/search?q={Uri.EscapeDataString(_text.Trim())}");
+        }
+    }
+
+    // Keeps the box showing the search page's query (and clears it elsewhere).
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        ShowCurrentQuery();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ShowCurrentQuery()
+    {
+        var uri = new Uri(Navigation.Uri);
+        _text = uri.AbsolutePath.TrimEnd('/').EndsWith("/search", StringComparison.OrdinalIgnoreCase)
+            ? System.Web.HttpUtility.ParseQueryString(uri.Query)["q"] ?? ""
+            : "";
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

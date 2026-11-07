@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Fossegrim.Api.Services;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Services;
@@ -13,24 +15,10 @@ public static class Albums
             .WithTags("Albums")
             .RequireAuthorization();
 
-        albumGroup.MapGet("/", async (FossegrimDbContext db) =>
-        {
-            var albums = await db.Albums
-                .Select(al => new AlbumDto(
-                    al.Id,
-                    al.Name,
-                    al.Year,
-                    al.Genre,
-                    al.Label,
-                    al.CoverImageUrl,
-                    al.DateAdded,
-                    al.LastModified,
-                    al.MediaItems.Select(m => new MediaItemSummaryDto(m.Id, m.Title, m.Duration, m.Track, m.Disc)),
-                    al.Artists.Select(a => new ArtistSummaryDto(a.Id, a.Name))))
-                .ToListAsync();
-            return Results.Ok(albums);
-        })
-        .WithName("GetAllAlbums")
+        // ?q= searches; sort= and order= see LibrarySorts.ForAlbums; page= and pageSize= (max 500).
+        albumGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
+            Browse.ListAsync(q, sort, order, page, pageSize, LibrarySorts.ForAlbums, principal, (request, userId) => browser.AlbumsAsync(request, userId, cancellationToken)))
+        .WithName("GetAlbums")
         .WithOpenApi();
 
         albumGroup.MapGet("/{id:guid}", async (Guid id, FossegrimDbContext db) =>

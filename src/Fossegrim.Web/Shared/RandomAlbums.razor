@@ -50,9 +50,6 @@
     private const int Count = 5;
 
     // Album DTOs only list their tracks' ids, so playing one needs the full tracks.
-    [Parameter, EditorRequired]
-    public IReadOnlyList<MediaItemDto> AllMediaItems { get; set; } = [];
-
     private IReadOnlyList<AlbumDto> _albums = [];
     private readonly Dictionary<Guid, string> _coverUrls = [];
     private string _mode = RandomModes.Adjusted;
@@ -107,20 +104,26 @@
     private static string ArtistNames(AlbumDto album) =>
         album.Artists.Any() ? string.Join(", ", album.Artists.Select(a => a.Name)) : "Unknown Artist";
 
-    private List<MediaItemDto> AlbumTracks(AlbumDto album) => AllMediaItems
-        .Where(m => m.Albums.Any(a => a.Id == album.Id))
-        .InPlayOrder()
+    // The album's track summaries are enough for queueing; playing needs the full tracks.
+    private static List<Guid> TrackIds(AlbumDto album) => album.MediaItems
+        .OrderBy(m => m.Disc ?? 1)
+        .ThenBy(m => m.Track ?? int.MaxValue)
+        .ThenBy(m => m.Title, StringComparer.OrdinalIgnoreCase)
+        .Select(m => m.Id)
         .ToList();
 
-    private Task PlayAlbumAsync(AlbumDto album)
+    private async Task PlayAlbumAsync(AlbumDto album)
     {
-        var tracks = AlbumTracks(album);
-        return tracks.Count > 0 ? PlayerState.PlayRandomAlbumAsync(album.Id, tracks, _mode) : Task.CompletedTask;
+        var tracks = await ApiClient.GetAlbumTracksAsync(album.Id);
+        if (tracks.Count > 0)
+        {
+            await PlayerState.PlayRandomAlbumAsync(album.Id, tracks, _mode);
+        }
     }
 
     private void ShowContextMenu(MouseEventArgs e, AlbumDto album)
     {
-        var trackIds = AlbumTracks(album).Select(m => m.Id).ToList();
+        var trackIds = TrackIds(album);
         _contextMenuX = e.ClientX;
         _contextMenuY = e.ClientY;
         _contextMenuActions =

@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Fossegrim.Api.Services;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Services;
@@ -13,14 +15,10 @@ public static class MediaItems
             .WithTags("MediaItems")
             .RequireAuthorization();
 
-        mediaItemGroup.MapGet("/", async (FossegrimDbContext db) =>
-        {
-            var mediaItems = await db.MediaItems
-                .Select(MediaItemMapping.ToDto)
-                .ToListAsync();
-            return Results.Ok(mediaItems);
-        })
-        .WithName("GetAllMediaItems")
+        // ?q= searches; sort= and order= see LibrarySorts.ForTracks; page= and pageSize= (max 500).
+        mediaItemGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
+            Browse.ListAsync(q, sort, order, page, pageSize, LibrarySorts.ForTracks, principal, (request, userId) => browser.TracksAsync(request, userId, cancellationToken)))
+        .WithName("GetMediaItems")
         .WithOpenApi();
 
         mediaItemGroup.MapGet("/{id:guid}", async (Guid id, FossegrimDbContext db) =>

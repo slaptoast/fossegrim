@@ -28,11 +28,44 @@ public class FossegrimApiClient
     // Where the Api is, e.g. for showing other applications which URL to call.
     public Uri? BaseAddress => _httpClient.BaseAddress;
 
-    public async Task<IReadOnlyList<ArtistDto>> GetArtistsAsync()
+    public Task<PagedResult<ArtistListItemDto>> GetArtistsAsync(BrowseQuery query) =>
+        GetPageAsync<ArtistListItemDto>("/api/artists", query);
+
+    public Task<PagedResult<AlbumListItemDto>> GetAlbumsAsync(BrowseQuery query) =>
+        GetPageAsync<AlbumListItemDto>("/api/albums", query);
+
+    public Task<PagedResult<MediaItemDto>> GetTracksAsync(BrowseQuery query) =>
+        GetPageAsync<MediaItemDto>("/api/mediaitems", query);
+
+    // Every track, a page at a time, for the pages that work on the whole
+    // library (the playlist editor's track picker, the tag editor).
+    public async Task<IReadOnlyList<MediaItemDto>> GetAllMediaItemsAsync()
     {
-        var response = await _httpClient.GetAsync("/api/artists");
+        var all = new List<MediaItemDto>();
+        for (var page = 1; ; page++)
+        {
+            var result = await GetTracksAsync(new BrowseQuery(Sort: LibrarySorts.Title, Page: page, PageSize: BrowseQuery.MaxPageSize));
+            all.AddRange(result.Items);
+            if (page >= result.TotalPages)
+            {
+                return all;
+            }
+        }
+    }
+
+    public async Task<IReadOnlyList<MediaItemDto>> GetArtistTracksAsync(Guid artistId)
+    {
+        var response = await _httpClient.GetAsync($"/api/artists/{artistId}/tracks");
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<List<ArtistDto>>() ?? [];
+        return await response.Content.ReadFromJsonAsync<List<MediaItemDto>>() ?? [];
+    }
+
+    private async Task<PagedResult<T>> GetPageAsync<T>(string path, BrowseQuery query)
+    {
+        var response = await _httpClient.GetAsync(path + query.ToQueryString());
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PagedResult<T>>()
+            ?? new PagedResult<T>([], 0, query.Page, query.PageSize);
     }
 
     public async Task<LibraryStatsDto?> GetLibraryStatsAsync()
@@ -132,13 +165,6 @@ public class FossegrimApiClient
         return $"{_httpClient.BaseAddress}stream/{mediaItemId}?access_token={Uri.EscapeDataString(token)}";
     }
 
-    public async Task<IReadOnlyList<AlbumDto>> GetAlbumsAsync()
-    {
-        var response = await _httpClient.GetAsync("/api/albums");
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<List<AlbumDto>>() ?? [];
-    }
-
     // mode is RandomModes.Full or RandomModes.Adjusted. Excluded albums are
     // left out unless that would leave none.
     public async Task<IReadOnlyList<AlbumDto>> GetRandomAlbumsAsync(string mode, int count, IEnumerable<Guid>? excludeIds = null)
@@ -217,13 +243,6 @@ public class FossegrimApiClient
 
         return await response.Content.ReadFromJsonAsync<T>()
             ?? throw new ApiException($"{action} succeeded but returned no result.");
-    }
-
-    public async Task<IReadOnlyList<MediaItemDto>> GetMediaItemsAsync()
-    {
-        var response = await _httpClient.GetAsync("/api/mediaitems");
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<List<MediaItemDto>>() ?? [];
     }
 
     public async Task<MediaItemDto?> GetMediaItemAsync(Guid id)

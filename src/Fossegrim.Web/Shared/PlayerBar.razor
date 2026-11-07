@@ -33,6 +33,7 @@
             <span class="player-title">@(PlayerState.CurrentTrack.Title ?? "Unknown")</span>
             <span class="player-artist">@(PlayerState.CurrentTrack.ArtistName ?? "Unknown Artist")</span>
         </div>
+        <FavoriteButton Kind="@FavoriteKinds.Tracks" Id="PlayerState.CurrentTrack.Id" Name="@(PlayerState.CurrentTrack.Title ?? "this track")" />
 
         <div class="player-controls">
             <button type="button" class="player-button" @onclick="OnPreviousAsync" aria-label="Previous" title="Previous (restarts the track if it's past 3 seconds)">⏮</button>

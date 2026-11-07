@@ -53,6 +53,21 @@ public class FossegrimApiClient
         }
     }
 
+    public async Task<FavoritesDto> GetFavoritesAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/favorites");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<FavoritesDto>() ?? new FavoritesDto([], [], []);
+    }
+
+    // kind is one of FavoriteKinds.
+    public async Task SetFavoriteAsync(string kind, Guid id, bool favorite)
+    {
+        var url = $"/api/favorites/{kind}/{id}";
+        var response = favorite ? await _httpClient.PutAsync(url, null) : await _httpClient.DeleteAsync(url);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<IReadOnlyList<MediaItemDto>> GetArtistTracksAsync(Guid artistId)
     {
         var response = await _httpClient.GetAsync($"/api/artists/{artistId}/tracks");

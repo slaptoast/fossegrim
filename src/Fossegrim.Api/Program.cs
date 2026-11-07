@@ -246,6 +246,7 @@ app.MapApiKeyEndpoints();
 app.MapLibraryFileEndpoints();
 app.MapRandomEndpoints();
 app.MapSearchEndpoints();
+app.MapFavoriteEndpoints();
 
 app.MapFallbackToFile("index.html");
 

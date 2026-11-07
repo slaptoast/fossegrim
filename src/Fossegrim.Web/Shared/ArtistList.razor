@@ -4,12 +4,13 @@
 @inject NavigationManager Navigation
 @inject ScanStatusService Scans
 @inject ToastService Toasts
+@inject FavoritesService Favorites
 @implements IDisposable
 
 <div class="artist-list-component">
     <div class="artist-list-header">
         <h2>@Title</h2>
-        <BrowseControls @ref="_controls" Sorts="SortOptions" ShowSearch="Query is null" Query="@Query" Placeholder="🔍 Search artists..." Changed="() => LoadAsync(1)" />
+        <BrowseControls @ref="_controls" Sorts="SortOptions" ShowSearch="Query is null" Query="@Query" FavoritesOnly="FavoritesOnly" Placeholder="🔍 Search artists..." Changed="() => LoadAsync(1)" />
     </div>
 
     <div class="artist-list-container">
@@ -29,6 +30,7 @@
                                 <div class="artist-name">@artist.Name</div>
                                 <div class="artist-track-count">@artist.TrackCount track@(artist.TrackCount != 1 ? "s" : "")</div>
                             </div>
+                        <FavoriteButton Kind="@FavoriteKinds.Artists" Id="artist.Id" Name="@artist.Name" />
                         </div>
                     </li>
                 }
@@ -57,6 +59,7 @@
         (LibrarySorts.Added, "Recently added"),
         (LibrarySorts.Played, "Most played"),
         (LibrarySorts.Recent, "Recently played"),
+        (LibrarySorts.Favorited, "Recently favourited"),
     ];
 
     [Parameter]
@@ -66,11 +69,16 @@
     [Parameter]
     public string? Query { get; set; }
 
+    // Only the user's favourite artists (the Favourites module).
+    [Parameter]
+    public bool FavoritesOnly { get; set; }
+
     private BrowseControls? _controls;
     private PagedResult<ArtistListItemDto>? _result;
     private string? _error;
     private string? _loadedQuery;
     private int _page = 1;
+    private BrowseQuery? _lastQuery;
     private bool _isAdmin;
 
     private bool _contextMenuOpen;
@@ -81,6 +89,7 @@
     protected override async Task OnInitializedAsync()
     {
         Scans.ScanFinished += OnScanFinished;
+        Favorites.Changed += OnFavoritesChanged;
         _isAdmin = (await AuthStateProvider.GetAuthenticationStateAsync()).User.IsInRole("Admin");
     }
 
@@ -102,6 +111,11 @@
         {
             query = query with { Q = Query };
         }
+        if (FavoritesOnly)
+        {
+            query = query with { Favorites = true };
+        }
+        _lastQuery = query;
         try
         {
             _result = await ApiClient.GetArtistsAsync(query);
@@ -121,6 +135,15 @@
         StateHasChanged();
     }
 
+    // A heart changed: a list of favourites (or sorted by them) shows a different page.
+    private void OnFavoritesChanged(string kind)
+    {
+        if (kind == FavoriteKinds.Artists && _lastQuery is { } last && (last.Favorites || last.Sort == LibrarySorts.Favorited))
+        {
+            _ = InvokeAsync(ReloadAsync);
+        }
+    }
+
     // A scan can add, rename or remove artists.
     private void OnScanFinished(ScanJobDto job) => InvokeAsync(async () =>
     {
@@ -137,6 +160,7 @@
         {
             new("Add to next in queue", async () => await PlayerState.AddToQueueNextAsync(await TrackIdsAsync(artist))),
             new("Add to end of queue", async () => await PlayerState.AddToQueueEndAsync(await TrackIdsAsync(artist))),
+            FavoriteAction(FavoriteKinds.Artists, artist.Id),
         };
 
         if (_isAdmin)
@@ -170,5 +194,13 @@
         }
     }
 
-    public void Dispose() => Scans.ScanFinished -= OnScanFinished;
+    private ContextMenuAction FavoriteAction(string kind, Guid id) => Favorites.IsFavorite(kind, id)
+        ? new("Remove from favourites", () => Favorites.SetAsync(kind, id, false))
+        : new("Add to favourites", () => Favorites.SetAsync(kind, id, true));
+
+    public void Dispose()
+    {
+        Scans.ScanFinished -= OnScanFinished;
+        Favorites.Changed -= OnFavoritesChanged;
+    }
 }

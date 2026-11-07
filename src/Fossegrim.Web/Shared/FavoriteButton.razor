@@ -1,0 +1,40 @@
+@inject FavoritesService Favorites
+@implements IDisposable
+
+@* A heart that adds the item to the user's favourites, or removes it. It
+   doesn't let the click through, so it can sit on a row that plays. *@
+<button type="button" class="favorite-button @(IsFavorite ? "on" : null)" aria-pressed="@(IsFavorite ? "true" : "false")"
+        aria-label="@(IsFavorite ? $"Remove {Name} from favourites" : $"Add {Name} to favourites")"
+        title="@(IsFavorite ? "Remove from favourites" : "Add to favourites")"
+        @onclick="() => Favorites.ToggleAsync(Kind, Id)" @onclick:stopPropagation="true">@(IsFavorite ? "♥" : "♡")</button>
+
+@code {
+    // One of FavoriteKinds.
+    [Parameter, EditorRequired]
+    public string Kind { get; set; } = FavoriteKinds.Tracks;
+
+    [Parameter, EditorRequired]
+    public Guid Id { get; set; }
+
+    // For screen readers, e.g. the track's title.
+    [Parameter]
+    public string Name { get; set; } = "this";
+
+    private bool IsFavorite => Favorites.IsFavorite(Kind, Id);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Favorites.Changed += OnChanged;
+        await Favorites.EnsureLoadedAsync();
+    }
+
+    private void OnChanged(string kind)
+    {
+        if (kind == Kind)
+        {
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose() => Favorites.Changed -= OnChanged;
+}

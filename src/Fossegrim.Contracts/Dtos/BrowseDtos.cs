@@ -30,7 +30,8 @@ public record SearchResultDto(
 /// The sort= values the list endpoints take. Each list accepts the ones that
 /// apply to it (see <see cref="ForAlbums"/> and the others); order= is
 /// "asc" or "desc", defaulting to <see cref="DefaultOrder"/>. With q= and no
-/// sort, results come best match first ("relevance").
+/// sort, results come best match first ("relevance"). favorites=true keeps
+/// only the caller's favourites.
 /// </summary>
 public static class LibrarySorts
 {
@@ -45,15 +46,30 @@ public static class LibrarySorts
     public const string Played = "played";
     // When the caller last played it.
     public const string Recent = "recent";
+    // When the caller favourited it (not favourited: last).
+    public const string Favorited = "favorited";
     public const string Relevance = "relevance";
 
     public const string Ascending = "asc";
     public const string Descending = "desc";
 
-    public static readonly IReadOnlyList<string> ForAlbums = [Name, Artist, Year, Added, Played, Recent, Relevance];
-    public static readonly IReadOnlyList<string> ForArtists = [Name, Added, Played, Recent, Relevance];
-    public static readonly IReadOnlyList<string> ForTracks = [Title, Artist, Album, Year, Added, Played, Recent, Relevance];
+    public static readonly IReadOnlyList<string> ForAlbums = [Name, Artist, Year, Added, Played, Recent, Favorited, Relevance];
+    public static readonly IReadOnlyList<string> ForArtists = [Name, Added, Played, Recent, Favorited, Relevance];
+    public static readonly IReadOnlyList<string> ForTracks = [Title, Artist, Album, Year, Added, Played, Recent, Favorited, Relevance];
 
     // Newest, most played and most recent first; names A to Z.
-    public static string DefaultOrder(string sort) => sort is Year or Added or Played or Recent ? Descending : Ascending;
+    public static string DefaultOrder(string sort) => sort is Year or Added or Played or Recent or Favorited ? Descending : Ascending;
+}
+
+// The caller's favourites, as ids, so a client can show which items have a
+// filled heart. The lists themselves come from the list endpoints with
+// favorites=true (sort=favorited for newest first).
+public record FavoritesDto(IReadOnlyList<Guid> TrackIds, IReadOnlyList<Guid> AlbumIds, IReadOnlyList<Guid> ArtistIds);
+
+// The {kind} in /api/favorites/{kind}/{id}.
+public static class FavoriteKinds
+{
+    public const string Tracks = "tracks";
+    public const string Albums = "albums";
+    public const string Artists = "artists";
 }

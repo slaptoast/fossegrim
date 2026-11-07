@@ -68,10 +68,11 @@
             new("randomalbums", "Random albums", new LayoutItem { Id = "randomalbums", X = 0, Y = 24, W = 8, H = 8 }, RandomAlbumsModule),
             new("randomtracks", "Random tracks", new LayoutItem { Id = "randomtracks", X = 8, Y = 24, W = 8, H = 8 }, RandomTracksModule),
             new("upnext", "Up next", new LayoutItem { Id = "upnext", X = 16, Y = 24, W = 8, H = 10, Hidden = true }, UpNextModule),
+            new("favorites", "Favourites", new LayoutItem { Id = "favorites", X = 0, Y = 32, W = 24, H = 12 }, FavoritesPanel, MinW: 8, MinH: 6),
         ];
         if (includeAlbumArt)
         {
-            modules.Add(new("albumart", "Album art", new LayoutItem { Id = "albumart", X = 0, Y = 34, W = 24, H = 12, Hidden = true }, AlbumArtModule, MinW: 10, MinH: 8));
+            modules.Add(new("albumart", "Album art", new LayoutItem { Id = "albumart", X = 0, Y = 44, W = 24, H = 12, Hidden = true }, AlbumArtModule, MinW: 10, MinH: 8));
         }
         return modules;
     }
@@ -117,6 +118,8 @@
     private RenderFragment VisualizerPanel => @<VisualizerModule />;
 
     private RenderFragment AlbumArtModule => @<AlbumArtEditor />;
+
+    private RenderFragment FavoritesPanel => @<FavoritesModule />;
 
     private RenderFragment TracksModule => @<TrackList FromServer="true" OnItemUpdated="HandleItemUpdated" />;
 

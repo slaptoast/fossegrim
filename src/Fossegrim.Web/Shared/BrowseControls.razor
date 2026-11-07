@@ -12,7 +12,7 @@
     }
     <div class="filter-group">
         <select aria-label="Sort by" value="@SelectedSort" @onchange="OnSortChanged">
-            @foreach (var (value, label) in Sorts.Where(s => s.Value != LibrarySorts.Relevance || Searching))
+            @foreach (var (value, label) in Sorts.Where(s => s.Value != LibrarySorts.Relevance || RelevanceAvailable))
             {
                 <option value="@value">@label</option>
             }
@@ -20,6 +20,11 @@
         <button type="button" class="button-secondary browse-order" title="@(Descending ? "Descending" : "Ascending")"
                 aria-label="@(Descending ? "Sorted descending; sort ascending" : "Sorted ascending; sort descending")"
                 @onclick="ToggleOrderAsync">@(Descending ? "↓" : "↑")</button>
+        @if (!FavoritesOnly)
+        {
+            <button type="button" class="button-secondary browse-favorites @(_favoritesOnly ? "active" : null)" aria-pressed="@(_favoritesOnly ? "true" : "false")"
+                    title="Favourites only" @onclick="ToggleFavoritesAsync">@(_favoritesOnly ? "♥" : "♡")<span class="visually-hidden"> Favourites only</span></button>
+        }
     </div>
 </div>
 
@@ -41,27 +46,40 @@
     [Parameter]
     public string? Query { get; set; }
 
+    // Always only favourites (the Favourites module), so no toggle.
+    [Parameter]
+    public bool FavoritesOnly { get; set; }
+
     [Parameter, EditorRequired]
     public EventCallback Changed { get; set; }
 
     private string _search = "";
     private string? _sort;
     private string? _order;
+    private bool _favoritesOnly;
     private CancellationTokenSource? _searchDelay;
 
     private string SearchText => ShowSearch ? _search : Query ?? "";
 
     private bool Searching => !string.IsNullOrWhiteSpace(SearchText);
 
+    private bool Favorites => FavoritesOnly || _favoritesOnly;
+
+    // Best match needs a search, and the Api can't rank within favourites.
+    private bool RelevanceAvailable => Searching && !Favorites && Sorts.Any(s => s.Value == LibrarySorts.Relevance);
+
     // What the Api will sort by: the chosen sort, or its default.
-    private string SelectedSort => _sort is { } sort && (sort != LibrarySorts.Relevance || Searching)
+    private string SelectedSort => _sort is { } sort && (sort != LibrarySorts.Relevance || RelevanceAvailable)
         ? sort
-        : Searching && Sorts.Any(s => s.Value == LibrarySorts.Relevance) ? LibrarySorts.Relevance : Sorts[0].Value;
+        : RelevanceAvailable ? LibrarySorts.Relevance
+        : Favorites && Sorts.Any(s => s.Value == LibrarySorts.Favorited) ? LibrarySorts.Favorited
+        : Sorts[0].Value;
 
     private bool Descending => (_order ?? LibrarySorts.DefaultOrder(SelectedSort)) == LibrarySorts.Descending;
 
     /// <summary>The current choices, for the first load and reloads.</summary>
-    public BrowseQuery Current(int page, int pageSize) => new(SearchText, SelectedSort, Descending ? LibrarySorts.Descending : LibrarySorts.Ascending, page, pageSize);
+    public BrowseQuery Current(int page, int pageSize) =>
+        new(SearchText, SelectedSort, Descending ? LibrarySorts.Descending : LibrarySorts.Ascending, page, pageSize, Favorites);
 
     private async Task OnSearchInput(ChangeEventArgs e)
     {
@@ -90,6 +108,12 @@
     private Task ToggleOrderAsync()
     {
         _order = Descending ? LibrarySorts.Ascending : LibrarySorts.Descending;
+        return NotifyAsync();
+    }
+
+    private Task ToggleFavoritesAsync()
+    {
+        _favoritesOnly = !_favoritesOnly;
         return NotifyAsync();
     }
 

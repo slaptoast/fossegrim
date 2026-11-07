@@ -15,9 +15,9 @@ public static class Albums
             .WithTags("Albums")
             .RequireAuthorization();
 
-        // ?q= searches; sort= and order= see LibrarySorts.ForAlbums; page= and pageSize= (max 500).
-        albumGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
-            Browse.ListAsync(q, sort, order, page, pageSize, LibrarySorts.ForAlbums, principal, (request, userId) => browser.AlbumsAsync(request, userId, cancellationToken)))
+        // ?q= searches; sort= and order= see LibrarySorts.ForAlbums; page= and pageSize= (max 500). favorites=true: only the caller's favourites.
+        albumGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, bool? favorites, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
+            Browse.ListAsync(q, sort, order, page, pageSize, favorites ?? false, LibrarySorts.ForAlbums, principal, (request, userId) => browser.AlbumsAsync(request, userId, cancellationToken)))
         .WithName("GetAlbums")
         .WithOpenApi();
 

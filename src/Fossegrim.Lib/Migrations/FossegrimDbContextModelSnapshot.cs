@@ -263,6 +263,66 @@ namespace fossegrim.lib.Migrations
                     b.ToTable("Artists");
                 });
 
+            modelBuilder.Entity("Fossegrim.Lib.Models.FavoriteAlbum", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AlbumId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "AlbumId");
+
+                    b.HasIndex("AlbumId");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("FavoriteAlbums");
+                });
+
+            modelBuilder.Entity("Fossegrim.Lib.Models.FavoriteArtist", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ArtistId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "ArtistId");
+
+                    b.HasIndex("ArtistId");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("FavoriteArtists");
+                });
+
+            modelBuilder.Entity("Fossegrim.Lib.Models.FavoriteTrack", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MediaItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "MediaItemId");
+
+                    b.HasIndex("MediaItemId");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("FavoriteTracks");
+                });
+
             modelBuilder.Entity("Fossegrim.Lib.Models.MediaFolder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -758,6 +818,63 @@ namespace fossegrim.lib.Migrations
                         .HasForeignKey("MediaItemsId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Fossegrim.Lib.Models.FavoriteAlbum", b =>
+                {
+                    b.HasOne("Fossegrim.Lib.Models.Album", "Album")
+                        .WithMany()
+                        .HasForeignKey("AlbumId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fossegrim.Lib.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Album");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Fossegrim.Lib.Models.FavoriteArtist", b =>
+                {
+                    b.HasOne("Fossegrim.Lib.Models.Artist", "Artist")
+                        .WithMany()
+                        .HasForeignKey("ArtistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fossegrim.Lib.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Artist");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Fossegrim.Lib.Models.FavoriteTrack", b =>
+                {
+                    b.HasOne("Fossegrim.Lib.Models.MediaItem", "MediaItem")
+                        .WithMany()
+                        .HasForeignKey("MediaItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Fossegrim.Lib.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MediaItem");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Fossegrim.Lib.Models.MediaItem", b =>

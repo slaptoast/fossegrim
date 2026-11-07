@@ -47,11 +47,12 @@ public static class Browse
         string? order,
         int? page,
         int? pageSize,
+        bool favorites,
         IReadOnlyList<string> sorts,
         ClaimsPrincipal principal,
         Func<BrowseRequest, string, Task<PagedResult<T>>> list)
     {
-        var (request, error) = LibraryBrowser.Parse(q, sort, order, page, pageSize, sorts);
+        var (request, error) = LibraryBrowser.Parse(q, sort, order, page, pageSize, sorts, favorites);
         if (request is null)
         {
             return Results.BadRequest(new ApiErrorResponse(error!));
@@ -64,5 +65,5 @@ public static class Browse
     }
 
     // The bearer handler maps the token's "sub" to NameIdentifier.
-    private static string? UserId(ClaimsPrincipal principal) => principal.FindFirstValue(ClaimTypes.NameIdentifier);
+    internal static string? UserId(ClaimsPrincipal principal) => principal.FindFirstValue(ClaimTypes.NameIdentifier);
 }

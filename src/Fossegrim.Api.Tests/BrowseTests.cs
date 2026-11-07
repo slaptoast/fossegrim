@@ -168,8 +168,8 @@ public sealed class BrowseTests : IClassFixture<FossegrimApiFactory>, IDisposabl
     }
 
     [Theory]
-    [InlineData("/api/albums?sort=title", "sort must be one of: name, artist, year, added, played, recent, relevance.")]
-    [InlineData("/api/artists?sort=year", "sort must be one of: name, added, played, recent, relevance.")]
+    [InlineData("/api/albums?sort=title", "sort must be one of: name, artist, year, added, played, recent, favorited, relevance.")]
+    [InlineData("/api/artists?sort=year", "sort must be one of: name, added, played, recent, favorited, relevance.")]
     [InlineData("/api/mediaitems?sort=title&order=up", "order must be asc or desc.")]
     [InlineData("/api/search?q=+-+", "q must contain a word to search for.")]
     public async Task BadQueries_AreRejected(string url, string error)

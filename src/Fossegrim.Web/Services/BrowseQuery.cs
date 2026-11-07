@@ -3,7 +3,7 @@ using Fossegrim.Contracts.Dtos;
 namespace Fossegrim.Web.Services;
 
 /// <summary>A request for one page of a library list (see LibrarySorts). Null Sort and Order use the Api's defaults.</summary>
-public record BrowseQuery(string? Q = null, string? Sort = null, string? Order = null, int Page = 1, int PageSize = 50)
+public record BrowseQuery(string? Q = null, string? Sort = null, string? Order = null, int Page = 1, int PageSize = 50, bool Favorites = false)
 {
     public const int MaxPageSize = 500;
 
@@ -21,6 +21,10 @@ public record BrowseQuery(string? Q = null, string? Sort = null, string? Order =
         if (!string.IsNullOrEmpty(Order))
         {
             parts.Add($"order={Order}");
+        }
+        if (Favorites)
+        {
+            parts.Add("favorites=true");
         }
         return "?" + string.Join('&', parts);
     }

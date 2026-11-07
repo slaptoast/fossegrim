@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Fossegrim.Api.Services;
 
 /// <summary>What a list request asked for, checked: see <see cref="LibraryBrowser.Parse"/>.</summary>
-public record BrowseRequest(string? Match, string Sort, bool Descending, int Page, int PageSize)
+public record BrowseRequest(string? Match, string Sort, bool Descending, int Page, int PageSize, bool FavoritesOnly = false)
 {
     public int Skip => (Page - 1) * PageSize;
 }
@@ -35,21 +35,23 @@ public class LibraryBrowser
     /// <summary>
     /// Checks a list request's query string. Without a sort, a search sorts
     /// by relevance and anything else by name (title for tracks); relevance
-    /// without a search falls back the same way.
+    /// without a search falls back the same way. Favourites default to newest
+    /// first, and there relevance means that too: ranking can't be combined
+    /// with the favourites filter.
     /// </summary>
     public static (BrowseRequest? Request, string? Error) Parse(
-        string? q, string? sort, string? order, int? page, int? pageSize, IReadOnlyList<string> sorts)
+        string? q, string? sort, string? order, int? page, int? pageSize, IReadOnlyList<string> sorts, bool favorites = false)
     {
         var match = SearchIndex.MatchQuery(q);
-        var byName = sorts[0];
-        var chosen = string.IsNullOrWhiteSpace(sort) ? (match is null ? byName : LibrarySorts.Relevance) : sort.Trim().ToLowerInvariant();
+        var fallback = favorites ? LibrarySorts.Favorited : sorts[0];
+        var chosen = string.IsNullOrWhiteSpace(sort) ? (match is null || favorites ? fallback : LibrarySorts.Relevance) : sort.Trim().ToLowerInvariant();
         if (!sorts.Contains(chosen))
         {
             return (null, $"sort must be one of: {string.Join(", ", sorts)}.");
         }
-        if (chosen == LibrarySorts.Relevance && match is null)
+        if (chosen == LibrarySorts.Relevance && (match is null || favorites))
         {
-            chosen = byName;
+            chosen = fallback;
         }
 
         var direction = string.IsNullOrWhiteSpace(order) ? LibrarySorts.DefaultOrder(chosen) : order.Trim().ToLowerInvariant();
@@ -63,7 +65,8 @@ public class LibraryBrowser
             chosen,
             direction == LibrarySorts.Descending,
             Math.Max(page ?? 1, 1),
-            Math.Clamp(pageSize ?? DefaultPageSize, 1, MaxPageSize)), null);
+            Math.Clamp(pageSize ?? DefaultPageSize, 1, MaxPageSize),
+            favorites), null);
     }
 
     public async Task<PagedResult<AlbumListItemDto>> AlbumsAsync(BrowseRequest request, string userId, CancellationToken cancellationToken = default)
@@ -83,6 +86,11 @@ public class LibraryBrowser
         }
 
         var plays = _db.PlayEvents.Where(pe => pe.UserId == userId);
+        var favorites = _db.FavoriteAlbums.Where(f => f.UserId == userId);
+        if (request.FavoritesOnly)
+        {
+            albums = albums.Where(al => favorites.Any(f => f.AlbumId == al.Id));
+        }
         var sorted = request.Sort switch
         {
             // By the first artist A to Z. The collation must wrap the subquery: one inside it doesn't reach the ORDER BY.
@@ -91,6 +99,7 @@ public class LibraryBrowser
             LibrarySorts.Added => albums.Sort(al => al.DateAdded, request.Descending),
             LibrarySorts.Played => albums.Sort(al => plays.Count(pe => pe.MediaItem!.Albums.Any(x => x.Id == al.Id)), request.Descending),
             LibrarySorts.Recent => albums.Sort(al => plays.Where(pe => pe.MediaItem!.Albums.Any(x => x.Id == al.Id)).Max(pe => (DateTime?)pe.PlayedAt), request.Descending),
+            LibrarySorts.Favorited => albums.Sort(al => favorites.Where(f => f.AlbumId == al.Id).Select(f => (DateTime?)f.CreatedAt).FirstOrDefault(), request.Descending),
             _ => albums.Sort(al => EF.Functions.Collate(al.Name, "NOCASE"), request.Descending),
         };
 
@@ -120,11 +129,17 @@ public class LibraryBrowser
         }
 
         var plays = _db.PlayEvents.Where(pe => pe.UserId == userId);
+        var favorites = _db.FavoriteArtists.Where(f => f.UserId == userId);
+        if (request.FavoritesOnly)
+        {
+            artists = artists.Where(a => favorites.Any(f => f.ArtistId == a.Id));
+        }
         var sorted = request.Sort switch
         {
             LibrarySorts.Added => artists.Sort(a => a.DateAdded, request.Descending),
             LibrarySorts.Played => artists.Sort(a => plays.Count(pe => pe.MediaItem!.Artists.Any(x => x.Id == a.Id)), request.Descending),
             LibrarySorts.Recent => artists.Sort(a => plays.Where(pe => pe.MediaItem!.Artists.Any(x => x.Id == a.Id)).Max(pe => (DateTime?)pe.PlayedAt), request.Descending),
+            LibrarySorts.Favorited => artists.Sort(a => favorites.Where(f => f.ArtistId == a.Id).Select(f => (DateTime?)f.CreatedAt).FirstOrDefault(), request.Descending),
             _ => artists.Sort(a => EF.Functions.Collate(a.Name, "NOCASE"), request.Descending),
         };
 
@@ -154,6 +169,11 @@ public class LibraryBrowser
         }
 
         var plays = _db.PlayEvents.Where(pe => pe.UserId == userId);
+        var favorites = _db.FavoriteTracks.Where(f => f.UserId == userId);
+        if (request.FavoritesOnly)
+        {
+            tracks = tracks.Where(m => favorites.Any(f => f.MediaItemId == m.Id));
+        }
         var sorted = request.Sort switch
         {
             LibrarySorts.Artist => tracks.Sort(m => EF.Functions.Collate(m.ArtistName, "NOCASE"), request.Descending),
@@ -162,6 +182,7 @@ public class LibraryBrowser
             LibrarySorts.Added => tracks.Sort(m => m.DateAdded, request.Descending),
             LibrarySorts.Played => tracks.Sort(m => plays.Count(pe => pe.MediaItemId == m.Id), request.Descending),
             LibrarySorts.Recent => tracks.Sort(m => plays.Where(pe => pe.MediaItemId == m.Id).Max(pe => (DateTime?)pe.PlayedAt), request.Descending),
+            LibrarySorts.Favorited => tracks.Sort(m => favorites.Where(f => f.MediaItemId == m.Id).Select(f => (DateTime?)f.CreatedAt).FirstOrDefault(), request.Descending),
             _ => tracks.Sort(m => EF.Functions.Collate(m.Title, "NOCASE"), request.Descending),
         };
 

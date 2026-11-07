@@ -33,6 +33,32 @@ public class PlaybackTransitionTests
     }
 
     [Fact]
+    public void Overlap_UsesAlbumIdsWhenBothTracksHaveThem()
+    {
+        var settings = Settings(gapless: true, crossfade: true, seconds: 8);
+        var (one, other) = (new AlbumSummaryDto(Guid.NewGuid(), "Greatest Hits", null), new AlbumSummaryDto(Guid.NewGuid(), "Greatest Hits", null));
+        MediaItemDto On(AlbumSummaryDto album) => Track(album.Name) with { Albums = [album] };
+
+        Assert.Equal(0, PlaybackTransitions.OverlapSeconds(On(one), On(one), settings));
+        // Same name, different albums: they crossfade.
+        Assert.Equal(8, PlaybackTransitions.OverlapSeconds(On(one), On(other), settings));
+        // Only one side knows its album: fall back to the name.
+        Assert.Equal(0, PlaybackTransitions.OverlapSeconds(On(one), Track("Greatest Hits"), settings));
+    }
+
+    [Fact]
+    public void QueueEntries_KeepTheirAlbumId()
+    {
+        var albumId = Guid.NewGuid();
+
+        var withAlbum = PlaylistTrackMapper.ToMediaItemDto(new PlaylistTrackDto(Guid.NewGuid(), "T", "A", "One", null, albumId));
+        var without = PlaylistTrackMapper.ToMediaItemDto(new PlaylistTrackDto(Guid.NewGuid(), "T", "A", "One", null));
+
+        Assert.Equal([albumId], withAlbum.Albums.Select(a => a.Id));
+        Assert.Empty(without.Albums);
+    }
+
+    [Fact]
     public void Settings_RoundTrip_WithGaplessOnAndCrossfadeOffForOlderDocuments()
     {
         var original = new AppearancePreferences { Player = Settings(gapless: false, crossfade: true, seconds: 9) };

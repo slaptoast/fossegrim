@@ -27,9 +27,18 @@ public static class PlaybackTransitions
         return settings.Gapless ? 0 : null;
     }
 
-    // By name, as that's what queue entries carry. Two albums sharing a name
-    // only lose the fade between them; tracks without an album never match.
-    private static bool IsSameAlbum(MediaItemDto a, MediaItemDto b) =>
-        !string.IsNullOrWhiteSpace(a.Album) &&
-        string.Equals(a.Album.Trim(), b.Album?.Trim(), StringComparison.OrdinalIgnoreCase);
+    // By album id when both tracks have one, so two albums sharing a name still
+    // crossfade; otherwise by name. Tracks without an album never match.
+    private static bool IsSameAlbum(MediaItemDto a, MediaItemDto b)
+    {
+        var aIds = a.Albums?.Select(al => al.Id).ToList() ?? [];
+        var bIds = b.Albums?.Select(al => al.Id).ToList() ?? [];
+        if (aIds.Count > 0 && bIds.Count > 0)
+        {
+            return aIds.Intersect(bIds).Any();
+        }
+
+        return !string.IsNullOrWhiteSpace(a.Album) &&
+            string.Equals(a.Album.Trim(), b.Album?.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
 }

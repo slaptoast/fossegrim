@@ -17,5 +17,6 @@ public static class PlaylistTrackMapper
         track.Duration,
         null,
         [],
-        []);
+        // The album's id lets the player tell same-named albums apart (see PlaybackTransitions).
+        track.AlbumId is { } albumId ? [new AlbumSummaryDto(albumId, track.Album ?? "", null)] : []);
 }

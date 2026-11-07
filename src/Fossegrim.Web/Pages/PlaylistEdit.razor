@@ -194,7 +194,7 @@
         try
         {
             _playlists = (await ApiClient.GetPlaylistsAsync()).ToList();
-            _mediaItems = (await ApiClient.GetMediaItemsAsync()).ToList();
+            _mediaItems = (await ApiClient.GetAllMediaItemsAsync()).ToList();
         }
         catch (Exception ex)
         {

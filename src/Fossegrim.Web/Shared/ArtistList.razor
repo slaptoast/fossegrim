@@ -1,37 +1,40 @@
+@inject FossegrimApiClient ApiClient
 @inject PlayerState PlayerState
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 @inject ScanStatusService Scans
 @inject ToastService Toasts
+@implements IDisposable
 
 <div class="artist-list-component">
     <div class="artist-list-header">
-        <h2>Artists</h2>
-        <div class="search-box">
-            <input type="text" placeholder="🔍 Search artists..." @oninput="OnFilterChanged" />
-        </div>
+        <h2>@Title</h2>
+        <BrowseControls @ref="_controls" Sorts="SortOptions" ShowSearch="Query is null" Query="@Query" Placeholder="🔍 Search artists..." Changed="() => LoadAsync(1)" />
     </div>
 
     <div class="artist-list-container">
-        @if (FilteredArtists.Count > 0)
+        @if (_error is not null)
+        {
+            <div class="error-message">@_error</div>
+        }
+        else if (_result is { Items.Count: > 0 })
         {
             <ul class="artist-list">
-                @foreach (var artist in PagedArtists)
+                @foreach (var artist in _result.Items)
                 {
-                    var trackCount = artist.MediaItems.Count();
                     <li class="artist-item" @oncontextmenu="e => ShowContextMenu(e, artist)" @oncontextmenu:preventDefault="true">
                         <div class="artist-info">
                             <div class="artist-avatar">@artist.Name.Substring(0, 1).ToUpperInvariant()</div>
                             <div class="artist-details">
                                 <div class="artist-name">@artist.Name</div>
-                                <div class="artist-track-count">@trackCount track@(trackCount != 1 ? "s" : "")</div>
+                                <div class="artist-track-count">@artist.TrackCount track@(artist.TrackCount != 1 ? "s" : "")</div>
                             </div>
                         </div>
                     </li>
                 }
             </ul>
         }
-        else
+        else if (_result is not null)
         {
             <div class="no-results">
                 <p>No artists found.</p>
@@ -39,7 +42,7 @@
         }
     </div>
 
-    <Pager @bind-CurrentPage="_currentPage" TotalPages="TotalPages" />
+    <Pager CurrentPage="_page" CurrentPageChanged="LoadAsync" TotalPages="_result?.TotalPages ?? 1" />
 </div>
 
 <ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
@@ -47,11 +50,27 @@
 @code {
     private const int PageSize = 10;
 
-    [Parameter, EditorRequired]
-    public IReadOnlyList<ArtistDto> Artists { get; set; } = [];
+    private static readonly IReadOnlyList<(string, string)> SortOptions =
+    [
+        (LibrarySorts.Name, "Name"),
+        (LibrarySorts.Relevance, "Best match"),
+        (LibrarySorts.Added, "Recently added"),
+        (LibrarySorts.Played, "Most played"),
+        (LibrarySorts.Recent, "Recently played"),
+    ];
 
-    private string _filter = "";
-    private int _currentPage = 1;
+    [Parameter]
+    public string Title { get; set; } = "Artists";
+
+    // Set by the search page: show only artists matching it, without a search box.
+    [Parameter]
+    public string? Query { get; set; }
+
+    private BrowseControls? _controls;
+    private PagedResult<ArtistListItemDto>? _result;
+    private string? _error;
+    private string? _loadedQuery;
+    private int _page = 1;
     private bool _isAdmin;
 
     private bool _contextMenuOpen;
@@ -61,47 +80,71 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Scans.ScanFinished += OnScanFinished;
         _isAdmin = (await AuthStateProvider.GetAuthenticationStateAsync()).User.IsInRole("Admin");
     }
 
-    private List<ArtistDto> FilteredArtists =>
-        Artists.Where(a => a.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
-
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredArtists.Count / (double)PageSize));
-
-    private List<ArtistDto> PagedArtists =>
-        FilteredArtists.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
-
-    private void OnFilterChanged(ChangeEventArgs e)
+    // First load, and again whenever the search page's query changes.
+    protected override async Task OnParametersSetAsync()
     {
-        _filter = e.Value?.ToString() ?? "";
-        _currentPage = 1;
+        if (_result is null || _loadedQuery != Query)
+        {
+            await LoadAsync(1);
+        }
     }
 
-    private void ShowContextMenu(MouseEventArgs e, ArtistDto artist)
+    private async Task LoadAsync(int page)
     {
-        var trackIds = artist.MediaItems.Select(m => m.Id).ToList();
+        _loadedQuery = Query;
+        var query = _controls?.Current(page, PageSize) ?? new BrowseQuery(Page: page, PageSize: PageSize);
+        // The controls only get a new Query after this component has loaded.
+        if (Query is not null)
+        {
+            query = query with { Q = Query };
+        }
+        try
+        {
+            _result = await ApiClient.GetArtistsAsync(query);
+            _page = page;
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Couldn't load artists: {ex.Message}";
+        }
+    }
+
+    // Shows the current page again, e.g. after a tag edit elsewhere on the page.
+    public async Task ReloadAsync()
+    {
+        await LoadAsync(_page);
+        StateHasChanged();
+    }
+
+    // A scan can add, rename or remove artists.
+    private void OnScanFinished(ScanJobDto job) => InvokeAsync(async () =>
+    {
+        await LoadAsync(_page);
+        StateHasChanged();
+    });
+
+    private void ShowContextMenu(MouseEventArgs e, ArtistListItemDto artist)
+    {
         _contextMenuX = e.ClientX;
         _contextMenuY = e.ClientY;
 
         var actions = new List<ContextMenuAction>
         {
-            new("Add to next in queue", () => PlayerState.AddToQueueNextAsync(trackIds)),
-            new("Add to end of queue", () => PlayerState.AddToQueueEndAsync(trackIds)),
+            new("Add to next in queue", async () => await PlayerState.AddToQueueNextAsync(await TrackIdsAsync(artist))),
+            new("Add to end of queue", async () => await PlayerState.AddToQueueEndAsync(await TrackIdsAsync(artist))),
         };
 
         if (_isAdmin)
         {
-            actions.Add(new ContextMenuAction("Edit all tags", () =>
-            {
-                Navigation.NavigateTo($"/tags/edit?ids={Uri.EscapeDataString(string.Join(',', trackIds))}");
-                return Task.CompletedTask;
-            }));
-            actions.Add(new ContextMenuAction("Rename files...", () =>
-            {
-                Navigation.NavigateTo($"/files/rename?ids={Uri.EscapeDataString(string.Join(',', trackIds))}");
-                return Task.CompletedTask;
-            }));
+            actions.Add(new ContextMenuAction("Edit all tags", async () =>
+                Navigation.NavigateTo($"/tags/edit?ids={Uri.EscapeDataString(string.Join(',', await TrackIdsAsync(artist)))}")));
+            actions.Add(new ContextMenuAction("Rename files...", async () =>
+                Navigation.NavigateTo($"/files/rename?ids={Uri.EscapeDataString(string.Join(',', await TrackIdsAsync(artist)))}")));
             actions.Add(new ContextMenuAction("Rescan artist", () => RescanAsync(artist)));
         }
 
@@ -109,9 +152,12 @@
         _contextMenuOpen = true;
     }
 
+    private async Task<IReadOnlyList<Guid>> TrackIdsAsync(ArtistListItemDto artist) =>
+        (await ApiClient.GetArtistTracksAsync(artist.Id)).Select(t => t.Id).ToList();
+
     private void CloseContextMenu() => _contextMenuOpen = false;
 
-    private async Task RescanAsync(ArtistDto artist)
+    private async Task RescanAsync(ArtistListItemDto artist)
     {
         try
         {
@@ -123,4 +169,6 @@
             Toasts.Show($"Couldn't rescan {artist.Name}: {ex.Message}");
         }
     }
+
+    public void Dispose() => Scans.ScanFinished -= OnScanFinished;
 }

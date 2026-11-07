@@ -1,0 +1,33 @@
+@page "/search"
+@attribute [Authorize]
+
+@* Results for the top bar's search box: matching artists, albums and
+   tracks, each paged and sortable on its own. *@
+<div class="search-page">
+    <div class="header small">
+        @if (string.IsNullOrWhiteSpace(Q))
+        {
+            <h1>🔍 Search</h1>
+            <p>Type in the search box at the top to find artists, albums and tracks.</p>
+        }
+        else
+        {
+            <h1>🔍 “@Q”</h1>
+            <p>Artists, albums and tracks matching your search. Words match the start of words, ignoring case and accents.</p>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Q))
+    {
+        <div class="search-results">
+            <div class="search-results-column"><ArtistList Query="@Q" /></div>
+            <div class="search-results-column"><AlbumList Query="@Q" /></div>
+            <div class="search-results-tracks"><TrackList FromServer="true" Query="@Q" Title="Tracks" /></div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Q { get; set; }
+}

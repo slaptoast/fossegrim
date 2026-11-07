@@ -9,17 +9,19 @@
 
 <div class="album-list-component">
     <div class="album-list-header">
-        <h2>Albums</h2>
-        <div class="search-box">
-            <input type="text" placeholder="🔍 Search albums..." @oninput="OnFilterChanged" />
-        </div>
+        <h2>@Title</h2>
+        <BrowseControls @ref="_controls" Sorts="SortOptions" ShowSearch="Query is null" Query="@Query" Placeholder="🔍 Search albums..." Changed="() => LoadAsync(1)" />
     </div>
 
     <div class="album-list-container">
-        @if (FilteredAlbums.Count > 0)
+        @if (_error is not null)
+        {
+            <div class="error-message">@_error</div>
+        }
+        else if (_result is { Items.Count: > 0 })
         {
             <ul class="album-list">
-                @foreach (var album in PagedAlbums)
+                @foreach (var album in _result.Items)
                 {
                     <li class="album-item" @oncontextmenu="e => ShowContextMenu(e, album)" @oncontextmenu:preventDefault="true">
                         <div class="album-art" @onclick="() => PlayAlbumAsync(album)">
@@ -36,7 +38,7 @@
                 }
             </ul>
         }
-        else
+        else if (_result is not null)
         {
             <div class="no-results">
                 <p>No albums found.</p>
@@ -44,7 +46,7 @@
         }
     </div>
 
-    <Pager @bind-CurrentPage="_currentPage" TotalPages="TotalPages" />
+    <Pager CurrentPage="_page" CurrentPageChanged="LoadAsync" TotalPages="_result?.TotalPages ?? 1" />
 </div>
 
 <ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
@@ -54,15 +56,30 @@
 @code {
     private const int PageSize = 10;
 
-    [Parameter, EditorRequired]
-    public IReadOnlyList<AlbumDto> Albums { get; set; } = [];
+    private static readonly IReadOnlyList<(string, string)> SortOptions =
+    [
+        (LibrarySorts.Name, "Name"),
+        (LibrarySorts.Relevance, "Best match"),
+        (LibrarySorts.Artist, "Artist"),
+        (LibrarySorts.Year, "Year"),
+        (LibrarySorts.Added, "Recently added"),
+        (LibrarySorts.Played, "Most played"),
+        (LibrarySorts.Recent, "Recently played"),
+    ];
 
-    [Parameter, EditorRequired]
-    public IReadOnlyList<MediaItemDto> AllMediaItems { get; set; } = [];
+    [Parameter]
+    public string Title { get; set; } = "Albums";
 
+    // Set by the search page: show only albums matching it, without a search box.
+    [Parameter]
+    public string? Query { get; set; }
+
+    private BrowseControls? _controls;
+    private PagedResult<AlbumListItemDto>? _result;
+    private string? _error;
+    private string? _loadedQuery;
+    private int _page = 1;
     private readonly Dictionary<Guid, string> _coverUrls = [];
-    private string _filter = "";
-    private int _currentPage = 1;
     private bool _isAdmin;
 
     private bool _contextMenuOpen;
@@ -76,73 +93,91 @@
     protected override async Task OnInitializedAsync()
     {
         AlbumArtEditor.CoverChanged += OnCoverChanged;
+        Scans.ScanFinished += OnScanFinished;
         var state = await AuthStateProvider.GetAuthenticationStateAsync();
         _isAdmin = state.User.IsInRole("Admin");
     }
 
-    private List<AlbumDto> FilteredAlbums =>
-        Albums.Where(a => a.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
-
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredAlbums.Count / (double)PageSize));
-
-    private List<AlbumDto> PagedAlbums =>
-        FilteredAlbums.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
-
+    // First load, and again whenever the search page's query changes.
     protected override async Task OnParametersSetAsync()
     {
-        foreach (var album in Albums)
+        if (_result is null || _loadedQuery != Query)
         {
-            if (!_coverUrls.ContainsKey(album.Id))
+            await LoadAsync(1);
+        }
+    }
+
+    private async Task LoadAsync(int page)
+    {
+        _loadedQuery = Query;
+        var query = _controls?.Current(page, PageSize) ?? new BrowseQuery(Page: page, PageSize: PageSize);
+        // The controls only get a new Query after this component has loaded.
+        if (Query is not null)
+        {
+            query = query with { Q = Query };
+        }
+
+        try
+        {
+            _result = await ApiClient.GetAlbumsAsync(query);
+            _page = page;
+            _error = null;
+            foreach (var album in _result.Items.Where(a => !_coverUrls.ContainsKey(a.Id)))
             {
                 _coverUrls[album.Id] = await ApiClient.GetAlbumCoverUrl(album.Id);
             }
         }
+        catch (Exception ex)
+        {
+            _error = $"Couldn't load albums: {ex.Message}";
+        }
     }
 
-    private static string ArtistNames(AlbumDto album) =>
+    // Shows the current page again, e.g. after a tag edit elsewhere on the page.
+    public async Task ReloadAsync()
+    {
+        await LoadAsync(_page);
+        StateHasChanged();
+    }
+
+    // A scan (e.g. a right-click rescan) can add, change or remove albums.
+    private void OnScanFinished(ScanJobDto job) => InvokeAsync(async () =>
+    {
+        await LoadAsync(_page);
+        StateHasChanged();
+    });
+
+    private static string ArtistNames(AlbumListItemDto album) =>
         album.Artists.Any() ? string.Join(", ", album.Artists.Select(a => a.Name)) : "Unknown Artist";
 
-    private void OnFilterChanged(ChangeEventArgs e)
+    private async Task PlayAlbumAsync(AlbumListItemDto album)
     {
-        _filter = e.Value?.ToString() ?? "";
-        _currentPage = 1;
+        var tracks = await ApiClient.GetAlbumTracksAsync(album.Id);
+        if (tracks.Count > 0)
+        {
+            await PlayerState.PlayAlbumAsync(album.Id, tracks);
+        }
     }
 
-    private List<MediaItemDto> AlbumTracks(AlbumDto album) => AllMediaItems
-        .Where(m => m.Albums.Any(a => a.Id == album.Id))
-        .InPlayOrder()
-        .ToList();
+    private async Task<IReadOnlyList<Guid>> TrackIdsAsync(AlbumListItemDto album) =>
+        (await ApiClient.GetAlbumTracksAsync(album.Id)).Select(t => t.Id).ToList();
 
-    private Task PlayAlbumAsync(AlbumDto album)
+    private void ShowContextMenu(MouseEventArgs e, AlbumListItemDto album)
     {
-        var tracks = AlbumTracks(album);
-        return tracks.Count > 0 ? PlayerState.PlayAlbumAsync(album.Id, tracks) : Task.CompletedTask;
-    }
-
-    private void ShowContextMenu(MouseEventArgs e, AlbumDto album)
-    {
-        var trackIds = AlbumTracks(album).Select(m => m.Id).ToList();
         _contextMenuX = e.ClientX;
         _contextMenuY = e.ClientY;
 
         var actions = new List<ContextMenuAction>
         {
-            new("Add to next in queue", () => PlayerState.AddToQueueNextAsync(trackIds)),
-            new("Add to end of queue", () => PlayerState.AddToQueueEndAsync(trackIds)),
-            new("Add to playlist...", () =>
-            {
-                OpenAddToPlaylist(trackIds);
-                return Task.CompletedTask;
-            })
+            new("Add to next in queue", async () => await PlayerState.AddToQueueNextAsync(await TrackIdsAsync(album))),
+            new("Add to end of queue", async () => await PlayerState.AddToQueueEndAsync(await TrackIdsAsync(album))),
+            new("Add to playlist...", async () => OpenAddToPlaylist(await TrackIdsAsync(album))),
         };
 
         if (_isAdmin)
         {
-            actions.Add(new ContextMenuAction("Edit all tags", () =>
-            {
-                NavigateToEditTags(trackIds);
-                return Task.CompletedTask;
-            }));
+            actions.Add(new ContextMenuAction("Edit all tags", async () =>
+                Navigation.NavigateTo($"/tags/edit?ids={Uri.EscapeDataString(string.Join(',', await TrackIdsAsync(album)))}")));
             if (AlbumArtEditor.IsAvailable)
             {
                 actions.Add(new ContextMenuAction("Edit album art", () =>
@@ -151,11 +186,8 @@
                     return Task.CompletedTask;
                 }));
             }
-            actions.Add(new ContextMenuAction("Rename files...", () =>
-            {
-                Navigation.NavigateTo($"/files/rename?ids={Uri.EscapeDataString(string.Join(',', trackIds))}");
-                return Task.CompletedTask;
-            }));
+            actions.Add(new ContextMenuAction("Rename files...", async () =>
+                Navigation.NavigateTo($"/files/rename?ids={Uri.EscapeDataString(string.Join(',', await TrackIdsAsync(album)))}")));
             actions.Add(new ContextMenuAction("Rescan album", () => RescanAsync(album)));
         }
 
@@ -165,7 +197,7 @@
 
     private void CloseContextMenu() => _contextMenuOpen = false;
 
-    private async Task RescanAsync(AlbumDto album)
+    private async Task RescanAsync(AlbumListItemDto album)
     {
         try
         {
@@ -194,11 +226,6 @@
     public void Dispose()
     {
         AlbumArtEditor.CoverChanged -= OnCoverChanged;
-    }
-
-    private void NavigateToEditTags(IEnumerable<Guid> trackIds)
-    {
-        var ids = string.Join(',', trackIds);
-        Navigation.NavigateTo($"/tags/edit?ids={Uri.EscapeDataString(ids)}");
+        Scans.ScanFinished -= OnScanFinished;
     }
 }

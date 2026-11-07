@@ -2,21 +2,46 @@
 @inject PlayerState PlayerState
 @inject AuthenticationStateProvider AuthStateProvider
 @inject AlbumArtEditorState AlbumArtEditor
+@inject FossegrimApiClient ApiClient
+@inject ScanStatusService Scans
+@implements IDisposable
 
+@* Shows either MediaItems (searched, sorted and paged here, e.g. the
+   playlist editor's picker) or, with FromServer, the whole library a page
+   at a time from the Api. *@
 <div class="track-list-component">
-    <div class="controls">
-        <div class="search-box">
-            <input type="text" placeholder="🔍 Search by title, artist, or album..." @oninput="OnSearchChanged" />
+    @if (FromServer)
+    {
+        <div class="controls">
+            @if (Title is not null)
+            {
+                <h2>@Title</h2>
+            }
+            <BrowseControls @ref="_controls" Sorts="ServerSorts" ShowSearch="Query is null" Query="@Query"
+                            Placeholder="🔍 Search by title, artist, or album..." Changed="() => LoadAsync(1)" />
         </div>
-        <div class="filter-group">
-            <label for="sortBy">Sort by:</label>
-            <select id="sortBy" @onchange="OnSortChanged">
-                <option value="title">Title</option>
-                <option value="artist">Artist</option>
-                <option value="album">Album</option>
-            </select>
+    }
+    else
+    {
+        <div class="controls">
+            <div class="search-box">
+                <input type="text" placeholder="🔍 Search by title, artist, or album..." @oninput="OnSearchChanged" />
+            </div>
+            <div class="filter-group">
+                <label for="sortBy">Sort by:</label>
+                <select id="sortBy" @onchange="OnSortChanged">
+                    <option value="title">Title</option>
+                    <option value="artist">Artist</option>
+                    <option value="album">Album</option>
+                </select>
+            </div>
         </div>
-    </div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="error-message">@_error</div>
+    }
 
     @if (Editable && SelectedIds.Count > 0)
     {
@@ -27,11 +52,15 @@
     }
 
     <div class="content">
-        @if (VisibleItems.Count == 0)
+        @if (FromServer && _result is null)
+        {
+            @* Still loading the first page. *@
+        }
+        else if (PagedItems.Count == 0)
         {
             <div class="no-results">
                 <h2>No tracks found</h2>
-                <p>@(MediaItems.Count == 0 ? "There are no tracks to show." : "No tracks match your search.")</p>
+                <p>@(Searching ? "No tracks match your search." : "There are no tracks to show.")</p>
             </div>
         }
         else
@@ -43,9 +72,18 @@
                         {
                             <th class="select-cell"></th>
                         }
-                        <th @onclick='() => SetSort("title")'>Title</th>
-                        <th @onclick='() => SetSort("artist")'>Artist</th>
-                        <th @onclick='() => SetSort("album")'>Album</th>
+                        @if (FromServer)
+                        {
+                            <th>Title</th>
+                            <th>Artist</th>
+                            <th>Album</th>
+                        }
+                        else
+                        {
+                            <th @onclick='() => SetSort("title")'>Title</th>
+                            <th @onclick='() => SetSort("artist")'>Artist</th>
+                            <th @onclick='() => SetSort("album")'>Album</th>
+                        }
                     </tr>
                 </thead>
                 <tbody>
@@ -66,7 +104,7 @@
                     }
                 </tbody>
             </table>
-            <Pager @bind-CurrentPage="_currentPage" TotalPages="TotalPages" />
+            <Pager CurrentPage="_currentPage" CurrentPageChanged="GoToPageAsync" TotalPages="TotalPages" />
         }
     </div>
 </div>
@@ -80,8 +118,32 @@
 @code {
     private const int PageSize = 25;
 
-    [Parameter, EditorRequired]
+    private static readonly IReadOnlyList<(string, string)> ServerSorts =
+    [
+        (LibrarySorts.Title, "Title"),
+        (LibrarySorts.Relevance, "Best match"),
+        (LibrarySorts.Artist, "Artist"),
+        (LibrarySorts.Album, "Album"),
+        (LibrarySorts.Year, "Year"),
+        (LibrarySorts.Added, "Recently added"),
+        (LibrarySorts.Played, "Most played"),
+        (LibrarySorts.Recent, "Recently played"),
+    ];
+
+    // The tracks to show, when not FromServer.
+    [Parameter]
     public IReadOnlyList<MediaItemDto> MediaItems { get; set; } = [];
+
+    // Load the library from the Api a page at a time instead of showing MediaItems.
+    [Parameter]
+    public bool FromServer { get; set; }
+
+    // With FromServer, set by the search page: only tracks matching it, without a search box.
+    [Parameter]
+    public string? Query { get; set; }
+
+    [Parameter]
+    public string? Title { get; set; }
 
     [Parameter]
     public bool Editable { get; set; }
@@ -115,11 +177,74 @@
     private bool _showEditModal;
     private MediaItemTagEditModel? _editingModel;
 
+    private BrowseControls? _controls;
+    private PagedResult<MediaItemDto>? _result;
+    private string? _loadedQuery;
+    private string? _error;
+
     protected override async Task OnInitializedAsync()
     {
+        if (FromServer)
+        {
+            Scans.ScanFinished += OnScanFinished;
+        }
         var state = await AuthStateProvider.GetAuthenticationStateAsync();
         _isAdmin = state.User.IsInRole("Admin");
     }
+
+    // With FromServer: the first load, and again whenever the search page's query changes.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (FromServer && (_result is null || _loadedQuery != Query))
+        {
+            await LoadAsync(1);
+        }
+    }
+
+    private async Task LoadAsync(int page)
+    {
+        _loadedQuery = Query;
+        var query = _controls?.Current(page, PageSize) ?? new BrowseQuery(Page: page, PageSize: PageSize);
+        // The controls only get a new Query after this component has loaded.
+        if (Query is not null)
+        {
+            query = query with { Q = Query };
+        }
+
+        try
+        {
+            _result = await ApiClient.GetTracksAsync(query);
+            _currentPage = page;
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Couldn't load tracks: {ex.Message}";
+        }
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        if (FromServer)
+        {
+            await LoadAsync(page);
+        }
+        else
+        {
+            _currentPage = page;
+        }
+    }
+
+    // A scan can add, change or remove tracks.
+    private void OnScanFinished(ScanJobDto job) => InvokeAsync(async () =>
+    {
+        await LoadAsync(_currentPage);
+        StateHasChanged();
+    });
+
+    private bool Searching => FromServer
+        ? !string.IsNullOrWhiteSpace(Query ?? _controls?.Current(1, PageSize).Q)
+        : !string.IsNullOrWhiteSpace(_searchFilter);
 
     private List<MediaItemDto> VisibleItems => MediaItems
         .Where(m => Matches(m, _searchFilter))
@@ -131,10 +256,13 @@
         }, StringComparer.OrdinalIgnoreCase)
         .ToList();
 
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(VisibleItems.Count / (double)PageSize));
+    private int TotalPages => FromServer
+        ? Math.Max(1, _result?.TotalPages ?? 1)
+        : Math.Max(1, (int)Math.Ceiling(VisibleItems.Count / (double)PageSize));
 
-    private List<MediaItemDto> PagedItems =>
-        VisibleItems.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
+    private IReadOnlyList<MediaItemDto> PagedItems => FromServer
+        ? _result?.Items ?? []
+        : VisibleItems.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
 
     private static bool Matches(MediaItemDto item, string filter)
     {
@@ -251,6 +379,19 @@
     private async Task OnTagsSavedAsync(MediaItemDto updated)
     {
         _showEditModal = false;
+        if (FromServer)
+        {
+            // The edit may move it in the sort order, or out of the search.
+            await LoadAsync(_currentPage);
+        }
         await OnItemUpdated.InvokeAsync(updated);
+    }
+
+    public void Dispose()
+    {
+        if (FromServer)
+        {
+            Scans.ScanFinished -= OnScanFinished;
+        }
     }
 }

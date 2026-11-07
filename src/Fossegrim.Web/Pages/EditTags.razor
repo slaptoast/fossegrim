@@ -108,7 +108,7 @@
                 return;
             }
 
-            var allItems = await ApiClient.GetMediaItemsAsync();
+            var allItems = await ApiClient.GetAllMediaItemsAsync();
             var byId = allItems.ToDictionary(m => m.Id);
 
             _models = requestedIds

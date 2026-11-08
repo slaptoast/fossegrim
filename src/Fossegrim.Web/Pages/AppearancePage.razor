@@ -27,6 +27,15 @@
                     <span class="theme-card-name">@label</span>
                 </button>
             }
+            @foreach (var theme in PresetThemes.All)
+            {
+                var choice = PresetThemes.ChoiceFor(theme);
+                <button type="button" role="radio" aria-checked="@IsActive(choice).ToString().ToLowerInvariant()"
+                        class="theme-card @(IsActive(choice) ? "active" : null)" @onclick="() => Appearance.SetThemeChoiceAsync(choice)">
+                    <span class="theme-swatches">@foreach (var color in Swatches(theme)) { <span style="background: @color"></span> }</span>
+                    <span class="theme-card-name">@theme.Name</span>
+                </button>
+            }
             @foreach (var theme in Appearance.Current.Theme.Custom)
             {
                 var choice = ThemeChoices.ForCustom(theme);
@@ -45,6 +54,22 @@
                 <InputFile accept=".json,application/json" OnChange="ImportThemeAsync" />
             </label>
         </div>
+
+        @if (_pendingTheme is { } incoming)
+        {
+            <div class="import-summary">
+                <p>
+                    <strong>“@incoming.Name”</strong> includes custom CSS, which can change how any part of the app looks.
+                    Only use it if you trust where the theme came from. It can't load anything from other servers.
+                </p>
+                <pre class="theme-css-preview">@incoming.Css</pre>
+                <div class="appearance-actions">
+                    <button type="button" class="button" @onclick="() => FinishThemeImportAsync(withCss: true)">Import with CSS</button>
+                    <button type="button" class="button-secondary" @onclick="() => FinishThemeImportAsync(withCss: false)">Colors only</button>
+                    <button type="button" class="button-secondary" @onclick="() => _pendingTheme = null">Cancel</button>
+                </div>
+            </div>
+        }
 
         @if (EditingTheme is { } editing)
         {
@@ -82,12 +107,32 @@
                     }
                 }
 
+                <h4 class="theme-editor-group">Custom CSS</h4>
+                <p class="appearance-hint">
+                    Optional, for going beyond the colors above. It applies after the app's own styles while this theme is on.
+                    It relies on the app's class names, which can change between releases, so a theme may need updating after an upgrade.
+                    Images and fonts can only come from this server or <code>data:</code> URLs.
+                    If a mistake hides the page, open it with <a href="/appearance?safe-mode" target="_top">?safe-mode</a> to turn custom CSS off until you close the tab.
+                </p>
+                @{ SyncCssDraft(editing); }
+                <textarea class="theme-css-editor" spellcheck="false" aria-label="Custom CSS" maxlength="@CssLimit(editing)"
+                          placeholder="/* e.g. */&#10;.player-bar { border-top: 2px solid var(--brand-violet); }"
+                          @bind="_cssDraft" @bind:event="oninput" @bind:after="SaveCssSoonAsync"></textarea>
+                <p class="theme-css-size">@KiB(_cssDraft.Length) of @KiB(CssLimit(editing)) KB</p>
+
                 <div class="appearance-actions">
                     <button type="button" class="button-secondary" @onclick="DuplicateThemeAsync">Duplicate</button>
                     <button type="button" class="button-secondary" @onclick="() => ExportThemeAsync(editing)">Export theme</button>
                     <button type="button" class="button-danger" @onclick="DeleteThemeAsync">Delete theme</button>
                 </div>
             </div>
+        }
+        else if (PresetThemes.Find(Appearance.Current.Theme.Choice) is { } preset)
+        {
+            <p class="appearance-hint">
+                “@preset.Name” comes with Fossegrim, so it can't be changed here.
+                <button type="button" class="link-button" @onclick="() => CopyPresetAsync(preset)">Make an editable copy</button>
+            </p>
         }
         else if (Appearance.Current.Theme.Custom.Count > 0)
         {
@@ -133,8 +178,28 @@
                     uses the <strong>@ChoiceLabel(pending)</strong> theme, and puts the player bar at the <strong>@pending.Player.Position</strong>.
                     Importing replaces all your current appearance settings.
                 </p>
+                @if (pending.Theme.Custom.Where(t => t.Css.Length > 0).ToList() is { Count: > 0 } withCss)
+                {
+                    <p>
+                        @(withCss.Count == 1 ? "One theme includes" : $"{withCss.Count} themes include") custom CSS
+                        (@string.Join(", ", withCss.Select(t => $"“{t.Name}”"))), which can change how any part of the app looks.
+                        Only keep it if you trust where the file came from.
+                    </p>
+                    <details>
+                        <summary>Show the CSS</summary>
+                        @foreach (var theme in withCss)
+                        {
+                            <h4 class="theme-editor-group">@theme.Name</h4>
+                            <pre class="theme-css-preview">@theme.Css</pre>
+                        }
+                    </details>
+                }
                 <div class="appearance-actions">
-                    <button type="button" class="button" @onclick="ApplyImportAsync">Replace my settings</button>
+                    <button type="button" class="button" @onclick="() => ApplyImportAsync(withCss: true)">Replace my settings</button>
+                    @if (pending.Theme.Custom.Any(t => t.Css.Length > 0))
+                    {
+                        <button type="button" class="button-secondary" @onclick="() => ApplyImportAsync(withCss: false)">Replace, without custom CSS</button>
+                    }
                     <button type="button" class="button-secondary" @onclick="() => _pendingImport = null">Cancel</button>
                 </div>
             </div>
@@ -156,7 +221,14 @@
     ];
 
     private AppearancePreferences? _pendingImport;
+    // An imported theme with CSS, waiting for the user to accept it.
+    private CustomTheme? _pendingTheme;
     private IJSObjectReference? _files;
+    private CancellationTokenSource? _cssEdit;
+    // What's in the CSS box, kept here so a save landing mid-typing can't
+    // replace what's been typed since; reloaded when another theme is picked.
+    private string _cssDraft = "";
+    private string? _cssDraftFor;
 
     // The custom theme being edited is whichever one is active.
     private CustomTheme? EditingTheme => Appearance.ActiveCustomTheme;
@@ -178,7 +250,7 @@
         SwatchTokens.Select(t => theme.Colors.TryGetValue(t, out var c) ? c : Default(t, theme.Base));
 
     private static string ChoiceLabel(AppearancePreferences preferences) =>
-        preferences.Theme.Custom.FirstOrDefault(t => ThemeChoices.ForCustom(t) == preferences.Theme.Choice)?.Name is { } name
+        (preferences.Theme.Custom.FirstOrDefault(t => ThemeChoices.ForCustom(t) == preferences.Theme.Choice) ?? PresetThemes.Find(preferences.Theme.Choice))?.Name is { } name
             ? $"“{name}”"
             : preferences.Theme.Choice switch { ThemeChoices.Light => "Light", ThemeChoices.Dark => "Dark", _ => "System" };
 
@@ -203,8 +275,19 @@
             return;
         }
 
-        var copy = new CustomTheme { Name = $"{source.Name} copy", Base = source.Base, Colors = new(source.Colors) };
+        var copy = new CustomTheme { Name = $"{source.Name} copy", Base = source.Base, Colors = new(source.Colors), Css = source.Css };
         await AddAndActivateAsync(copy);
+    }
+
+    private async Task CopyPresetAsync(CustomTheme preset)
+    {
+        if (Appearance.Current.Theme.Custom.Count >= AppearancePreferencesFile.MaxCustomThemes)
+        {
+            Toasts.Show($"You can have up to {AppearancePreferencesFile.MaxCustomThemes} custom themes.");
+            return;
+        }
+
+        await AddAndActivateAsync(new CustomTheme { Name = $"{preset.Name} copy", Base = preset.Base, Colors = new(preset.Colors), Css = preset.Css });
     }
 
     private Task AddAndActivateAsync(CustomTheme theme) => Appearance.UpdateAsync(p =>
@@ -231,6 +314,44 @@
         string.IsNullOrEmpty(color) ? Task.CompletedTask : EditThemeAsync(t => t.Colors[token.Name] = color);
 
     private Task ResetColorAsync(ThemeToken token) => EditThemeAsync(t => t.Colors.Remove(token.Name));
+
+    private void SyncCssDraft(CustomTheme theme)
+    {
+        if (_cssDraftFor != theme.Id)
+        {
+            _cssEdit?.Cancel();
+            _cssDraftFor = theme.Id;
+            _cssDraft = theme.Css;
+        }
+    }
+
+    // Applied a moment after typing stops, rather than on every key.
+    private async Task SaveCssSoonAsync()
+    {
+        _cssEdit?.Cancel();
+        var pending = _cssEdit = new CancellationTokenSource();
+        var themeId = _cssDraftFor;
+        try
+        {
+            await Task.Delay(300, pending.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        if (EditingTheme?.Id == themeId)
+        {
+            var css = _cssDraft;
+            await EditThemeAsync(t => t.Css = css);
+        }
+    }
+
+    // The most CSS this theme can have: its own limit, or what the other themes leave.
+    private int CssLimit(CustomTheme theme) => Math.Min(
+        AppearancePreferencesFile.MaxCssLength,
+        AppearancePreferencesFile.MaxTotalCssLength - Appearance.Current.Theme.Custom.Where(t => t.Id != theme.Id).Sum(t => t.Css.Length));
+
+    private static string KiB(int length) => (length / 1024.0).ToString("0.#");
 
     private async Task DeleteThemeAsync()
     {
@@ -275,8 +396,30 @@
             return;
         }
 
+        if (theme.Css.Length > 0)
+        {
+            _pendingTheme = theme; // shown for the user to accept first
+            return;
+        }
+
         await AddAndActivateAsync(theme);
         Toasts.Show($"Imported “{theme.Name}”");
+    }
+
+    private async Task FinishThemeImportAsync(bool withCss)
+    {
+        if (_pendingTheme is not { } theme)
+        {
+            return;
+        }
+
+        _pendingTheme = null;
+        if (!withCss)
+        {
+            theme.Css = "";
+        }
+        await AddAndActivateAsync(theme);
+        Toasts.Show(withCss ? $"Imported “{theme.Name}”" : $"Imported “{theme.Name}” without its CSS");
     }
 
     private async Task ReadSettingsImportAsync(InputFileChangeEventArgs e)
@@ -294,7 +437,7 @@
         }
     }
 
-    private async Task ApplyImportAsync()
+    private async Task ApplyImportAsync(bool withCss)
     {
         if (_pendingImport is not { } import)
         {
@@ -302,6 +445,10 @@
         }
 
         _pendingImport = null;
+        if (!withCss)
+        {
+            import.Theme.Custom.ForEach(t => t.Css = "");
+        }
         await Appearance.ReplaceAsync(import);
         Toasts.Show("Imported your settings");
     }

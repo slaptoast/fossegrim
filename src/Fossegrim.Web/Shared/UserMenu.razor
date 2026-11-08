@@ -31,7 +31,7 @@
                                 @onclick="() => Appearance.SetThemeChoiceAsync(choice)">@label</button>
                     }
                 </div>
-                @if (Appearance.ActiveCustomTheme is { } custom)
+                @if (Appearance.ActiveTheme is { } custom)
                 {
                     <span class="user-menu-theme-custom">Using “@custom.Name”</span>
                 }

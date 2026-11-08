@@ -39,7 +39,7 @@ public class AppearanceServiceTests : IClassFixture<FossegrimApiFactory>
         var user = await _factory.CreateUserAsync();
         var (service, js) = Create(user);
         await service.EnsureLoadedAsync();
-        var theme = new CustomTheme { Name = "Fjord", Base = "dark", Colors = { ["--canvas"] = "#102030" } };
+        var theme = new CustomTheme { Name = "Fjord", Base = "dark", Colors = { ["--canvas"] = "#102030" }, Css = ".topbar { letter-spacing: 1px; }" };
 
         await service.UpdateAsync(p =>
         {
@@ -50,6 +50,7 @@ public class AppearanceServiceTests : IClassFixture<FossegrimApiFactory>
         var applied = js.LastApplied!.Value;
         Assert.Equal("dark", applied.GetProperty("base").GetString());
         Assert.Equal("#102030", applied.GetProperty("colors").GetProperty("--canvas").GetString());
+        Assert.Equal(".topbar { letter-spacing: 1px; }", applied.GetProperty("css").GetString());
 
         var saved = await WaitForSavedAsync(user, s => s.Contains("Fjord"));
         Assert.Equal(ThemeChoices.ForCustom(theme), AppearancePreferencesFile.Parse(saved)!.Theme.Choice);

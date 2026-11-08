@@ -634,6 +634,12 @@ a.button, a.button-secondary { text-decoration: none; }
 .file-button:focus-within { box-shadow: var(--shadow-focus); }
 .import-summary { margin-top: var(--space-12); padding: var(--space-12); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--info-bg); color: var(--info-fg); }
 .import-summary p { color: inherit; }
+/* Custom CSS in a theme: the editor, and the preview shown before importing a theme that has some. */
+.theme-css-editor { width: 100%; min-height: 220px; box-sizing: border-box; padding: var(--space-8); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8125rem; line-height: 1.5; resize: vertical; tab-size: 2; }
+.theme-css-size { margin: var(--space-4) 0 0; font-size: 0.75rem; color: var(--text-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.theme-css-preview { max-height: 240px; overflow: auto; margin: var(--space-8) 0; padding: var(--space-8); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-muted); color: var(--ink); font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; }
+/* Safe mode (custom CSS off for this tab): js/theme.js */
+.safe-mode-banner { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-12); padding: var(--space-8) var(--space-12); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--selection-bg); color: var(--selection-fg); font-size: 0.8125rem; }
 
 /* ---- Buttons: 28px, solid, no lift ---- */
 .button,

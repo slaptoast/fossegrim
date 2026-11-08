@@ -36,9 +36,9 @@
                 {
                     <div class="album-art-frame">
                         <span class="album-art-frame-placeholder">💿</span>
-                        @if (_currentCoverUrl is not null)
+                        @if (_currentCoverUrl is not null && _currentCoverUrl != _failedCoverUrl)
                         {
-                            <img src="@_currentCoverUrl" alt="Current cover" onerror="this.style.visibility='hidden'" onload="this.style.visibility=''" />
+                            <img src="@_currentCoverUrl" alt="Current cover" @onerror="() => _failedCoverUrl = _currentCoverUrl" />
                         }
                     </div>
                     <span class="album-art-caption">Current cover</span>
@@ -145,6 +145,8 @@
     private string _album = "";
     private string _artist = "";
     private string? _currentCoverUrl;
+    // An album without a cover answers 404; the placeholder shows instead.
+    private string? _failedCoverUrl;
     private IReadOnlyList<CoverProviderStatusDto> _providers = [];
     private DateTime _providersAt;
     // Each provider's state when the last search ran, to tell "nothing found" from "didn't search".

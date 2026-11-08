@@ -1,6 +1,7 @@
 @page "/files/rename"
 @attribute [Authorize(Roles = "Admin")]
 @inject FossegrimApiClient ApiClient
+@inject IJSRuntime JS
 
 @* Preview, then apply, renaming tracks' files to the file-naming template.
    Opened with ?ids=... (from a right-click menu) or ?all=true. *@
@@ -50,7 +51,7 @@
             }
 
             <div class="setup-nav">
-                <a class="button-secondary" href="javascript:history.back()">Cancel</a>
+                <button type="button" class="button-secondary" @onclick='() => JS.InvokeVoidAsync("history.back")'>Cancel</button>
                 <button type="button" class="button" disabled="@(_busy || toRename == 0)" @onclick="ApplyAsync">
                     @(_busy ? "Renaming..." : $"Rename {toRename} File{(toRename == 1 ? "" : "s")}")
                 </button>

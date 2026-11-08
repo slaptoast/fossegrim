@@ -1,0 +1,191 @@
+@implements IAsyncDisposable
+@inject PlayerState PlayerState
+@inject PlayerHost Host
+@inject AppearanceService Appearance
+
+@* What's playing and the controls for it, in the floating bar (one row) or
+   in the Library page's Player panel (a large cover beside or above the
+   rest). Playback itself is PlayerEngine's; play, seek and volume are
+   mounted into the transport element by playerControls.js. *@
+@if (PlayerState.CurrentTrack is { } track)
+{
+    @if (_popup == Popup.Queue)
+    {
+        <div class="up-next-panel" role="dialog" aria-label="Up next">
+            <div class="up-next-header">
+                <span>Up next</span>
+                <button type="button" class="player-button" @onclick="() => _popup = Popup.None" aria-label="Close">✕</button>
+            </div>
+            <UpNextList />
+        </div>
+    }
+    else if (_popup == Popup.Transitions)
+    {
+        <div class="up-next-panel" role="dialog" aria-label="Track transitions">
+            <div class="up-next-header">
+                <span>Track transitions</span>
+                <button type="button" class="player-button" @onclick="() => _popup = Popup.None" aria-label="Close">✕</button>
+            </div>
+            <div class="transitions-panel-body">
+                <PlaybackTransitionSettings />
+            </div>
+        </div>
+    }
+
+    @if (Panel)
+    {
+        <div class="player-panel">
+            <CoverArt AlbumId="track.CoverAlbumId()" Size="512" Class="player-panel-cover" />
+            <div class="player-panel-main">
+                <div class="player-track-info">
+                    <span class="player-title">@(track.Title ?? "Unknown")</span>
+                    <span class="player-artist">@ArtistAndAlbum(track)</span>
+                </div>
+                <div class="player-controls">
+                    @PreviousNext
+                </div>
+                @Transport
+                <div class="player-panel-extras">
+                    @Toggles
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <CoverArt AlbumId="track.CoverAlbumId()" Size="128" Class="player-cover" />
+        <div class="player-track-info">
+            <span class="player-title">@(track.Title ?? "Unknown")</span>
+            <span class="player-artist">@(track.ArtistName ?? "Unknown Artist")</span>
+        </div>
+        <div class="player-controls">
+            @PreviousNext
+        </div>
+        @Transport
+        @Toggles
+    }
+}
+else if (Panel)
+{
+    <div class="player-panel-idle">
+        <span class="player-panel-idle-icon" aria-hidden="true">🎵</span>
+        <span>Nothing playing. Pick a track to start.</span>
+    </div>
+}
+
+@code {
+    private enum Popup { None, Queue, Transitions }
+
+    // The panel layout rather than the bar's single row.
+    [Parameter]
+    public bool Panel { get; set; }
+
+    private Popup _popup;
+    private ElementReference _transport;
+    private IJSObjectReference? _controls;
+    // The transport element the controls are in (each render with a track has one).
+    private ElementReference? _mountedIn;
+    private bool _mounting;
+    private bool _disposed;
+
+    private RenderFragment PreviousNext => @<text>
+        <button type="button" class="player-button" @onclick="Host.PreviousAsync" aria-label="Previous" title="Previous (restarts the track if it's past 3 seconds)">⏮</button>
+        <button type="button" class="player-button" disabled="@(!PlayerState.HasNext)" @onclick="PlayerState.PlayNextAsync" aria-label="Next" title="Next">⏭</button>
+    </text>;
+
+    private RenderFragment Transport => @<text>
+        @if (PlayerState.ErrorMessage is not null)
+        {
+            <span class="player-error">@PlayerState.ErrorMessage</span>
+        }
+        @* playerControls.js fills this; Blazor never renders inside it. *@
+        <div @ref="_transport" class="player-transport" hidden="@(PlayerState.ErrorMessage is not null)"></div>
+    </text>;
+
+    private RenderFragment Toggles => @<text>
+        <button type="button" class="player-button up-next-toggle @(_popup == Popup.Transitions ? "active" : "")" @onclick="() => Toggle(Popup.Transitions)"
+                aria-expanded="@(_popup == Popup.Transitions)" aria-label="Track transitions" title="Track transitions: gapless and crossfade">⇄ @TransitionLabel</button>
+        <button type="button" class="player-button up-next-toggle @(_popup == Popup.Queue ? "active" : "")" @onclick="() => Toggle(Popup.Queue)"
+                aria-expanded="@(_popup == Popup.Queue)" title="Up next">☰ @UpNextCount</button>
+    </text>;
+
+    protected override void OnInitialized()
+    {
+        PlayerState.Changed += OnChanged;
+        Appearance.Changed += OnChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The transport element comes and goes with the track (and is a new
+        // element when the layout switches), so the controls follow it.
+        var current = PlayerState.CurrentTrack is null ? (ElementReference?)null : _transport;
+        if (_mounting || current?.Id == _mountedIn?.Id)
+        {
+            return;
+        }
+
+        _mounting = true;
+        try
+        {
+            await UnmountAsync();
+            if (current is { } element && !_disposed)
+            {
+                _controls = await Host.MountControlsAsync(element);
+                _mountedIn = element;
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page is going away.
+        }
+        finally
+        {
+            _mounting = false;
+        }
+
+        // The track may have changed while mounting.
+        if (!_disposed && (PlayerState.CurrentTrack is null ? null : (ElementReference?)_transport)?.Id != _mountedIn?.Id)
+        {
+            StateHasChanged();
+        }
+    }
+
+    private async Task UnmountAsync()
+    {
+        _mountedIn = null;
+        if (_controls is { } controls)
+        {
+            _controls = null;
+            await controls.InvokeVoidAsync("dispose");
+            await controls.DisposeAsync();
+        }
+    }
+
+    private void Toggle(Popup popup) => _popup = _popup == popup ? Popup.None : popup;
+
+    private string TransitionLabel => Appearance.Current.Player.Crossfade ? $"{Appearance.Current.Player.CrossfadeSeconds}s" : "";
+
+    // Tracks after the one playing.
+    private int UpNextCount => Math.Max(0, PlayerState.Queue.Count - PlayerState.CurrentIndex - 1);
+
+    private static string ArtistAndAlbum(MediaItemDto track) =>
+        string.Join(" · ", new[] { track.ArtistName ?? "Unknown Artist", track.Album }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        PlayerState.Changed -= OnChanged;
+        Appearance.Changed -= OnChanged;
+        try
+        {
+            await UnmountAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page is going away; nothing to clean up.
+        }
+    }
+}

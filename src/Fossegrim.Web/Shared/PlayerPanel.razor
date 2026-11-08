@@ -1,0 +1,15 @@
+@implements IDisposable
+@inject PlayerHost Host
+
+@* The player as a Library page panel. While it's on screen the floating
+   player bar is hidden; hiding the panel or leaving the page brings the
+   bar back. *@
+<div class="player-panel-module">
+    <PlayerControls Panel="true" />
+</div>
+
+@code {
+    protected override void OnInitialized() => Host.PanelAdded();
+
+    public void Dispose() => Host.PanelRemoved();
+}

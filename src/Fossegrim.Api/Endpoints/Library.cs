@@ -16,29 +16,11 @@ public static class Library
         {
             var artistCount = await db.Artists.CountAsync();
             var albumCount = await db.Albums.CountAsync();
-            var fileLocations = await db.MediaItems
-                .Select(m => m.FileLocation)
-                .ToListAsync();
+            // Sizes as of the last scan, rather than reading every file on disk.
+            var trackCount = await db.MediaItems.CountAsync();
+            var totalBytes = await db.MediaItems.SumAsync(m => m.FileSize ?? 0);
 
-            // File size isn't stored in the database, so read it from disk.
-            // Files that have moved or been deleted since the last scan are
-            // skipped rather than failing the whole request.
-            long totalBytes = 0;
-            foreach (var location in fileLocations)
-            {
-                if (string.IsNullOrWhiteSpace(location))
-                {
-                    continue;
-                }
-
-                var file = new FileInfo(location);
-                if (file.Exists)
-                {
-                    totalBytes += file.Length;
-                }
-            }
-
-            return Results.Ok(new LibraryStatsDto(artistCount, albumCount, fileLocations.Count, totalBytes));
+            return Results.Ok(new LibraryStatsDto(artistCount, albumCount, trackCount, totalBytes));
         })
         .WithName("GetLibraryStats")
         .WithOpenApi();

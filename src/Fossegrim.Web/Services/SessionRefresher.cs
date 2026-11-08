@@ -16,17 +16,20 @@ public enum RefreshOutcome
 }
 
 /// <summary>
-/// Swaps the stored refresh token for new tokens. Access tokens are renewed
-/// a day before they expire, so the stream and cover URLs built from them
-/// (which can't be retried after a 401) keep working; a rejected token is
-/// renewed straight away. Uses its own HttpClient, without
-/// AuthorizedHttpMessageHandler, so refreshing never recurses.
+/// Swaps the stored refresh token for new tokens. Access tokens are short
+/// lived and renewed shortly before they expire (a rejected one is renewed
+/// straight away). The media token in stream and cover URLs lasts days and
+/// is renewed a day before it expires, since those URLs can't be retried
+/// after a 401; keeping it between refreshes keeps the URLs stable. Uses its
+/// own HttpClient, without AuthorizedHttpMessageHandler, so refreshing never
+/// recurses.
 /// </summary>
 public class SessionRefresher
 {
     public const string HttpClientName = "session-refresh";
 
-    private static readonly TimeSpan RenewBefore = TimeSpan.FromDays(1);
+    private static readonly TimeSpan RenewBefore = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan RenewMediaBefore = TimeSpan.FromDays(1);
 
     private readonly TokenStore _tokenStore;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -47,18 +50,32 @@ public class SessionRefresher
         }
     }
 
+    /// <summary>Renews the tokens if the media token is missing or about to expire; does nothing when signed out.</summary>
+    public async Task EnsureMediaTokenFreshAsync()
+    {
+        if (await _tokenStore.GetTokenAsync() is { } token &&
+            (await _tokenStore.GetMediaTokenAsync() is not { } mediaToken || ExpiresWithin(mediaToken, RenewMediaBefore)))
+        {
+            await RefreshAsync(token, media: true);
+        }
+    }
+
     /// <summary>
     /// Renews the tokens. <paramref name="staleToken"/> is the access token
     /// that was rejected or is expiring; if the store already holds a
     /// different, fresh one (another request or tab refreshed first), that's
     /// used instead.
     /// </summary>
-    public async Task<RefreshOutcome> RefreshAsync(string? staleToken)
+    public async Task<RefreshOutcome> RefreshAsync(string? staleToken) => await RefreshAsync(staleToken, media: false);
+
+    // media: renewing for the media token, which is then replaced.
+    private async Task<RefreshOutcome> RefreshAsync(string? staleToken, bool media)
     {
         await _lock.WaitAsync();
         try
         {
-            if (await _tokenStore.ReloadTokenAsync() is { } current && current != staleToken && !ExpiresSoon(current))
+            if (await _tokenStore.ReloadTokenAsync() is { } current && current != staleToken && !ExpiresSoon(current) &&
+                (!media || await _tokenStore.GetMediaTokenAsync() is { } mediaToken && !ExpiresWithin(mediaToken, RenewMediaBefore)))
             {
                 return RefreshOutcome.Refreshed;
             }
@@ -90,7 +107,8 @@ public class SessionRefresher
                     return RefreshOutcome.Failed;
                 }
 
-                await _tokenStore.SetSessionAsync(login);
+                var stored = await _tokenStore.GetMediaTokenAsync();
+                await _tokenStore.SetSessionAsync(login, replaceMediaToken: media || stored is null || ExpiresWithin(stored, RenewMediaBefore));
                 return RefreshOutcome.Refreshed;
             }
         }
@@ -100,9 +118,11 @@ public class SessionRefresher
         }
     }
 
-    public static bool ExpiresSoon(string token)
+    public static bool ExpiresSoon(string token) => ExpiresWithin(token, RenewBefore);
+
+    private static bool ExpiresWithin(string token, TimeSpan window)
     {
         var handler = new JwtSecurityTokenHandler();
-        return !handler.CanReadToken(token) || handler.ReadJwtToken(token).ValidTo - DateTime.UtcNow < RenewBefore;
+        return !handler.CanReadToken(token) || handler.ReadJwtToken(token).ValidTo - DateTime.UtcNow < window;
     }
 }

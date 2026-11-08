@@ -9,6 +9,8 @@ using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services;
 using Fossegrim.Lib.Services.Library;
 using Microsoft.AspNetCore.Authentication;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Fossegrim.Api.Endpoints;
 using Fossegrim.Api.Services;
 
@@ -18,8 +20,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 // Configure CORS
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? ["http://localhost:5085", "https://localhost:7049"];
+// Only needed when the web app is served from another origin (local dev, see
+// appsettings.Development.json); in production it's served from here.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowWeb", policy =>
@@ -37,64 +40,88 @@ builder.Services.AddDbContext<FossegrimDbContext>(options =>
         ?? "Data Source=fossegrim.db"));
 
 // Configure Identity (core only - this is a token-issuing API, not cookie-based)
-builder.Services.AddIdentityCore<ApplicationUser>()
+builder.Services.AddIdentityCore<ApplicationUser>(options =>
+    {
+        // Too many wrong passwords lock the account for a while (see Endpoints/Auth.cs).
+        options.Lockout.MaxFailedAccessAttempts = SignInLimits.MaxFailedAttempts;
+        options.Lockout.DefaultLockoutTimeSpan = SignInLimits.LockoutDuration;
+        options.Lockout.AllowedForNewUsers = true;
+    })
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<FossegrimDbContext>();
 
 // Configure JWT bearer authentication. The resolved key is written back into
-// configuration so token issuing (Endpoints/Auth.cs) signs with the same key.
+// configuration so token issuing (Services/SessionService.cs) signs with the same key.
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var (jwtKey, jwtKeySource) = JwtKeyStore.Resolve(jwtSection["Key"], jwtSection["KeyFile"]);
 jwtSection["Key"] = jwtKey;
+TokenValidationParameters JwtValidation(string audience) => new()
+{
+    ValidateIssuer = true,
+    ValidIssuer = jwtSection["Issuer"],
+    ValidateAudience = true,
+    ValidAudience = audience,
+    ValidateIssuerSigningKey = true,
+    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+    ValidateLifetime = true
+};
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    // Access tokens, in the Authorization header only.
     .AddJwtBearer(options =>
     {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = jwtSection["Issuer"],
-            ValidateAudience = true,
-            ValidAudience = jwtSection["Audience"],
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-            ValidateLifetime = true
-        };
-
-        // <audio>/<img> elements can't set an Authorization header, so callers
-        // pass the token via query string for the /stream and /cover endpoints.
+        options.TokenValidationParameters = JwtValidation(jwtSection["Audience"]!);
+        options.Events = new JwtBearerEvents { OnTokenValidated = MediaAuth.RequireActiveSessionAsync };
+    })
+    // Media tokens, for /stream and /cover: <audio>/<img> elements can't set
+    // an Authorization header, so the token goes in the URL. A media token
+    // has its own audience, so it can't be used on the rest of the API, and
+    // an access token in a URL isn't accepted.
+    .AddJwtBearer(MediaAuth.Scheme, options =>
+    {
+        options.TokenValidationParameters = JwtValidation(JwtTokenService.MediaAudience(jwtSection["Audience"]!));
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
             {
-                if ((context.Request.Path.StartsWithSegments("/stream") || context.Request.Path.StartsWithSegments("/cover")) &&
-                    context.Request.Query.TryGetValue("access_token", out var token))
+                if (context.Request.Query.TryGetValue("access_token", out var token))
                 {
                     context.Token = token;
                 }
+                else
+                {
+                    context.NoResult();
+                }
                 return Task.CompletedTask;
             },
-            // A signed-out device's token stops working at once, not when it
-            // expires. Tokens from before sessions existed have no session id
-            // and stay valid until they expire.
-            OnTokenValidated = async context =>
-            {
-                if (context.Principal?.FindFirst(JwtTokenService.SessionClaim) is not { } claim)
-                {
-                    return;
-                }
-
-                var sessions = context.HttpContext.RequestServices.GetRequiredService<SessionService>();
-                if (!Guid.TryParse(claim.Value, out var sessionId) || !await sessions.IsActiveAsync(sessionId))
-                {
-                    context.Fail("This device has been signed out.");
-                }
-            }
+            OnTokenValidated = MediaAuth.RequireActiveSessionAsync
         };
     })
     // Other applications (e.g. Lidarr) start scans with an API key; see Endpoints/Scans.cs.
     .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthentication>(ApiKeyAuthentication.Scheme, null);
 
 builder.Services.AddAuthorization();
+
+// Per client address: signing in, registering, claiming a fresh install and
+// changing a password. Account lockout (above) covers guessing spread
+// across addresses. Behind a reverse proxy every client shares the proxy's
+// address, so this is a server-wide limit there.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(SignInLimits.Policy, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = builder.Configuration.GetValue("RateLimiting:SignInPerMinute", SignInLimits.DefaultPerMinute),
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+    options.OnRejected = (context, _) =>
+    {
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        return ValueTask.CompletedTask;
+    };
+});
 
 // Register application services
 builder.Services.AddScoped<MediaLibraryService>();
@@ -194,7 +221,10 @@ switch (jwtKeySource)
 // Apply migrations, then seed roles and admin user
 using (var scope = app.Services.CreateScope())
 {
-    await scope.ServiceProvider.GetRequiredService<FossegrimDbContext>().Database.MigrateAsync();
+    var startupDb = scope.ServiceProvider.GetRequiredService<FossegrimDbContext>();
+    await startupDb.Database.MigrateAsync();
+    // Renames any accounts sharing a display name from before names were unique.
+    await DisplayNames.EnsureUniqueAsync(startupDb, app.Logger);
     // Fills the search indexes on first run, and if they've got out of step.
     await scope.ServiceProvider.GetRequiredService<SearchIndex>().EnsureBuiltAsync();
     await RoleSeeder.SeedRolesAndAdminAsync(scope.ServiceProvider, seedDefaultAdmin: app.Environment.IsDevelopment());
@@ -208,7 +238,13 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+if (!app.Environment.IsDevelopment())
+{
+    // Only sent over HTTPS, i.e. when Kestrel itself serves TLS.
+    app.UseHsts();
+}
 app.UseHttpsRedirection();
+app.UseSecurityHeaders();
 
 // Serve the Blazor WebAssembly app (Fossegrim.Web) from this process's
 // wwwroot -- populated at publish time via the ProjectReference below.
@@ -222,6 +258,7 @@ app.UseCors("AllowWeb");
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 // Map all endpoints
 app.MapAuthEndpoints();

@@ -47,6 +47,28 @@ self-registration until an admin opens it again. The old
 `admin@fossegrim.local` / `Admin123!` seed account is now only created in
 local development (`run-dev.sh`), where the wizard never starts on its own.
 
+### Security
+
+**Use HTTPS.** The container serves plain HTTP on port 8080. Before
+exposing it beyond your own network, put it behind a reverse proxy that
+terminates TLS (Caddy, Traefik, nginx, ...). Otherwise passwords and
+tokens cross the network in the clear.
+
+**Password guessing.** Ten wrong passwords in a row lock an account for
+five minutes (the sign-in page says so), and each client address gets 20
+sign-in attempts a minute (`RateLimiting__SignInPerMinute`). Behind a
+reverse proxy every request comes from the proxy's address, so that limit
+is shared by everyone signing in at once, which is still plenty for a
+household. If your proxy can rate-limit by the real client address, that
+adds a per-client limit on top.
+
+**Stream and cover URLs.** `<audio>` and `<img>` elements can't send an
+Authorization header, so their URLs carry a token. It's a separate media
+token that only `/stream` and `/cover` accept, so one that turns up in a
+proxy's access log can play music but not reach anything else, and it
+stops working when that device is signed out. Normal access tokens are
+never accepted in a URL.
+
 ## Cutting a release
 
 Publishing is **version-tag-driven**, not automatic on every push to `main`
@@ -110,7 +132,8 @@ into the image for a given deployment.
 | Variable | Purpose |
 |---|---|
 | `JWT_KEY` | Secret signing key for auth tokens. Optional -- generated automatically if unset. See [Auth signing key](#auth-signing-key). |
-| `JWT_ISSUER` / `JWT_AUDIENCE` / `JWT_EXPIRY_MINUTES` | JWT claims/expiry. Defaults match dev settings. |
+| `JWT_ISSUER` / `JWT_AUDIENCE` / `JWT_EXPIRY_MINUTES` | JWT claims, and how long an access token lasts (default 60 minutes; apps renew them with their refresh token). Stream and cover URLs use separate media tokens, which last `Jwt__MediaExpiryMinutes` (default 7 days). |
+| `RateLimiting__SignInPerMinute` | Sign-in, registration and password-change attempts allowed per client address per minute (default 20). See [Security](#security). |
 | `MUSIC_LIBRARY_PATH` | Host path to your music library; mounted **read-write** at `/music` in the container. After startup, register `/music` (or a subfolder) as a media folder from the admin UI. |
 | `PORT` | Host-side port to publish. |
 | `BACKUP_PATH` | Host folder for backup zips, mounted at `/backups`. Must be writable by uid 100 / gid 101. See [Backups](#backups). |
@@ -176,8 +199,7 @@ devices**; changing your password signs out all your other devices.
 `ClientName` to `/api/auth/login`) is a session that never expires on its
 own. It ends when the user signs it out from their Profile page, logs out
 on that device, or changes their password, and a signed-out device's
-tokens stop working immediately. Tokens issued before this feature existed
-have no session; they keep working until they expire (at most 7 days).
+tokens stop working immediately.
 
 **Moving the key file.** `Jwt__KeyFile` controls where the generated key
 lives (default `/data/jwt.key`). To keep it outside the data volume, e.g. on
@@ -373,7 +395,9 @@ touched. A backup missed while the server was down runs once when it
 comes back up.
 
 Backups contain `jwt.key` and the Data Protection keys, so treat them like
-the `/data` volume itself.
+the `/data` volume itself. Fossegrim writes each zip readable by the
+container user only (mode 600); keep it that way if you copy them
+elsewhere.
 
 **Restoring** is manual. Stop the container, replace the contents of
 `/data` with the zip's contents, then start it again. With the default

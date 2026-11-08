@@ -39,6 +39,8 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Backup:WorkerEnabled", "false");
         builder.UseSetting("Backup:Directory", BackupDirectory);
         builder.UseSetting("Covers:CacheDirectory", Path.Combine(_directory, "cover-cache"));
+        // Every test signs in from the same address; SignInRateLimitTests sets its own.
+        builder.UseSetting("RateLimiting:SignInPerMinute", SignInPerMinute.ToString());
 
         builder.ConfigureTestServices(services =>
         {
@@ -48,6 +50,9 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
             services.AddHttpClient<DockerHubClient>().ConfigurePrimaryHttpMessageHandler(() => DockerHub);
         });
     }
+
+    /// <summary>The sign-in rate limit; high enough by default not to get in tests' way.</summary>
+    public int SignInPerMinute { get; init; } = 100_000;
 
     public string BackupDirectory => Path.Combine(_directory, "backups");
 
@@ -79,7 +84,8 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         using (var scope = Services.CreateScope())
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            var user = new ApplicationUser { UserName = email, Email = email, DisplayName = displayName, DateJoined = DateTime.UtcNow };
+            // Display names are unique, so each test user gets its own.
+            var user = new ApplicationUser { UserName = email, Email = email, DisplayName = $"{displayName} {email[..email.IndexOf('@')]}", DateJoined = DateTime.UtcNow };
             var result = await users.CreateAsync(user, password);
             Assert.True(result.Succeeded, string.Join(", ", result.Errors.Select(e => e.Description)));
             if (isAdmin)

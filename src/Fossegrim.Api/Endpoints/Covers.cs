@@ -43,7 +43,7 @@ public static class Covers
         })
         .WithName("GetAlbumCover")
         .WithOpenApi()
-        .RequireAuthorization();
+        .RequireMediaAuthorization();
     }
 
     // Private: the response needs the caller's token. no-cache: keep it, but

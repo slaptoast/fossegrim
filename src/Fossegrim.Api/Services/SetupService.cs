@@ -83,7 +83,7 @@ public class SetupService
         {
             UserName = email,
             Email = email,
-            DisplayName = displayName,
+            DisplayName = AccountRules.Clean(displayName),
             DateJoined = _time.GetUtcNow().UtcDateTime,
             EmailConfirmed = true
         };

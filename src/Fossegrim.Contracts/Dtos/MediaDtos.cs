@@ -41,7 +41,10 @@ public record MediaItemDto(
     int? Disc = null,
     // The file as /stream serves it, e.g. for offline downloads.
     long? FileSize = null,
-    string? ContentType = null);
+    string? ContentType = null,
+    // When the caller last played it: filled in by the list endpoint
+    // (/api/mediaitems), null elsewhere and for tracks never played.
+    DateTime? LastPlayedAt = null);
 
 public static class MediaItemOrder
 {

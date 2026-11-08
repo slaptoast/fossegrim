@@ -1,3 +1,4 @@
+using Fossegrim.Contracts.Dtos;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -23,6 +24,7 @@ public sealed class AppearancePreferences
     public PlayerSettings Player { get; set; } = new();
     public VisualizerSettings Visualizer { get; set; } = new();
     public RandomSettings Random { get; set; } = new();
+    public RecentSettings Recent { get; set; } = new();
 }
 
 public sealed class ThemeSettings
@@ -105,6 +107,26 @@ public static class RandomModes
 
     // A module override: null (follow the preferred mode) unless it's a known mode.
     public static string? SanitizeOverride(string? mode) => mode is Full or Adjusted ? mode : null;
+}
+
+// Which way round the front-page Recently played modules list things.
+public sealed class RecentSettings
+{
+    public string AlbumOrder { get; set; } = RecentOrders.Recent;
+    public string TrackOrder { get; set; } = RecentOrders.Recent;
+}
+
+// Recent: the most recently played first. NotLately: the longest since played
+// first. Either way, only things the user has played.
+public static class RecentOrders
+{
+    public const string Recent = "recent";
+    public const string NotLately = "notlately";
+
+    public static string Sanitize(string? order) => order == NotLately ? NotLately : Recent;
+
+    // The list endpoints' order= for sort=recent.
+    public static string ToApiOrder(string order) => order == NotLately ? LibrarySorts.Ascending : LibrarySorts.Descending;
 }
 
 public static class ThemeChoices
@@ -277,6 +299,11 @@ public static partial class AppearancePreferencesFile
                 PreferredMode = RandomModes.Sanitize(preferences.Random?.PreferredMode),
                 AlbumMode = RandomModes.SanitizeOverride(preferences.Random?.AlbumMode),
                 TrackMode = RandomModes.SanitizeOverride(preferences.Random?.TrackMode),
+            },
+            Recent = new RecentSettings
+            {
+                AlbumOrder = RecentOrders.Sanitize(preferences.Recent?.AlbumOrder),
+                TrackOrder = RecentOrders.Sanitize(preferences.Recent?.TrackOrder),
             },
         };
     }

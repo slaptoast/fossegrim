@@ -16,8 +16,8 @@ public static class Artists
             .RequireAuthorization();
 
         // ?q= searches; sort= and order= see LibrarySorts.ForArtists; page= and pageSize= (max 500).
-        artistGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
-            Browse.ListAsync(q, sort, order, page, pageSize, LibrarySorts.ForArtists, principal, (request, userId) => browser.ArtistsAsync(request, userId, cancellationToken)))
+        artistGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, bool? listened, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
+            Browse.ListAsync(q, sort, order, page, pageSize, listened ?? false, LibrarySorts.ForArtists, principal, (request, userId) => browser.ArtistsAsync(request, userId, cancellationToken)))
         .WithName("GetArtists")
         .WithOpenApi();
 

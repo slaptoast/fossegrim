@@ -774,6 +774,7 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
 .random-module .album-list-header > .button-secondary { margin-left: auto; }
 .random-module .album-list-header > .button-secondary + .random-controls { margin-left: 0; }
 .random-track { cursor: pointer; }
+.recent-played-at { flex-shrink: 0; font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
 .layout-module .artist-list-container,
 .layout-module .album-list-container { max-height: none; flex: 1; min-height: 0; }
 .layout-module .track-list-component > .content { flex: 1; min-height: 0; overflow-y: auto; }

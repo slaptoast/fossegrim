@@ -189,12 +189,14 @@ public class FossegrimApiClient
         return await response.Content.ReadFromJsonAsync<List<MediaItemDto>>() ?? [];
     }
 
-    public async Task<string> GetAlbumCoverUrl(Guid albumId)
+    // size: the longest side wanted, in pixels (null for full size; see /cover).
+    public async Task<string> GetAlbumCoverUrl(Guid albumId, int? size = null)
     {
         await _refresher.EnsureFreshAsync();
         var token = await _tokenStore.GetTokenAsync()
             ?? throw new InvalidOperationException("Cannot build a cover URL without a stored access token.");
-        return $"{_httpClient.BaseAddress}cover/{albumId}?access_token={Uri.EscapeDataString(token)}";
+        var sizePart = size is { } px ? $"&size={px}" : "";
+        return $"{_httpClient.BaseAddress}cover/{albumId}?access_token={Uri.EscapeDataString(token)}{sizePart}";
     }
 
     public async Task<IReadOnlyList<CoverProviderStatusDto>> GetCoverProvidersAsync()

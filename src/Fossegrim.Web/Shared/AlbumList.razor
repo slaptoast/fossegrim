@@ -24,14 +24,7 @@
                 @foreach (var album in _result.Items)
                 {
                     <li class="album-item" @oncontextmenu="e => ShowContextMenu(e, album)" @oncontextmenu:preventDefault="true">
-                        <div class="album-art" @onclick="() => PlayAlbumAsync(album)">
-                            <span class="album-art-placeholder">💿</span>
-                            @if (_coverUrls.TryGetValue(album.Id, out var coverUrl))
-                            {
-                                <img src="@coverUrl" alt="@album.Name" onerror="this.style.visibility='hidden'" onload="this.style.visibility=''" />
-                            }
-                            <div class="album-play-overlay">▶</div>
-                        </div>
+                        <CoverArt AlbumId="album.Id" OnPlay="() => PlayAlbumAsync(album)" />
                         <div class="album-title">@album.Name</div>
                         <div class="album-artist">@ArtistNames(album)</div>
                     </li>
@@ -79,7 +72,6 @@
     private string? _error;
     private string? _loadedQuery;
     private int _page = 1;
-    private readonly Dictionary<Guid, string> _coverUrls = [];
     private bool _isAdmin;
 
     private bool _contextMenuOpen;
@@ -92,7 +84,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        AlbumArtEditor.CoverChanged += OnCoverChanged;
         Scans.ScanFinished += OnScanFinished;
         var state = await AuthStateProvider.GetAuthenticationStateAsync();
         _isAdmin = state.User.IsInRole("Admin");
@@ -122,10 +113,6 @@
             _result = await ApiClient.GetAlbumsAsync(query);
             _page = page;
             _error = null;
-            foreach (var album in _result.Items.Where(a => !_coverUrls.ContainsKey(a.Id)))
-            {
-                _coverUrls[album.Id] = await ApiClient.GetAlbumCoverUrl(album.Id);
-            }
         }
         catch (Exception ex)
         {
@@ -216,16 +203,9 @@
         _showAddToPlaylist = true;
     }
 
-    // A saved cover keeps its URL, so add a version to make the browser load it again.
-    private void OnCoverChanged(Guid albumId) => InvokeAsync(async () =>
-    {
-        _coverUrls[albumId] = await ApiClient.GetAlbumCoverUrl(albumId) + $"&v={AlbumArtEditor.CoverVersion(albumId)}";
-        StateHasChanged();
-    });
 
     public void Dispose()
     {
-        AlbumArtEditor.CoverChanged -= OnCoverChanged;
         Scans.ScanFinished -= OnScanFinished;
     }
 }

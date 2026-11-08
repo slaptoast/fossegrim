@@ -24,14 +24,7 @@
                 @foreach (var album in _albums)
                 {
                     <li class="album-item" @key="album.Id" @oncontextmenu="e => ShowContextMenu(e, album)" @oncontextmenu:preventDefault="true">
-                        <div class="album-art" @onclick="() => PlayAlbumAsync(album)" title="Play album">
-                            <span class="album-art-placeholder">💿</span>
-                            @if (_coverUrls.TryGetValue(album.Id, out var coverUrl))
-                            {
-                                <img src="@coverUrl" alt="@album.Name" onerror="this.style.visibility='hidden'" onload="this.style.visibility=''" />
-                            }
-                            <div class="album-play-overlay">▶</div>
-                        </div>
+                        <CoverArt AlbumId="album.Id" OnPlay="() => PlayAlbumAsync(album)" />
                         <div class="album-title">@album.Name</div>
                         <div class="album-artist">@ArtistNames(album)</div>
                         @if (album.LastPlayedAt is { } playedAt)
@@ -57,7 +50,6 @@
     private const int Count = 10;
 
     private IReadOnlyList<AlbumListItemDto> _albums = [];
-    private readonly Dictionary<Guid, string> _coverUrls = [];
     private string _order = RecentOrders.Recent;
     private bool _loading = true;
     private string? _error;
@@ -99,10 +91,6 @@
             var page = await ApiClient.GetAlbumsAsync(new BrowseQuery(
                 Sort: LibrarySorts.Recent, Order: RecentOrders.ToApiOrder(_order), PageSize: Count, Listened: true));
             _albums = page.Items;
-            foreach (var album in _albums.Where(a => !_coverUrls.ContainsKey(a.Id)))
-            {
-                _coverUrls[album.Id] = await ApiClient.GetAlbumCoverUrl(album.Id);
-            }
             _error = null;
         }
         catch (Exception ex)

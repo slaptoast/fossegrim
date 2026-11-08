@@ -24,6 +24,7 @@
                 {
                     <li class="album-item random-track" @key="track.Id" title="Play" @onclick="() => PlayerState.PlayRandomTracksAsync([track], _mode)"
                         @oncontextmenu="e => ShowContextMenu(e, track)" @oncontextmenu:preventDefault="true">
+                        <CoverArt AlbumId="track.CoverAlbumId()" />
                         <div class="album-title">@(track.Title ?? "Unknown")</div>
                         <div class="album-artist">@(track.ArtistName ?? "Unknown Artist")</div>
                     </li>

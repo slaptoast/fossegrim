@@ -1,0 +1,93 @@
+@implements IDisposable
+@inject FossegrimApiClient ApiClient
+@inject AlbumArtEditorState AlbumArtEditor
+
+@* An album's cover as a small square, for every list of tracks or albums
+   (a track shows its album's). Without an album, or until the cover loads,
+   it shows a placeholder. With OnPlay it gets a ▶ overlay and plays on click.
+   It reloads when the album art editor saves a new cover. *@
+<div class="album-art @Class" title="@(OnPlay.HasDelegate ? PlayTitle : null)" @onclick="ClickAsync">
+    <span class="album-art-placeholder" aria-hidden="true">💿</span>
+    @if (_url is not null)
+    {
+        <img src="@_url" alt="" loading="lazy" onerror="this.style.visibility='hidden'" onload="this.style.visibility=''" />
+    }
+    @if (OnPlay.HasDelegate)
+    {
+        <div class="album-play-overlay">▶</div>
+    }
+</div>
+
+@code {
+    // Covers are served at 64, 128, 256... px: 64 is sharp at 28px on a 2x screen.
+    public const int ThumbnailSize = 64;
+
+    [Parameter]
+    public Guid? AlbumId { get; set; }
+
+    // The longest side to fetch, in pixels.
+    [Parameter]
+    public int Size { get; set; } = ThumbnailSize;
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public EventCallback OnPlay { get; set; }
+
+    [Parameter]
+    public string PlayTitle { get; set; } = "Play album";
+
+    private string? _url;
+    private Guid? _loadedFor;
+    private int _loadedSize;
+
+    protected override void OnInitialized() => AlbumArtEditor.CoverChanged += OnCoverChanged;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AlbumId == _loadedFor && Size == _loadedSize)
+        {
+            return;
+        }
+        _loadedFor = AlbumId;
+        _loadedSize = Size;
+        _url = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (AlbumId is not { } albumId)
+        {
+            return;
+        }
+        try
+        {
+            var url = await ApiClient.GetAlbumCoverUrl(albumId, Size);
+            var version = AlbumArtEditor.CoverVersion(albumId);
+            // A saved cover keeps its URL, so a version makes the browser load it again.
+            _url = version > 0 ? $"{url}&v={version}" : url;
+        }
+        catch (InvalidOperationException)
+        {
+            // Signed out: the placeholder stays.
+        }
+    }
+
+    private void OnCoverChanged(Guid albumId)
+    {
+        if (albumId == AlbumId)
+        {
+            InvokeAsync(async () =>
+            {
+                await LoadAsync();
+                StateHasChanged();
+            });
+        }
+    }
+
+    private Task ClickAsync() => OnPlay.HasDelegate ? OnPlay.InvokeAsync() : Task.CompletedTask;
+
+    public void Dispose() => AlbumArtEditor.CoverChanged -= OnCoverChanged;
+}

@@ -33,6 +33,23 @@ public class PlaysEndpointTests : IClassFixture<FossegrimApiFactory>
     }
 
     [Fact]
+    public async Task History_IncludesEachTracksAlbum_ForItsCover()
+    {
+        var client = await _factory.CreateUserClientAsync();
+        var linked = await _factory.AddMediaItemAsync(linkedAlbumLabel: "Label");
+        var loose = await _factory.AddMediaItemAsync();
+        await PlayAsync(client, linked);
+        await PlayAsync(client, loose);
+        var albumId = Guid.Empty;
+        await _factory.WithDbAsync(async db => albumId = await db.MediaItems.Where(m => m.Id == linked.Id).Select(m => m.Albums.Single().Id).SingleAsync());
+
+        var history = await GetHistoryAsync(client);
+
+        Assert.Equal(albumId, history.Items.Single(p => p.MediaItem.Id == linked.Id).MediaItem.AlbumId);
+        Assert.Null(history.Items.Single(p => p.MediaItem.Id == loose.Id).MediaItem.AlbumId);
+    }
+
+    [Fact]
     public async Task Record_StoresClientStartTimeAndListenedFor()
     {
         var client = await _factory.CreateUserClientAsync();

@@ -21,14 +21,7 @@
                 @foreach (var album in _albums)
                 {
                     <li class="album-item" @key="album.Id" @oncontextmenu="e => ShowContextMenu(e, album)" @oncontextmenu:preventDefault="true">
-                        <div class="album-art" @onclick="() => PlayAlbumAsync(album)" title="Play album">
-                            <span class="album-art-placeholder">💿</span>
-                            @if (_coverUrls.TryGetValue(album.Id, out var coverUrl))
-                            {
-                                <img src="@coverUrl" alt="@album.Name" onerror="this.style.visibility='hidden'" onload="this.style.visibility=''" />
-                            }
-                            <div class="album-play-overlay">▶</div>
-                        </div>
+                        <CoverArt AlbumId="album.Id" OnPlay="() => PlayAlbumAsync(album)" />
                         <div class="album-title">@album.Name</div>
                         <div class="album-artist">@ArtistNames(album)</div>
                     </li>
@@ -51,7 +44,6 @@
 
     // Album DTOs only list their tracks' ids, so playing one needs the full tracks.
     private IReadOnlyList<AlbumDto> _albums = [];
-    private readonly Dictionary<Guid, string> _coverUrls = [];
     private string _mode = RandomModes.Adjusted;
     private bool _loading = true;
     private string? _error;
@@ -85,10 +77,6 @@
         try
         {
             _albums = await ApiClient.GetRandomAlbumsAsync(_mode, Count);
-            foreach (var album in _albums.Where(a => !_coverUrls.ContainsKey(a.Id)))
-            {
-                _coverUrls[album.Id] = await ApiClient.GetAlbumCoverUrl(album.Id);
-            }
             _error = null;
         }
         catch (Exception ex)

@@ -18,6 +18,7 @@
                     {
                         <th class="drag-handle-cell"></th>
                     }
+                    <th class="cover-cell"></th>
                     <th>Title</th>
                     <th>Artist</th>
                     <th>Album</th>
@@ -43,6 +44,7 @@
                         {
                             <td class="drag-handle-cell" title="Drag to reorder">⠿</td>
                         }
+                        <td class="cover-cell"><CoverArt AlbumId="item.MediaItem.AlbumId" /></td>
                         <td class="title-cell">@(item.MediaItem.Title ?? "Unknown")</td>
                         <td class="artist-cell">@(item.MediaItem.ArtistName ?? "Unknown Artist")</td>
                         <td class="album-cell">@(item.MediaItem.Album ?? "Unknown Album")</td>

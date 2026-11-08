@@ -39,6 +39,7 @@
                 <thead>
                     <tr>
                         <th class="played-cell">Played</th>
+                        <th class="cover-cell"></th>
                         <th>Title</th>
                         <th>Artist</th>
                         <th>Album</th>
@@ -56,6 +57,7 @@
                     {
                         <tr @onclick="() => PlayAsync(play.MediaItem)" title="Play this track">
                             <td class="played-cell">@FormatPlayedAt(play.PlayedAt)</td>
+                            <td class="cover-cell"><CoverArt AlbumId="play.MediaItem.AlbumId" /></td>
                             <td class="title-cell">@(play.MediaItem.Title ?? "Unknown")</td>
                             <td class="artist-cell">@(play.MediaItem.ArtistName ?? "Unknown Artist")</td>
                             <td class="album-cell">@play.MediaItem.Album</td>
@@ -143,7 +145,8 @@
 
     private Task PlayAsync(PlayedTrackDto track) => PlayerState.PlayAsync(new MediaItemDto(
         track.Id, track.Title, track.ArtistName, track.Album, null, null,
-        track.Year, track.Track, track.Genre, track.Duration, null, [], []));
+        track.Year, track.Track, track.Genre, track.Duration, null, [],
+        track.AlbumId is { } albumId ? [new AlbumSummaryDto(albumId, track.Album ?? "", track.Year)] : []));
 
     private static string FormatPlayedAt(DateTime playedAtUtc)
     {

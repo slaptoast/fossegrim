@@ -41,6 +41,7 @@
                     <span class="player-title">@(track.Title ?? "Unknown")</span>
                     <span class="player-artist">@ArtistAndAlbum(track)</span>
                 </div>
+                <FavoriteButton Kind="@FavoriteKinds.Tracks" Id="track.Id" Name="@(track.Title ?? "this track")" />
                 <div class="player-controls">
                     @PreviousNext
                 </div>
@@ -58,6 +59,7 @@
             <span class="player-title">@(track.Title ?? "Unknown")</span>
             <span class="player-artist">@(track.ArtistName ?? "Unknown Artist")</span>
         </div>
+        <FavoriteButton Kind="@FavoriteKinds.Tracks" Id="track.Id" Name="@(track.Title ?? "this track")" />
         <div class="player-controls">
             @PreviousNext
         </div>

@@ -1,0 +1,79 @@
+@inject FossegrimApiClient ApiClient
+@inject PlayerState PlayerState
+@inject ToastService Toasts
+
+@* The user's favourite tracks, albums and artists, newest first, one tab
+   each. Play all plays every favourite track in that order. *@
+<div class="favorites-module">
+    <div class="favorites-tabs" role="tablist" aria-label="Favourites">
+        @foreach (var (tab, label) in Tabs)
+        {
+            <button type="button" role="tab" class="favorites-tab @(_tab == tab ? "active" : null)"
+                    aria-selected="@(_tab == tab ? "true" : "false")" @onclick="() => _tab = tab">@label</button>
+        }
+        @if (_tab == FavoriteKinds.Tracks)
+        {
+            <button type="button" class="button-secondary favorites-play" disabled="@_starting" @onclick="PlayAllAsync">▶ Play all</button>
+        }
+    </div>
+
+    <div class="favorites-body" role="tabpanel">
+        @switch (_tab)
+        {
+            case FavoriteKinds.Albums:
+                <AlbumList FavoritesOnly="true" Title="Favourite albums" />
+                break;
+            case FavoriteKinds.Artists:
+                <ArtistList FavoritesOnly="true" Title="Favourite artists" />
+                break;
+            default:
+                <TrackList FromServer="true" FavoritesOnly="true" Title="Favourite tracks" />
+                break;
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly (string Tab, string Label)[] Tabs =
+    [
+        (FavoriteKinds.Tracks, "Tracks"),
+        (FavoriteKinds.Albums, "Albums"),
+        (FavoriteKinds.Artists, "Artists"),
+    ];
+
+    private string _tab = FavoriteKinds.Tracks;
+    private bool _starting;
+
+    private async Task PlayAllAsync()
+    {
+        _starting = true;
+        try
+        {
+            var tracks = new List<MediaItemDto>();
+            for (var page = 1; ; page++)
+            {
+                var result = await ApiClient.GetTracksAsync(new BrowseQuery(Sort: LibrarySorts.Favorited, Page: page, PageSize: BrowseQuery.MaxPageSize, Favorites: true));
+                tracks.AddRange(result.Items);
+                if (page >= result.TotalPages)
+                {
+                    break;
+                }
+            }
+
+            if (tracks.Count == 0)
+            {
+                Toasts.Show("You haven't favourited any tracks yet.");
+                return;
+            }
+            await PlayerState.PlayQueueAsync(tracks);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show($"Couldn't play your favourites: {ex.Message}");
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+}

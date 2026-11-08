@@ -4,6 +4,7 @@
 @inject AlbumArtEditorState AlbumArtEditor
 @inject FossegrimApiClient ApiClient
 @inject ScanStatusService Scans
+@inject FavoritesService Favorites
 @implements IDisposable
 
 @* Shows either MediaItems (searched, sorted and paged here, e.g. the
@@ -17,7 +18,7 @@
             {
                 <h2>@Title</h2>
             }
-            <BrowseControls @ref="_controls" Sorts="ServerSorts" ShowSearch="Query is null" Query="@Query"
+            <BrowseControls @ref="_controls" Sorts="ServerSorts" ShowSearch="Query is null" Query="@Query" FavoritesOnly="FavoritesOnly"
                             Placeholder="🔍 Search by title, artist, or album..." Changed="() => LoadAsync(1)" />
         </div>
     }
@@ -85,6 +86,7 @@
                             <th @onclick='() => SetSort("artist")'>Artist</th>
                             <th @onclick='() => SetSort("album")'>Album</th>
                         }
+                        <th class="favorite-cell"><span class="visually-hidden">Favourite</span></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -102,6 +104,7 @@
                             <td class="title-cell">@(item.Title ?? "Unknown")</td>
                             <td class="artist-cell">@(item.ArtistName ?? "Unknown Artist")</td>
                             <td class="album-cell">@(item.Album ?? "Unknown Album")</td>
+                            <td class="favorite-cell"><FavoriteButton Kind="@FavoriteKinds.Tracks" Id="item.Id" Name="@(item.Title ?? "this track")" /></td>
                         </tr>
                     }
                 </tbody>
@@ -130,6 +133,7 @@
         (LibrarySorts.Added, "Recently added"),
         (LibrarySorts.Played, "Most played"),
         (LibrarySorts.Recent, "Recently played"),
+        (LibrarySorts.Favorited, "Recently favourited"),
     ];
 
     // The tracks to show, when not FromServer.
@@ -146,6 +150,10 @@
 
     [Parameter]
     public string? Title { get; set; }
+
+    // With FromServer: only the user's favourite tracks (the Favourites module).
+    [Parameter]
+    public bool FavoritesOnly { get; set; }
 
     [Parameter]
     public bool Editable { get; set; }
@@ -182,6 +190,7 @@
     private BrowseControls? _controls;
     private PagedResult<MediaItemDto>? _result;
     private string? _loadedQuery;
+    private BrowseQuery? _lastQuery;
     private string? _error;
 
     protected override async Task OnInitializedAsync()
@@ -189,6 +198,7 @@
         if (FromServer)
         {
             Scans.ScanFinished += OnScanFinished;
+            Favorites.Changed += OnFavoritesChanged;
         }
         var state = await AuthStateProvider.GetAuthenticationStateAsync();
         _isAdmin = state.User.IsInRole("Admin");
@@ -212,6 +222,11 @@
         {
             query = query with { Q = Query };
         }
+        if (FavoritesOnly)
+        {
+            query = query with { Favorites = true };
+        }
+        _lastQuery = query;
 
         try
         {
@@ -234,6 +249,19 @@
         else
         {
             _currentPage = page;
+        }
+    }
+
+    // A heart changed: a list of favourites (or sorted by them) shows a different page.
+    private void OnFavoritesChanged(string kind)
+    {
+        if (kind == FavoriteKinds.Tracks && _lastQuery is { } last && (last.Favorites || last.Sort == LibrarySorts.Favorited))
+        {
+            _ = InvokeAsync(async () =>
+            {
+                await LoadAsync(_currentPage);
+                StateHasChanged();
+            });
         }
     }
 
@@ -331,6 +359,9 @@
         {
             new("Add to next in queue", () => PlayerState.AddToQueueNextAsync([item.Id])),
             new("Add to end of queue", () => PlayerState.AddToQueueEndAsync([item.Id])),
+            Favorites.IsFavorite(FavoriteKinds.Tracks, item.Id)
+                ? new ContextMenuAction("Remove from favourites", () => Favorites.SetAsync(FavoriteKinds.Tracks, item.Id, false))
+                : new ContextMenuAction("Add to favourites", () => Favorites.SetAsync(FavoriteKinds.Tracks, item.Id, true)),
             new("Add to playlist...", () =>
             {
                 OpenAddToPlaylist([item.Id]);
@@ -394,6 +425,7 @@
         if (FromServer)
         {
             Scans.ScanFinished -= OnScanFinished;
+            Favorites.Changed -= OnFavoritesChanged;
         }
     }
 }

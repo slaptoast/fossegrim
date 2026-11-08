@@ -62,19 +62,11 @@
     private DotNetObjectReference<ModuleGrid>? _self;
 
     /// <summary>
-    /// The saved layout, with defaults for modules it doesn't mention (new
-    /// modules, or nothing saved yet) and without ones that no longer exist.
+    /// The saved layout, or the defaults with nothing saved. A module added
+    /// since the layout was saved goes at the top (see ModuleLayout.Merge).
     /// </summary>
-    public List<LayoutItem> Layout
-    {
-        get
-        {
-            var saved = Appearance.Current.Layouts.GetValueOrDefault(PageId) ?? [];
-            return Modules
-                .Select(m => saved.FirstOrDefault(i => i.Id == m.Id) ?? Copy(m.Default))
-                .ToList();
-        }
-    }
+    public List<LayoutItem> Layout =>
+        ModuleLayout.Merge(Modules.Select(m => m.Default).ToList(), Appearance.Current.Layouts.GetValueOrDefault(PageId));
 
     public IEnumerable<(ModuleDefinition Module, bool Hidden)> ModuleVisibility =>
         Modules.Select(m => (m, Layout.First(i => i.Id == m.Id).Hidden));
@@ -197,10 +189,7 @@
         return Appearance.UpdateAsync(p => p.Layouts[PageId] = layout);
     }
 
-    private static LayoutItem Copy(LayoutItem item) => new()
-    {
-        Id = item.Id, X = item.X, Y = item.Y, W = item.W, H = item.H, Hidden = item.Hidden
-    };
+    private static LayoutItem Copy(LayoutItem item) => ModuleLayout.Copy(item);
 
     public async ValueTask DisposeAsync()
     {

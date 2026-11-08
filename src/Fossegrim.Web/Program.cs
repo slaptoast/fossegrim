@@ -33,6 +33,7 @@ builder.Services.AddScoped<PlayerHost>();
 builder.Services.AddScoped<AppearanceService>();
 builder.Services.AddScoped<IPlaybackSettings>(sp => sp.GetRequiredService<AppearanceService>());
 builder.Services.AddScoped<AlbumArtEditorState>();
+builder.Services.AddScoped<FavoritesService>();
 builder.Services.AddScoped<ScanStatusService>();
 
 builder.Services.AddTransient<AuthorizedHttpMessageHandler>();

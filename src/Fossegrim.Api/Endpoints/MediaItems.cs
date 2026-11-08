@@ -16,8 +16,9 @@ public static class MediaItems
             .RequireAuthorization();
 
         // ?q= searches; sort= and order= see LibrarySorts.ForTracks; page= and pageSize= (max 500).
-        mediaItemGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, bool? listened, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
-            Browse.ListAsync(q, sort, order, page, pageSize, listened ?? false, LibrarySorts.ForTracks, principal, (request, userId) => browser.TracksAsync(request, userId, cancellationToken)))
+        // listened=true leaves out what the caller has never played; favorites=true keeps only their favourites.
+        mediaItemGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, bool? listened, bool? favorites, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
+            Browse.ListAsync(q, sort, order, page, pageSize, listened ?? false, favorites ?? false, LibrarySorts.ForTracks, principal, (request, userId) => browser.TracksAsync(request, userId, cancellationToken)))
         .WithName("GetMediaItems")
         .WithOpenApi();
 

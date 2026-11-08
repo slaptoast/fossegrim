@@ -20,6 +20,9 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<AppSetting> AppSettings { get; set; }
     public DbSet<UserPreferences> UserPreferences { get; set; }
     public DbSet<UserSession> UserSessions { get; set; }
+    public DbSet<FavoriteTrack> FavoriteTracks { get; set; }
+    public DbSet<FavoriteAlbum> FavoriteAlbums { get; set; }
+    public DbSet<FavoriteArtist> FavoriteArtists { get; set; }
 
     public FossegrimDbContext(DbContextOptions<FossegrimDbContext> options)
         : base(options)
@@ -247,6 +250,29 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
                   .WithMany()
                   .HasForeignKey(pe => pe.MediaItemId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Favourites: one row per user and item, newest-first lists per user.
+        modelBuilder.Entity<FavoriteTrack>(entity =>
+        {
+            entity.HasKey(f => new { f.UserId, f.MediaItemId });
+            entity.HasIndex(f => new { f.UserId, f.CreatedAt });
+            entity.HasOne(f => f.User).WithMany().HasForeignKey(f => f.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(f => f.MediaItem).WithMany().HasForeignKey(f => f.MediaItemId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<FavoriteAlbum>(entity =>
+        {
+            entity.HasKey(f => new { f.UserId, f.AlbumId });
+            entity.HasIndex(f => new { f.UserId, f.CreatedAt });
+            entity.HasOne(f => f.User).WithMany().HasForeignKey(f => f.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(f => f.Album).WithMany().HasForeignKey(f => f.AlbumId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<FavoriteArtist>(entity =>
+        {
+            entity.HasKey(f => new { f.UserId, f.ArtistId });
+            entity.HasIndex(f => new { f.UserId, f.CreatedAt });
+            entity.HasOne(f => f.User).WithMany().HasForeignKey(f => f.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(f => f.Artist).WithMany().HasForeignKey(f => f.ArtistId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // Signed-in devices; deleted along with the user

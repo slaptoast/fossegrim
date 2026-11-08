@@ -23,6 +23,19 @@ public static class CoverImages
     }
 
     /// <summary>
+    /// The same hosts as <see cref="IsAllowedSource"/>, as content security
+    /// policy sources: the browser shows cover search results straight from
+    /// them, and may load images from nowhere else. Keep the two in step.
+    /// </summary>
+    public static readonly IReadOnlyList<string> BrowserImageSources =
+    [
+        "https://coverartarchive.org",
+        "https://archive.org",
+        "https://*.archive.org",
+        "https://*.dzcdn.net",
+    ];
+
+    /// <summary>
     /// Whether the server may download from <paramref name="url"/>: HTTPS on
     /// the search providers' image hosts only. The address comes from the
     /// browser, so without this the server could be pointed at anything it can

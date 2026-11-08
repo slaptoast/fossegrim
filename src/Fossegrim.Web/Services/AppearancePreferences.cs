@@ -29,7 +29,8 @@ public sealed class AppearancePreferences
 
 public sealed class ThemeSettings
 {
-    // "system", "light", "dark", or "custom:<id>" for one of Custom.
+    // "system", "light", "dark", "builtin:<id>" for one of PresetThemes, or
+    // "custom:<id>" for one of Custom.
     public string Choice { get; set; } = ThemeChoices.System;
     public List<CustomTheme> Custom { get; set; } = [];
 }
@@ -45,6 +46,11 @@ public sealed class CustomTheme
 
     // Token name (see ThemeTokens) -> "#rrggbb".
     public Dictionary<string, string> Colors { get; set; } = [];
+
+    // Extra CSS applied after the app's own while this theme is active. It
+    // can't reach other servers: the content security policy only lets
+    // images and fonts load from the app itself and the cover providers.
+    public string Css { get; set; } = "";
 
     public static string NewId() => Guid.NewGuid().ToString("N")[..12];
 }
@@ -151,6 +157,10 @@ public static partial class AppearancePreferencesFile
 {
     public const int MaxCustomThemes = 50;
     public const int MaxNameLength = 60;
+    // Custom CSS: per theme, and across all of them, so the whole document
+    // stays well inside the server's 256 KB limit on preferences.
+    public const int MaxCssLength = 32 * 1024;
+    public const int MaxTotalCssLength = 160 * 1024;
     public const int GridColumns = 24;
     private const int MaxRows = 200;
 
@@ -241,8 +251,21 @@ public static partial class AppearancePreferencesFile
             .Take(MaxCustomThemes)
             .ToList();
 
+        // Over the total, later themes lose their CSS (the editor stops it
+        // getting that far; only a hand-made file could).
+        var cssBudget = MaxTotalCssLength;
+        foreach (var theme in themes)
+        {
+            if (theme.Css.Length > cssBudget)
+            {
+                theme.Css = "";
+            }
+            cssBudget -= theme.Css.Length;
+        }
+
         var choice = preferences.Theme?.Choice ?? ThemeChoices.System;
         var choiceIsValid = choice is ThemeChoices.System or ThemeChoices.Light or ThemeChoices.Dark ||
+            PresetThemes.Find(choice) is not null ||
             (choice.StartsWith(ThemeChoices.CustomPrefix, StringComparison.Ordinal) &&
              themes.Any(t => ThemeChoices.ForCustom(t) == choice));
 
@@ -324,7 +347,23 @@ public static partial class AppearancePreferencesFile
             Colors = (theme.Colors ?? [])
                 .Where(c => ThemeTokens.IsEditable(c.Key) && c.Value is not null && HexColor().IsMatch(c.Value))
                 .ToDictionary(c => c.Key, c => c.Value.ToLowerInvariant()),
+            Css = SanitizeCss(theme.Css),
         };
+    }
+
+    /// <summary>
+    /// The CSS as it will be applied, or "" if it's too long. It's set as a
+    /// style element's text, so it can't add markup; control characters
+    /// (other than line breaks and tabs) are dropped as they have no place in CSS.
+    /// </summary>
+    public static string SanitizeCss(string? css)
+    {
+        if (string.IsNullOrWhiteSpace(css) || css.Length > MaxCssLength)
+        {
+            return "";
+        }
+        var cleaned = new string(css.Where(c => !char.IsControl(c) || c is '\n' or '\r' or '\t').ToArray());
+        return cleaned.Trim().Length == 0 ? "" : cleaned;
     }
 
     // An exported single theme: marked so importing a full settings file

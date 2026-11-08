@@ -12,6 +12,32 @@ public static class JwtTokenService
     // handler would remap to ClaimTypes.Sid.
     public const string SessionClaim = "fsg_sid";
 
+    /// <summary>The audience of media tokens, which only /stream and /cover accept.</summary>
+    public static string MediaAudience(string audience) => audience + ":media";
+
+    /// <summary>
+    /// A token for /stream and /cover URLs only (see Fossegrim.Api's
+    /// MediaAuth): it names the user and session and nothing else, and its
+    /// audience keeps it off the rest of the API.
+    /// </summary>
+    public static (string Token, DateTime ExpiresAt) GenerateMediaToken(
+        string userId,
+        string issuer,
+        string audience,
+        string signingKey,
+        int expiryMinutes,
+        Guid sessionId)
+    {
+        var expiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes);
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: MediaAudience(audience),
+            claims: [new(JwtRegisteredClaimNames.Sub, userId), new(SessionClaim, sessionId.ToString())],
+            expires: expiresAt,
+            signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)), SecurityAlgorithms.HmacSha256));
+        return (new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
+    }
+
     public static (string Token, DateTime ExpiresAt) GenerateToken(
         ApplicationUser user,
         IEnumerable<string> roles,

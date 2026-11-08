@@ -152,15 +152,19 @@ public class SessionTests : IClassFixture<FossegrimApiFactory>
         var user = await _factory.CreateUserAsync();
         var (device, login) = await SignInAsync(user);
 
-        await device.PostAsync("/api/auth/logout", null);
-        var response = await _factory.CreateClient().GetAsync($"/cover/{Guid.NewGuid()}?access_token={Uri.EscapeDataString(login.Token)}");
+        // Signed in, an unknown album's cover is a 404; signed out, a 401.
+        var url = $"/cover/{Guid.NewGuid()}?access_token={Uri.EscapeDataString(login.MediaToken!)}";
+        Assert.Equal(HttpStatusCode.NotFound, (await _factory.CreateClient().GetAsync(url)).StatusCode);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        await device.PostAsync("/api/auth/logout", null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateClient().GetAsync(url)).StatusCode);
     }
 
-    // Tokens issued before this release have no session; they work until they expire.
+    // Every token carries a session id, so one without is rejected (it
+    // could only come from before sessions existed, and those have expired).
     [Fact]
-    public async Task TokensWithoutASession_StillWork()
+    public async Task TokensWithoutASession_AreRejected()
     {
         var user = await _factory.CreateUserAsync();
         var token = new JwtSecurityToken(
@@ -173,7 +177,7 @@ public class SessionTests : IClassFixture<FossegrimApiFactory>
 
         var response = await ClientWith(new JwtSecurityTokenHandler().WriteToken(token)).GetAsync("/api/auth/me");
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Theory]

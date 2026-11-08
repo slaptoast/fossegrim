@@ -183,15 +183,15 @@ public static class Playlists
                 return Results.Unauthorized();
             }
 
-            if (string.IsNullOrWhiteSpace(request.Name))
+            if (NameError(request.Name) is { } nameError)
             {
-                return Results.BadRequest(new ApiErrorResponse("Name is required."));
+                return Results.BadRequest(new ApiErrorResponse(nameError));
             }
 
             var playlist = new Playlist
             {
                 Id = Guid.NewGuid(),
-                Name = request.Name,
+                Name = request.Name.Trim(),
                 Type = PlaylistType.Standard,
                 OwnerId = user.Id,
                 DateAdded = DateTime.UtcNow,
@@ -241,12 +241,12 @@ public static class Playlists
                 return Results.BadRequest(new ApiErrorResponse("The queue cannot be renamed."));
             }
 
-            if (string.IsNullOrWhiteSpace(request.Name))
+            if (NameError(request.Name) is { } nameError)
             {
-                return Results.BadRequest(new ApiErrorResponse("Name is required."));
+                return Results.BadRequest(new ApiErrorResponse(nameError));
             }
 
-            playlist.Name = request.Name;
+            playlist.Name = request.Name.Trim();
             playlist.LastModified = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
@@ -267,8 +267,8 @@ public static class Playlists
                 return Results.Unauthorized();
             }
 
-            var playlist = await db.Playlists.FirstOrDefaultAsync(p => p.Id == id);
-            if (playlist is null)
+            var playlist = await db.Playlists.Include(p => p.Shares).FirstOrDefaultAsync(p => p.Id == id);
+            if (playlist is null || GetAccess(playlist, user.Id) == PlaylistAccess.None)
             {
                 return Results.NotFound();
             }
@@ -503,7 +503,7 @@ public static class Playlists
             }
 
             var playlist = await LoadPlaylistAsync(db, id);
-            if (playlist is null)
+            if (playlist is null || GetAccess(playlist, user.Id) == PlaylistAccess.None)
             {
                 return Results.NotFound();
             }
@@ -571,7 +571,7 @@ public static class Playlists
             }
 
             var playlist = await LoadPlaylistAsync(db, id);
-            if (playlist is null)
+            if (playlist is null || GetAccess(playlist, user.Id) == PlaylistAccess.None)
             {
                 return Results.NotFound();
             }
@@ -623,6 +623,13 @@ public static class Playlists
         .WithName("LeavePlaylist")
         .WithOpenApi();
     }
+
+    private const int MaxNameLength = 200;
+
+    private static string? NameError(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? "Name is required."
+        : name.Trim().Length > MaxNameLength ? $"Playlist names can be at most {MaxNameLength} characters."
+        : null;
 
     // Gap between fractional positions. Leaves room to insert between any two
     // neighbors by averaging, without needing to touch other rows.

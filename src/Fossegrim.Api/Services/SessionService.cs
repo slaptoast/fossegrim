@@ -20,6 +20,8 @@ public class SessionService
     // Recording every request would write to the database each time.
     private static readonly TimeSpan LastUsedResolution = TimeSpan.FromMinutes(5);
 
+    private const int DefaultMediaExpiryMinutes = 7 * 24 * 60;
+
     private readonly FossegrimDbContext _db;
     private readonly UserManager<ApplicationUser> _users;
     private readonly IConfiguration _configuration;
@@ -137,7 +139,7 @@ public class SessionService
         return sessions.ExecuteDeleteAsync();
     }
 
-    /// <summary>The session the request's access token belongs to (null for tokens issued before sessions).</summary>
+    /// <summary>The session the request's token belongs to.</summary>
     public static Guid? CurrentSessionId(ClaimsPrincipal principal) =>
         Guid.TryParse(principal.FindFirstValue(JwtTokenService.SessionClaim), out var id) ? id : null;
 
@@ -155,7 +157,15 @@ public class SessionService
             jwt.GetValue<int>("ExpiryMinutes"),
             sessionId);
 
-        return new LoginResponse(token, expiresAt, user.Id, user.UserName!, user.Email!, user.DisplayName, roles.ToList(), refreshToken, sessionId);
+        var (mediaToken, mediaExpiresAt) = JwtTokenService.GenerateMediaToken(
+            user.Id,
+            jwt["Issuer"]!,
+            jwt["Audience"]!,
+            jwt["Key"]!,
+            jwt.GetValue("MediaExpiryMinutes", DefaultMediaExpiryMinutes),
+            sessionId);
+
+        return new LoginResponse(token, expiresAt, user.Id, user.UserName!, user.Email!, user.DisplayName, roles.ToList(), refreshToken, sessionId, mediaToken, mediaExpiresAt);
     }
 
     private static string NewRefreshToken() =>

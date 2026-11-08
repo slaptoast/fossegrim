@@ -1,5 +1,6 @@
 using Fossegrim.Api.Services;
 using Fossegrim.Contracts.Dtos;
+using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
 using Microsoft.AspNetCore.Identity;
 
@@ -23,12 +24,18 @@ public static class Setup
         setupGroup.MapPost("/admin", async (
             CreateFirstAdminRequest request,
             HttpRequest http,
+            FossegrimDbContext db,
             SetupService setup,
             SessionService sessions) =>
         {
             if (!await setup.IsSetupRequiredAsync())
             {
                 return Results.Problem("Setup has already been done; sign in as an admin to change settings.", statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            if (await AccountRules.CheckDisplayNameAsync(db, request.DisplayName) is { } nameError)
+            {
+                return Results.BadRequest(new IdentityErrorsResponse([nameError]));
             }
 
             var (user, result) = await setup.CreateFirstAdminAsync(request);
@@ -39,6 +46,7 @@ public static class Setup
 
             return Results.Ok(await sessions.SignInAsync(user, request.ClientName, Auth.UserAgentOf(http)));
         })
+        .RequireRateLimiting(SignInLimits.Policy)
         .WithName("CreateFirstAdmin")
         .WithOpenApi();
 
@@ -63,8 +71,13 @@ public static class Setup
         .WithName("UpdateRegistrationSettings")
         .WithOpenApi();
 
-        adminGroup.MapPost("/users", async (CreateUserRequest request, SetupService setup) =>
+        adminGroup.MapPost("/users", async (CreateUserRequest request, FossegrimDbContext db, SetupService setup) =>
         {
+            if (await AccountRules.CheckDisplayNameAsync(db, request.DisplayName) is { } nameError)
+            {
+                return Results.BadRequest(new IdentityErrorsResponse([nameError]));
+            }
+
             var (user, result) = await setup.CreateUserAsync(request.Email, request.DisplayName, request.Password, request.IsAdmin);
             if (user is null || !result.Succeeded)
             {

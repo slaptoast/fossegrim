@@ -1,0 +1,153 @@
+@implements IDisposable
+@inject FossegrimApiClient ApiClient
+@inject PlayerState PlayerState
+@inject AppearanceService Appearance
+
+@* The albums the user has played most recently, or longest ago (Not lately).
+   Albums never played don't show. Click the cover to play one, right-click to
+   queue it. Refreshes itself when a listen is recorded. *@
+<div class="album-list-component random-module recent-module">
+    <div class="album-list-header">
+        <h2>Recently played albums</h2>
+        <RecentOrderToggle Order="_order" OrderChanged="SetOrderAsync" OnRefresh="LoadAsync" Loading="_loading" />
+    </div>
+
+    <div class="album-list-container">
+        @if (_error is not null)
+        {
+            <div class="no-results"><p>@_error</p></div>
+        }
+        else if (_albums.Count > 0)
+        {
+            var now = DateTime.UtcNow;
+            <ul class="album-list">
+                @foreach (var album in _albums)
+                {
+                    <li class="album-item" @key="album.Id" @oncontextmenu="e => ShowContextMenu(e, album)" @oncontextmenu:preventDefault="true">
+                        <div class="album-art" @onclick="() => PlayAlbumAsync(album)" title="Play album">
+                            <span class="album-art-placeholder">💿</span>
+                            @if (_coverUrls.TryGetValue(album.Id, out var coverUrl))
+                            {
+                                <img src="@coverUrl" alt="@album.Name" onerror="this.style.visibility='hidden'" onload="this.style.visibility=''" />
+                            }
+                            <div class="album-play-overlay">▶</div>
+                        </div>
+                        <div class="album-title">@album.Name</div>
+                        <div class="album-artist">@ArtistNames(album)</div>
+                        @if (album.LastPlayedAt is { } playedAt)
+                        {
+                            <span class="recent-played-at" title="Last played @playedAt.ToLocalTime().ToString("g")">@RelativeTime.Format(playedAt, now)</span>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+        else if (!_loading)
+        {
+            <div class="no-results"><p>No albums played yet.</p></div>
+        }
+    </div>
+</div>
+
+<ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="() => _contextMenuOpen = false" />
+
+<AddToPlaylistModal IsOpen="_showAddToPlaylist" MediaItemIds="_addToPlaylistIds" OnClose="() => _showAddToPlaylist = false" />
+
+@code {
+    private const int Count = 10;
+
+    private IReadOnlyList<AlbumListItemDto> _albums = [];
+    private readonly Dictionary<Guid, string> _coverUrls = [];
+    private string _order = RecentOrders.Recent;
+    private bool _loading = true;
+    private string? _error;
+
+    private bool _contextMenuOpen;
+    private double _contextMenuX;
+    private double _contextMenuY;
+    private IReadOnlyList<ContextMenuAction> _contextMenuActions = [];
+
+    private bool _showAddToPlaylist;
+    private IReadOnlyList<Guid> _addToPlaylistIds = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        PlayerState.ListenRecorded += OnListenRecorded;
+        await Appearance.EnsureLoadedAsync();
+        _order = Appearance.Current.Recent.AlbumOrder;
+        await LoadAsync();
+    }
+
+    private void OnListenRecorded() => InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task SetOrderAsync(string order)
+    {
+        _order = order;
+        await Appearance.UpdateAsync(p => p.Recent.AlbumOrder = order);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var page = await ApiClient.GetAlbumsAsync(new BrowseQuery(
+                Sort: LibrarySorts.Recent, Order: RecentOrders.ToApiOrder(_order), PageSize: Count, Listened: true));
+            _albums = page.Items;
+            foreach (var album in _albums.Where(a => !_coverUrls.ContainsKey(a.Id)))
+            {
+                _coverUrls[album.Id] = await ApiClient.GetAlbumCoverUrl(album.Id);
+            }
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Couldn't load recently played albums: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ArtistNames(AlbumListItemDto album) =>
+        album.Artists.Any() ? string.Join(", ", album.Artists.Select(a => a.Name)) : "Unknown Artist";
+
+    private async Task PlayAlbumAsync(AlbumListItemDto album)
+    {
+        var tracks = await ApiClient.GetAlbumTracksAsync(album.Id);
+        if (tracks.Count > 0)
+        {
+            await PlayerState.PlayAlbumAsync(album.Id, tracks);
+        }
+    }
+
+    // List items don't carry their tracks, so queueing fetches them.
+    private async Task<IReadOnlyList<Guid>> TrackIdsAsync(AlbumListItemDto album) =>
+        (await ApiClient.GetAlbumTracksAsync(album.Id)).Select(t => t.Id).ToList();
+
+    private void ShowContextMenu(MouseEventArgs e, AlbumListItemDto album)
+    {
+        _contextMenuX = e.ClientX;
+        _contextMenuY = e.ClientY;
+        _contextMenuActions =
+        [
+            new("Play album", () => PlayAlbumAsync(album)),
+            new("Add to next in queue", async () => await PlayerState.AddToQueueNextAsync(await TrackIdsAsync(album))),
+            new("Add to end of queue", async () => await PlayerState.AddToQueueEndAsync(await TrackIdsAsync(album))),
+            new("Add to playlist...", async () =>
+            {
+                _addToPlaylistIds = await TrackIdsAsync(album);
+                _showAddToPlaylist = true;
+            }),
+        ];
+        _contextMenuOpen = true;
+    }
+
+    public void Dispose() => PlayerState.ListenRecorded -= OnListenRecorded;
+}

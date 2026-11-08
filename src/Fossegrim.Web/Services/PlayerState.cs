@@ -88,6 +88,9 @@ public class PlayerState
 
     public event Action? Changed;
 
+    // A listen was saved to the user's history (e.g. for the Recently played modules).
+    public event Action? ListenRecorded;
+
     public Task PlayAsync(MediaItemDto track) => PlayQueueAsync([track]);
 
     // Replaces the queue with these tracks and starts playing the first.
@@ -331,7 +334,9 @@ public class PlayerState
         catch
         {
             // Best-effort, like now-playing: a lost listen shouldn't disrupt playback.
+            return;
         }
+        ListenRecorded?.Invoke();
     }
 
     public void Stop()

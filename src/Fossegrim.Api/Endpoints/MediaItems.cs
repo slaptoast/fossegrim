@@ -16,8 +16,8 @@ public static class MediaItems
             .RequireAuthorization();
 
         // ?q= searches; sort= and order= see LibrarySorts.ForTracks; page= and pageSize= (max 500).
-        mediaItemGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
-            Browse.ListAsync(q, sort, order, page, pageSize, LibrarySorts.ForTracks, principal, (request, userId) => browser.TracksAsync(request, userId, cancellationToken)))
+        mediaItemGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, bool? listened, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
+            Browse.ListAsync(q, sort, order, page, pageSize, listened ?? false, LibrarySorts.ForTracks, principal, (request, userId) => browser.TracksAsync(request, userId, cancellationToken)))
         .WithName("GetMediaItems")
         .WithOpenApi();
 

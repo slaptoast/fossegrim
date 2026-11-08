@@ -47,11 +47,12 @@ public static class Browse
         string? order,
         int? page,
         int? pageSize,
+        bool listened,
         IReadOnlyList<string> sorts,
         ClaimsPrincipal principal,
         Func<BrowseRequest, string, Task<PagedResult<T>>> list)
     {
-        var (request, error) = LibraryBrowser.Parse(q, sort, order, page, pageSize, sorts);
+        var (request, error) = LibraryBrowser.Parse(q, sort, order, page, pageSize, sorts, listened);
         if (request is null)
         {
             return Results.BadRequest(new ApiErrorResponse(error!));

@@ -1,0 +1,24 @@
+@* Recent / Not lately switch and a refresh button, for the Recently played modules' headers. *@
+<div class="random-controls" role="group" aria-label="Order">
+    <button type="button" class="button-secondary" aria-pressed="@(Order == RecentOrders.Recent ? "true" : "false")"
+            title="What you've played most recently" @onclick="() => SetAsync(RecentOrders.Recent)">Recent</button>
+    <button type="button" class="button-secondary" aria-pressed="@(Order == RecentOrders.NotLately ? "true" : "false")"
+            title="What you've played, longest ago first" @onclick="() => SetAsync(RecentOrders.NotLately)">Not lately</button>
+    <button type="button" class="button-secondary" title="Refresh" aria-label="Refresh" disabled="@Loading" @onclick="OnRefresh">↻</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Order { get; set; } = RecentOrders.Recent;
+
+    [Parameter]
+    public EventCallback<string> OrderChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnRefresh { get; set; }
+
+    [Parameter]
+    public bool Loading { get; set; }
+
+    private Task SetAsync(string order) => order == Order ? Task.CompletedTask : OrderChanged.InvokeAsync(order);
+}

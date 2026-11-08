@@ -14,7 +14,9 @@ public record PlayedTrackDto(
     int? Year,
     int? Track,
     string? Genre,
-    TimeSpan? Duration);
+    TimeSpan? Duration,
+    // The track's album, for /cover/{AlbumId}; null if it has none.
+    Guid? AlbumId = null);
 
 // ScrobbleStatus is null when the play isn't going to Last.fm, otherwise
 // "Pending", "Scrobbled", "Ignored" or "Failed" (ScrobbleError says why).

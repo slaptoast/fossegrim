@@ -72,6 +72,7 @@
                         {
                             <th class="select-cell"></th>
                         }
+                        <th class="cover-cell"></th>
                         @if (FromServer)
                         {
                             <th>Title</th>
@@ -97,6 +98,7 @@
                                     <input type="checkbox" checked="@IsSelected(item.Id)" @onchange="e => ToggleSelected(item.Id, e)" />
                                 </td>
                             }
+                            <td class="cover-cell"><CoverArt AlbumId="item.CoverAlbumId()" /></td>
                             <td class="title-cell">@(item.Title ?? "Unknown")</td>
                             <td class="artist-cell">@(item.ArtistName ?? "Unknown Artist")</td>
                             <td class="album-cell">@(item.Album ?? "Unknown Album")</td>

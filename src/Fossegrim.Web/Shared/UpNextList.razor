@@ -17,8 +17,11 @@ else
             <li class="@(isCurrent ? "current" : i < PlayerState.CurrentIndex ? "played" : "")" @key="entry.ItemId">
                 <button type="button" class="up-next-track" disabled="@isCurrent" @onclick="() => PlayerState.JumpToAsync(entry.ItemId)"
                         title="@(isCurrent ? "Now playing" : "Play this")">
-                    <span class="up-next-title">@(entry.Track.Title ?? "Unknown")</span>
-                    <span class="up-next-artist">@(entry.Track.ArtistName ?? "Unknown Artist")</span>
+                    <CoverArt AlbumId="entry.Track.CoverAlbumId()" />
+                    <span class="up-next-text">
+                        <span class="up-next-title">@(entry.Track.Title ?? "Unknown")</span>
+                        <span class="up-next-artist">@(entry.Track.ArtistName ?? "Unknown Artist")</span>
+                    </span>
                 </button>
                 @if (isCurrent)
                 {

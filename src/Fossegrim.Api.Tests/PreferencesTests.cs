@@ -1,3 +1,4 @@
+using Fossegrim.Contracts.Dtos;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -150,6 +151,21 @@ public class AppearancePreferencesFileTests
         Assert.Equal((RandomModes.Adjusted, RandomModes.Full), (imported.Random.AlbumModeOrPreferred, imported.Random.TrackModeOrPreferred));
         Assert.Equal((RandomModes.Adjusted, null, null), (unknown.Random.PreferredMode, unknown.Random.AlbumMode, unknown.Random.TrackMode));
         Assert.Equal((RandomModes.Adjusted, null, null), (older.Random.PreferredMode, older.Random.AlbumMode, older.Random.TrackMode));
+    }
+
+    [Fact]
+    public void RecentSettings_RoundTrip_AndDefaultToRecent()
+    {
+        var original = new AppearancePreferences { Recent = new RecentSettings { AlbumOrder = RecentOrders.NotLately } };
+
+        var imported = AppearancePreferencesFile.Parse(AppearancePreferencesFile.Serialize(original))!;
+        var unknown = AppearancePreferencesFile.Parse("""{"recent":{"albumOrder":"sideways","trackOrder":null}}""")!;
+        var older = AppearancePreferencesFile.Parse("""{"theme":{"choice":"dark","custom":[]}}""")!;
+
+        Assert.Equal((RecentOrders.NotLately, RecentOrders.Recent), (imported.Recent.AlbumOrder, imported.Recent.TrackOrder));
+        Assert.Equal((RecentOrders.Recent, RecentOrders.Recent), (unknown.Recent.AlbumOrder, unknown.Recent.TrackOrder));
+        Assert.Equal((RecentOrders.Recent, RecentOrders.Recent), (older.Recent.AlbumOrder, older.Recent.TrackOrder));
+        Assert.Equal((LibrarySorts.Ascending, LibrarySorts.Descending), (RecentOrders.ToApiOrder(RecentOrders.NotLately), RecentOrders.ToApiOrder(RecentOrders.Recent)));
     }
 
     [Theory]

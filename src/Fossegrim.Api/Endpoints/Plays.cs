@@ -111,7 +111,7 @@ public static class Plays
                 .ThenByDescending(pe => pe.Id)
                 .Skip((pageNumber - 1) * size)
                 .Take(size)
-                .Include(pe => pe.MediaItem)
+                .Include(pe => pe.MediaItem).ThenInclude(m => m!.Albums)
                 .ToListAsync();
 
             return Results.Ok(new PlayHistoryPageDto(plays.Select(ToPlayEventDto).ToList(), totalCount, pageNumber, size));
@@ -133,7 +133,7 @@ public static class Plays
             }
 
             var play = await db.PlayEvents
-                .Include(pe => pe.MediaItem)
+                .Include(pe => pe.MediaItem).ThenInclude(m => m!.Albums)
                 .FirstOrDefaultAsync(pe => pe.Id == id && pe.UserId == user.Id);
 
             return play is null ? Results.NotFound() : Results.Ok(ToPlayEventDto(play));
@@ -214,5 +214,6 @@ public static class Plays
             playEvent.MediaItem?.Year,
             playEvent.MediaItem?.Track,
             playEvent.MediaItem?.Genre,
-            playEvent.MediaItem?.Duration));
+            playEvent.MediaItem?.Duration,
+            playEvent.MediaItem?.Albums.Select(a => (Guid?)a.Id).FirstOrDefault()));
 }

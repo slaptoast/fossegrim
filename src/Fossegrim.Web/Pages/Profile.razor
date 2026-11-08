@@ -15,6 +15,10 @@
         {
             <div class="success-message">@_statusMessage</div>
         }
+        @if (_profileError is not null)
+        {
+            <div class="error-message">@_profileError</div>
+        }
 
         <div class="info-section">
             <h3>Account Information</h3>
@@ -155,6 +159,7 @@
     private string _email = "";
     private readonly ProfileInput _input = new();
     private string? _statusMessage;
+    private string? _profileError;
     private LastFmStatusDto? _lastFm;
     private string? _lastFmError;
     private bool _lastFmBusy;
@@ -265,9 +270,18 @@
 
     private async Task SaveAsync()
     {
-        var updated = await ApiClient.UpdateProfileAsync(_input.DisplayName, _input.PhoneNumber);
-        LoadFrom(updated);
-        _statusMessage = "Your profile has been updated";
+        _statusMessage = null;
+        try
+        {
+            var updated = await ApiClient.UpdateProfileAsync(_input.DisplayName, _input.PhoneNumber);
+            LoadFrom(updated);
+            _profileError = null;
+            _statusMessage = "Your profile has been updated";
+        }
+        catch (ApiException ex)
+        {
+            _profileError = ex.Message;
+        }
     }
 
     private void LoadFrom(ProfileDto profile)

@@ -25,6 +25,7 @@
     }
 
     <main class="app-content">
+        <SafeModeBanner />
         @Body
         <AppFooter />
     </main>
@@ -34,6 +35,8 @@
         <PlayerBar />
     }
     <Toasts />
+    @* Outside the bar, so playback carries on whichever way the player is shown. *@
+    <PlayerEngine />
 </div>
 
 @code {

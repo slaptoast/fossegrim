@@ -255,10 +255,15 @@ body {
 .player-track-info { display: flex; flex-direction: column; min-width: 160px; }
 .player-title { font-weight: 600; }
 .player-artist { font-size: 0.75rem; line-height: 16px; color: var(--chrome-muted); }
-.player-decks { flex: 1; min-width: 240px; display: flex; }
-.player-decks[hidden] { display: none; }
-.player-audio { flex: 1; min-width: 0; height: 32px; }
-.player-audio[hidden] { display: none; }
+/* Play/seek/volume, built by playerControls.js in each place the player shows. */
+.player-transport { flex: 1; min-width: 240px; display: flex; }
+.player-transport[hidden] { display: none; }
+.transport { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-6); }
+.transport-time { min-width: 4ch; font-size: 0.75rem; color: var(--chrome-muted); font-variant-numeric: tabular-nums; text-align: center; }
+.transport input[type="range"] { margin: 0; padding: 0; width: auto; border: none; background: none; accent-color: var(--chrome-fg); cursor: pointer; }
+.transport input[type="range"]:disabled { opacity: 0.4; cursor: default; }
+.transport-seek { flex: 1; min-width: 60px; }
+.transport-volume { flex: 0 1 88px; min-width: 48px; }
 .player-error { color: var(--player-error); }
 .player-controls { display: flex; gap: var(--space-4); }
 .player-button {
@@ -275,6 +280,37 @@ body {
 }
 .player-button:hover:not(:disabled), .player-button.active { background: var(--chip-hover); }
 .player-button:disabled { opacity: 0.4; cursor: default; }
+
+/* ---- Player panel: the player as a Library module (hides the bar) ---- */
+.layout-module > .player-panel-module { height: 100%; }
+.player-panel-module {
+    background: var(--chrome-bg);
+    color: var(--chrome-fg);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    container-type: size;
+}
+/* Wide: a square cover on the left, as tall as the panel allows. Narrow or
+   tall: the cover on top, above the controls (about 150px of them). */
+.player-panel { height: 100%; display: flex; align-items: center; gap: var(--space-16); padding: var(--space-12); box-sizing: border-box; }
+.player-panel .player-panel-cover { --cover-side: max(48px, min(calc(100cqh - 24px), 45cqw)); flex: 0 0 auto; width: var(--cover-side); height: var(--cover-side); border-radius: var(--radius-md); }
+.player-panel-cover .album-art-placeholder { font-size: 3rem; }
+.player-panel-main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: var(--space-8); }
+.player-panel .player-track-info { min-width: 0; }
+.player-panel .player-title { font-size: 1.125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-panel .player-artist { font-size: 0.8125rem; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-panel .player-transport { flex: 0 0 auto; min-width: 0; }
+/* A narrow panel puts mute and volume on a second line rather than cutting them off. */
+.player-panel .transport { flex-wrap: wrap; row-gap: var(--space-4); }
+.player-panel .transport-seek { flex: 1 1 80px; }
+.player-panel-extras { display: flex; gap: var(--space-4); }
+@container (max-aspect-ratio: 5/4) {
+    .player-panel { flex-direction: column; justify-content: center; gap: var(--space-8); }
+    .player-panel .player-panel-cover { --cover-side: max(48px, min(calc(100cqw - 24px), calc(100cqh - 180px))); }
+    .player-panel-main { flex: 0 0 auto; width: 100%; }
+}
+.player-panel-idle { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-8); padding: var(--space-12); color: var(--chrome-muted); font-size: 0.8125rem; text-align: center; }
+.player-panel-idle-icon { font-size: 2rem; }
 
 /* ---- Up next: the queue, opened from the player bar ---- */
 .up-next-panel {
@@ -306,9 +342,10 @@ body {
 .up-next-list li { display: flex; align-items: center; gap: var(--space-8); padding-right: var(--space-8); border-bottom: 1px solid var(--border); }
 .up-next-list li.current { background: var(--selection-bg); box-shadow: inset 2px 0 0 var(--brand-indigo); }
 .up-next-list li.played .up-next-track { opacity: 0.55; }
-.up-next-track { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; padding: var(--space-6) var(--space-12); background: none; border: none; font: inherit; text-align: left; cursor: pointer; color: var(--ink); }
+.up-next-track { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-8); padding: var(--space-6) var(--space-12); background: none; border: none; font: inherit; text-align: left; cursor: pointer; color: var(--ink); }
 .up-next-track:hover:not(:disabled) { background: var(--surface-muted); }
 .up-next-track:disabled { cursor: default; }
+.up-next-text { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
 .up-next-title, .up-next-artist { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .up-next-title { font-weight: 600; }
 .up-next-artist { font-size: 0.75rem; color: var(--text-muted); }
@@ -597,6 +634,12 @@ a.button, a.button-secondary { text-decoration: none; }
 .file-button:focus-within { box-shadow: var(--shadow-focus); }
 .import-summary { margin-top: var(--space-12); padding: var(--space-12); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--info-bg); color: var(--info-fg); }
 .import-summary p { color: inherit; }
+/* Custom CSS in a theme: the editor, and the preview shown before importing a theme that has some. */
+.theme-css-editor { width: 100%; min-height: 220px; box-sizing: border-box; padding: var(--space-8); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8125rem; line-height: 1.5; resize: vertical; tab-size: 2; }
+.theme-css-size { margin: var(--space-4) 0 0; font-size: 0.75rem; color: var(--text-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.theme-css-preview { max-height: 240px; overflow: auto; margin: var(--space-8) 0; padding: var(--space-8); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-muted); color: var(--ink); font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; }
+/* Safe mode (custom CSS off for this tab): js/theme.js */
+.safe-mode-banner { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-12); padding: var(--space-8) var(--space-12); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--selection-bg); color: var(--selection-fg); font-size: 0.8125rem; }
 
 /* ---- Buttons: 28px, solid, no lift ---- */
 .button,
@@ -774,6 +817,7 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
 .random-module .album-list-header > .button-secondary { margin-left: auto; }
 .random-module .album-list-header > .button-secondary + .random-controls { margin-left: 0; }
 .random-track { cursor: pointer; }
+.recent-played-at { flex-shrink: 0; font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
 .layout-module .artist-list-container,
 .layout-module .album-list-container { max-height: none; flex: 1; min-height: 0; }
 .layout-module .track-list-component > .content { flex: 1; min-height: 0; overflow-y: auto; }
@@ -848,6 +892,9 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
 }
 .album-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
 .album-art-placeholder { font-size: 0.875rem; }
+/* Cover columns in track tables, and the now-playing cover in the player bar. */
+th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
+.player-cover { width: 40px; height: 40px; }
 .album-play-overlay { position: absolute; inset: 0; z-index: 2; display: none; align-items: center; justify-content: center; background: var(--overlay); color: var(--on-brand); font-size: 0.75rem; cursor: pointer; }
 .album-art:hover .album-play-overlay { display: flex; }
 

@@ -28,7 +28,8 @@ public static class MediaItemMapping
         m.Disc,
         m.FileSize,
         // Runs client-side: it's the last step of the query.
-        m.FileLocation == null ? null : AudioFormats.ContentType(m.FileLocation));
+        m.FileLocation == null ? null : AudioFormats.ContentType(m.FileLocation),
+        null);
 
     private static readonly Func<MediaItem, MediaItemDto> Compiled = ToDto.Compile();
 

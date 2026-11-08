@@ -167,6 +167,77 @@ public sealed class BrowseTests : IClassFixture<FossegrimApiFactory>, IDisposabl
         Assert.Single(artists!.Items);
     }
 
+    [Fact]
+    public async Task Listened_LeavesOutWhatTheCallerNeverPlayed_InEitherOrder()
+    {
+        var artist = Artist($"Listener {_tag}");
+        var old = Album($"Old {_tag}", artist);
+        var lately = Album($"Lately {_tag}", artist);
+        var never = Album($"Never {_tag}", artist);
+        var oldTrack = Track($"Old track {_tag}", old, artist);
+        var latelyTrack = Track($"Lately track {_tag}", lately, artist);
+        Track($"Never track {_tag}", never, artist);
+        var neverPlayedByMe = Track($"Theirs track {_tag}", never, artist);
+        await SaveAsync(artist);
+        var me = await _factory.CreateUserAsync();
+        var someoneElse = await _factory.CreateUserAsync();
+        await PlaysAsync(me, oldTrack, new DateTime(2026, 1, 1), new DateTime(2026, 2, 1));
+        await PlaysAsync(me, latelyTrack, new DateTime(2026, 6, 1));
+        // Someone else's listens don't make it count as played for me.
+        await PlaysAsync(someoneElse, neverPlayedByMe, new DateTime(2026, 7, 1));
+
+        async Task<PagedResult<AlbumListItemDto>> Albums(string order) =>
+            (await me.Client.GetFromJsonAsync<PagedResult<AlbumListItemDto>>($"/api/albums?q={_tag}&sort=recent&order={order}&listened=true"))!;
+        async Task<PagedResult<MediaItemDto>> Tracks(string order) =>
+            (await me.Client.GetFromJsonAsync<PagedResult<MediaItemDto>>($"/api/mediaitems?q={_tag}&sort=recent&order={order}&listened=true"))!;
+
+        var recentAlbums = await Albums("desc");
+        Assert.Equal(["Lately", "Old"], recentAlbums.Items.Select(a => a.Name.Split(' ')[0]));
+        Assert.Equal(2, recentAlbums.TotalCount);
+        Assert.Equal([new DateTime(2026, 6, 1), new DateTime(2026, 2, 1)], recentAlbums.Items.Select(a => a.LastPlayedAt));
+        Assert.Equal(["Old", "Lately"], (await Albums("asc")).Items.Select(a => a.Name.Split(' ')[0]));
+
+        var recentTracks = await Tracks("desc");
+        Assert.Equal(["Lately", "Old"], recentTracks.Items.Select(t => t.Title!.Split(' ')[0]));
+        Assert.Equal([new DateTime(2026, 6, 1), new DateTime(2026, 2, 1)], recentTracks.Items.Select(t => t.LastPlayedAt));
+        Assert.Equal(["Old", "Lately"], (await Tracks("asc")).Items.Select(t => t.Title!.Split(' ')[0]));
+
+        var artists = await me.Client.GetFromJsonAsync<PagedResult<ArtistListItemDto>>($"/api/artists?q={_tag}&listened=true");
+        Assert.Equal(new DateTime(2026, 6, 1), Assert.Single(artists!.Items).LastPlayedAt);
+    }
+
+    [Fact]
+    public async Task Listened_WithASearch_SortsByRecentInsteadOfRelevance()
+    {
+        var artist = Artist($"Ranker {_tag}");
+        var album = Album($"Ranked {_tag}", artist);
+        var first = Track($"Alpha {_tag}", album, artist);
+        var second = Track($"Beta {_tag}", album, artist);
+        Track($"Gamma {_tag}", album, artist);
+        await SaveAsync(artist);
+        var me = await _factory.CreateUserAsync();
+        await PlaysAsync(me, first, new DateTime(2026, 1, 1));
+        await PlaysAsync(me, second, new DateTime(2026, 3, 1));
+
+        var page = await me.Client.GetFromJsonAsync<PagedResult<MediaItemDto>>($"/api/mediaitems?q={_tag}&listened=true");
+
+        Assert.Equal(["Beta", "Alpha"], page!.Items.Select(t => t.Title!.Split(' ')[0]));
+    }
+
+    [Fact]
+    public async Task Lists_WithoutListened_StillIncludeUnplayed_WithNoLastPlayed()
+    {
+        var artist = Artist($"Plain {_tag}");
+        var album = Album($"Plain album {_tag}", artist);
+        Track($"Plain track {_tag}", album, artist);
+        await SaveAsync(artist);
+        var user = await _factory.CreateUserClientAsync();
+
+        var tracks = await user.GetFromJsonAsync<PagedResult<MediaItemDto>>($"/api/mediaitems?q={_tag}&sort=recent&order=asc");
+
+        Assert.Null(Assert.Single(tracks!.Items).LastPlayedAt);
+    }
+
     [Theory]
     [InlineData("/api/albums?sort=title", "sort must be one of: name, artist, year, added, played, recent, favorited, relevance.")]
     [InlineData("/api/artists?sort=year", "sort must be one of: name, added, played, recent, favorited, relevance.")]

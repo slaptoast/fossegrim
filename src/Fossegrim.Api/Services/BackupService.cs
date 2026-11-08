@@ -233,7 +233,7 @@ public partial class BackupService
 
         var workDirectory = Path.Combine(Path.GetTempPath(), $"fossegrim-backup-{Guid.NewGuid():N}");
         var partialPath = path + ".partial";
-        System.IO.Directory.CreateDirectory(workDirectory);
+        CreatePrivateDirectory(workDirectory);
         try
         {
             // SQLite's online backup API gives a consistent copy while the app
@@ -249,7 +249,9 @@ public partial class BackupService
             }
 
             var files = new List<string> { "fossegrim.db" };
-            await using (var stream = new FileStream(partialPath, FileMode.CreateNew))
+            // Owner-only from the moment it exists: the zip holds the JWT
+            // signing key, which would let anyone who reads it sign in as anyone.
+            await using (var stream = new FileStream(partialPath, PrivateFile()))
             using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
             {
                 zip.CreateEntryFromFile(databaseCopy, "fossegrim.db", CompressionLevel.Optimal);
@@ -292,6 +294,28 @@ public partial class BackupService
         {
             File.Delete(partialPath);
             System.IO.Directory.Delete(workDirectory, recursive: true);
+        }
+    }
+
+    private static FileStreamOptions PrivateFile()
+    {
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.ReadWrite };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+        return options;
+    }
+
+    private static void CreatePrivateDirectory(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            System.IO.Directory.CreateDirectory(path);
+        }
+        else
+        {
+            System.IO.Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
     }
 

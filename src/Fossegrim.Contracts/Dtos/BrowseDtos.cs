@@ -7,6 +7,7 @@ public record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, i
 }
 
 // An album in a list: its tracks come from /api/albums/{id}/tracks.
+// LastPlayedAt is when the caller last played any of its tracks (null if never).
 public record AlbumListItemDto(
     Guid Id,
     string Name,
@@ -14,10 +15,12 @@ public record AlbumListItemDto(
     string? Genre,
     DateTime? DateAdded,
     int TrackCount,
-    IEnumerable<ArtistSummaryDto> Artists);
+    IEnumerable<ArtistSummaryDto> Artists,
+    DateTime? LastPlayedAt = null);
 
 // An artist in a list: its tracks come from /api/artists/{id}/tracks.
-public record ArtistListItemDto(Guid Id, string Name, DateTime? DateAdded, int AlbumCount, int TrackCount);
+// LastPlayedAt is when the caller last played any of its tracks (null if never).
+public record ArtistListItemDto(Guid Id, string Name, DateTime? DateAdded, int AlbumCount, int TrackCount, DateTime? LastPlayedAt = null);
 
 // /api/search: the best matches of each kind. Each list endpoint takes the
 // same q (and a page) for more of one kind.
@@ -30,8 +33,10 @@ public record SearchResultDto(
 /// The sort= values the list endpoints take. Each list accepts the ones that
 /// apply to it (see <see cref="ForAlbums"/> and the others); order= is
 /// "asc" or "desc", defaulting to <see cref="DefaultOrder"/>. With q= and no
-/// sort, results come best match first ("relevance"). favorites=true keeps
-/// only the caller's favourites.
+/// sort, results come best match first ("relevance"). listened=true leaves
+/// out what the caller has never played; sort=recent with it lists the most
+/// recently played first (order=desc) or the longest since played (asc).
+/// favorites=true keeps only the caller's favourites.
 /// </summary>
 public static class LibrarySorts
 {

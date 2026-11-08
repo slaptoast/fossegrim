@@ -174,9 +174,9 @@ public class FossegrimApiClient
     public async Task<string> GetStreamUrlAsync(Guid mediaItemId)
     {
         // The <audio> element can't refresh the token in its URL itself.
-        await _refresher.EnsureFreshAsync();
-        var token = await _tokenStore.GetTokenAsync()
-            ?? throw new InvalidOperationException("Cannot build a stream URL without a stored access token.");
+        await _refresher.EnsureMediaTokenFreshAsync();
+        var token = await _tokenStore.GetMediaTokenAsync()
+            ?? throw new InvalidOperationException("Cannot build a stream URL without a stored media token.");
         return $"{_httpClient.BaseAddress}stream/{mediaItemId}?access_token={Uri.EscapeDataString(token)}";
     }
 
@@ -204,12 +204,14 @@ public class FossegrimApiClient
         return await response.Content.ReadFromJsonAsync<List<MediaItemDto>>() ?? [];
     }
 
-    public async Task<string> GetAlbumCoverUrl(Guid albumId)
+    // size: the longest side wanted, in pixels (null for full size; see /cover).
+    public async Task<string> GetAlbumCoverUrl(Guid albumId, int? size = null)
     {
-        await _refresher.EnsureFreshAsync();
-        var token = await _tokenStore.GetTokenAsync()
-            ?? throw new InvalidOperationException("Cannot build a cover URL without a stored access token.");
-        return $"{_httpClient.BaseAddress}cover/{albumId}?access_token={Uri.EscapeDataString(token)}";
+        await _refresher.EnsureMediaTokenFreshAsync();
+        var token = await _tokenStore.GetMediaTokenAsync()
+            ?? throw new InvalidOperationException("Cannot build a cover URL without a stored media token.");
+        var sizePart = size is { } px ? $"&size={px}" : "";
+        return $"{_httpClient.BaseAddress}cover/{albumId}?access_token={Uri.EscapeDataString(token)}{sizePart}";
     }
 
     public async Task<IReadOnlyList<CoverProviderStatusDto>> GetCoverProvidersAsync()
@@ -546,7 +548,10 @@ public class FossegrimApiClient
     public async Task<ProfileDto> UpdateProfileAsync(string? displayName, string? phoneNumber)
     {
         var response = await _httpClient.PutAsJsonAsync("/api/auth/me", new UpdateProfileRequest(displayName, phoneNumber));
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadErrorAsync(response) ?? $"Updating your profile failed ({(int)response.StatusCode}).");
+        }
         return await response.Content.ReadFromJsonAsync<ProfileDto>()
             ?? throw new ApiException("Profile update succeeded but returned no result.");
     }
@@ -843,6 +848,12 @@ public class FossegrimApiClient
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             return new AuthResult(false, null, [unauthorizedMessage]);
+        }
+
+        // A locked account (with a message) or the sign-in rate limit (no body).
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            return new AuthResult(false, null, [await ReadProblemDetailAsync(response) ?? "Too many attempts. Wait a minute and try again."]);
         }
 
         var errors = await response.Content.ReadFromJsonAsync<IdentityErrorsResponse>();

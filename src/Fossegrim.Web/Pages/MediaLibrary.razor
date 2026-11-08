@@ -56,7 +56,7 @@
         Appearance.Changed += OnAppearanceChanged;
     }
 
-    // Default layout on the 24-column grid; rows are 40px. Up next and album art start hidden.
+    // Default layout on the 24-column grid; rows are 40px. Up next, the player and album art start hidden.
     private IReadOnlyList<ModuleGrid.ModuleDefinition> BuildModules(bool includeAlbumArt)
     {
         List<ModuleGrid.ModuleDefinition> modules =
@@ -68,11 +68,15 @@
             new("randomalbums", "Random albums", new LayoutItem { Id = "randomalbums", X = 0, Y = 24, W = 8, H = 8 }, RandomAlbumsModule),
             new("randomtracks", "Random tracks", new LayoutItem { Id = "randomtracks", X = 8, Y = 24, W = 8, H = 8 }, RandomTracksModule),
             new("upnext", "Up next", new LayoutItem { Id = "upnext", X = 16, Y = 24, W = 8, H = 10, Hidden = true }, UpNextModule),
-            new("favorites", "Favourites", new LayoutItem { Id = "favorites", X = 0, Y = 32, W = 24, H = 12 }, FavoritesPanel, MinW: 8, MinH: 6),
+            new("recentalbums", "Recently played albums", new LayoutItem { Id = "recentalbums", X = 0, Y = 32, W = 8, H = 10 }, RecentAlbumsModule),
+            new("recenttracks", "Recently played tracks", new LayoutItem { Id = "recenttracks", X = 8, Y = 32, W = 8, H = 10 }, RecentTracksModule),
+            // Showing it hides the floating player bar while this page is open.
+            new("player", "Player", new LayoutItem { Id = "player", X = 16, Y = 32, W = 8, H = 10, Hidden = true }, PlayerModule, MinW: 6, MinH: 4),
+            new("favorites", "Favourites", new LayoutItem { Id = "favorites", X = 0, Y = 42, W = 24, H = 12 }, FavoritesPanel, MinW: 8, MinH: 6),
         ];
         if (includeAlbumArt)
         {
-            modules.Add(new("albumart", "Album art", new LayoutItem { Id = "albumart", X = 0, Y = 44, W = 24, H = 12, Hidden = true }, AlbumArtModule, MinW: 10, MinH: 8));
+            modules.Add(new("albumart", "Album art", new LayoutItem { Id = "albumart", X = 0, Y = 54, W = 24, H = 12, Hidden = true }, AlbumArtModule, MinW: 10, MinH: 8));
         }
         return modules;
     }
@@ -115,11 +119,17 @@
 
     private RenderFragment RandomTracksModule => @<RandomTracks />;
 
+    private RenderFragment RecentAlbumsModule => @<RecentAlbums />;
+
+    private RenderFragment RecentTracksModule => @<RecentTracks />;
+
     private RenderFragment VisualizerPanel => @<VisualizerModule />;
 
     private RenderFragment AlbumArtModule => @<AlbumArtEditor />;
 
     private RenderFragment FavoritesPanel => @<FavoritesModule />;
+
+    private RenderFragment PlayerModule => @<PlayerPanel />;
 
     private RenderFragment TracksModule => @<TrackList FromServer="true" OnItemUpdated="HandleItemUpdated" />;
 

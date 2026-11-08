@@ -1,259 +1,29 @@
-@implements IAsyncDisposable
+@implements IDisposable
 @inject PlayerState PlayerState
-@inject AppearanceService Appearance
-@inject IJSRuntime JS
+@inject PlayerHost Host
 
-@if (PlayerState.CurrentTrack is not null)
+@* The floating player, at the bottom (or top) of every page. It steps aside
+   while the Library page's Player panel is on screen, and comes back on
+   other pages; playback carries on either way (see PlayerEngine). *@
+@if (PlayerState.CurrentTrack is not null && !Host.PanelShown)
 {
-    @if (_panel == Panel.Queue)
-    {
-        <div class="up-next-panel" role="dialog" aria-label="Up next">
-            <div class="up-next-header">
-                <span>Up next</span>
-                <button type="button" class="player-button" @onclick="() => _panel = Panel.None" aria-label="Close">✕</button>
-            </div>
-            <UpNextList />
-        </div>
-    }
-    else if (_panel == Panel.Transitions)
-    {
-        <div class="up-next-panel" role="dialog" aria-label="Track transitions">
-            <div class="up-next-header">
-                <span>Track transitions</span>
-                <button type="button" class="player-button" @onclick="() => _panel = Panel.None" aria-label="Close">✕</button>
-            </div>
-            <div class="transitions-panel-body">
-                <PlaybackTransitionSettings />
-            </div>
-        </div>
-    }
-
     <div class="player-bar">
-        <div class="player-track-info">
-            <span class="player-title">@(PlayerState.CurrentTrack.Title ?? "Unknown")</span>
-            <span class="player-artist">@(PlayerState.CurrentTrack.ArtistName ?? "Unknown Artist")</span>
-        </div>
-        <FavoriteButton Kind="@FavoriteKinds.Tracks" Id="PlayerState.CurrentTrack.Id" Name="@(PlayerState.CurrentTrack.Title ?? "this track")" />
-
-        <div class="player-controls">
-            <button type="button" class="player-button" @onclick="OnPreviousAsync" aria-label="Previous" title="Previous (restarts the track if it's past 3 seconds)">⏮</button>
-            <button type="button" class="player-button" disabled="@(!PlayerState.HasNext)" @onclick="PlayerState.PlayNextAsync" aria-label="Next" title="Next">⏭</button>
-        </div>
-
-        @if (PlayerState.ErrorMessage is not null)
-        {
-            <span class="player-error">@PlayerState.ErrorMessage</span>
-        }
-
-        @* player.js puts its two <audio> decks in here; Blazor never touches them. *@
-        <div @ref="_decks" class="player-decks" hidden="@(PlayerState.ErrorMessage is not null)"></div>
-
-        <button type="button" class="player-button up-next-toggle @(_panel == Panel.Transitions ? "active" : "")" @onclick="() => Toggle(Panel.Transitions)"
-                aria-expanded="@(_panel == Panel.Transitions)" aria-label="Track transitions" title="Track transitions: gapless and crossfade">⇄ @TransitionLabel</button>
-        <button type="button" class="player-button up-next-toggle @(_panel == Panel.Queue ? "active" : "")" @onclick="() => Toggle(Panel.Queue)"
-                aria-expanded="@(_panel == Panel.Queue)" title="Up next">☰ @UpNextCount</button>
+        <PlayerControls />
     </div>
 }
 
 @code {
-    private enum Panel { None, Queue, Transitions }
-
-    // Past this point, Previous restarts the track instead of going back one.
-    private const double RestartThresholdSeconds = 3;
-
-    private ElementReference _decks;
-    private Panel _panel;
-    private IJSObjectReference? _playerModule;
-    private IJSObjectReference? _player;
-    private DotNetObjectReference<PlayerBar>? _selfReference;
-
-    // What the JS player was last told, so a render only sends what changed.
-    private int? _loadedVersion;
-    private string? _nextSent;
-
-    // Renders can arrive while a sync is awaiting JS; they ask for another pass.
-    private bool _syncing;
-    private bool _syncAgain;
-    private bool _disposed;
-
     protected override void OnInitialized()
     {
         PlayerState.Changed += OnChanged;
-        Appearance.Changed += OnChanged;
+        Host.Changed += OnChanged;
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
     {
-        if (_syncing)
-        {
-            _syncAgain = true;
-            return;
-        }
-
-        _syncing = true;
-        try
-        {
-            do
-            {
-                _syncAgain = false;
-                await SyncPlayerAsync();
-            }
-            while (_syncAgain && !_disposed);
-        }
-        catch (JSDisconnectedException)
-        {
-            // The page is going away.
-        }
-        finally
-        {
-            _syncing = false;
-        }
-    }
-
-    // Brings the JS player in line with PlayerState.
-    private async Task SyncPlayerAsync()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        if (PlayerState.CurrentTrack is not { } track)
-        {
-            await DisposePlayerAsync();
-            return;
-        }
-
-        if (_decks.Id is null)
-        {
-            return;
-        }
-
-        if (_player is null)
-        {
-            _selfReference ??= DotNetObjectReference.Create(this);
-            _playerModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/player.js");
-            _player = await _playerModule.InvokeAsync<IJSObjectReference>("createPlayer", _decks, _selfReference);
-            _loadedVersion = null;
-            _nextSent = null;
-        }
-
-        if (_loadedVersion != PlayerState.LoadVersion)
-        {
-            if (PlayerState.StreamUrl is { } url)
-            {
-                await _player.InvokeVoidAsync("load", url, track.Id.ToString(), PlayerState.AutoPlay);
-            }
-            else if (PlayerState.ErrorMessage is not null)
-            {
-                await _player.InvokeVoidAsync("stop");
-            }
-            else
-            {
-                return; // the URL is on its way, and its Changed brings us back
-            }
-
-            _loadedVersion = PlayerState.LoadVersion;
-            _nextSent = null;
-        }
-
-        await SyncNextAsync(track);
-    }
-
-    private async Task SyncNextAsync(MediaItemDto track)
-    {
-        var next = PlayerState.NextTrack;
-        var overlap = next is null ? null : PlaybackTransitions.OverlapSeconds(track, next, Appearance.Current.Player);
-        // The index is included so a queue like A, B, A, B tells the player again after each move.
-        var loadVersion = PlayerState.LoadVersion;
-        var signature = $"{loadVersion}|{PlayerState.CurrentIndex}|{next?.Id}|{overlap}";
-        if (signature == _nextSent)
-        {
-            return;
-        }
-
-        // If the queue moves during this await, its Changed brings another sync.
-        var url = overlap is null ? null : await PlayerState.TryGetStreamUrlAsync(next!.Id);
-        _nextSent = signature;
-        await _player!.InvokeVoidAsync("setNext", url is null
-            ? null
-            : new { url, trackId = next!.Id.ToString(), loadVersion, overlap });
-    }
-
-    private void Toggle(Panel panel) => _panel = _panel == panel ? Panel.None : panel;
-
-    private string TransitionLabel => Appearance.Current.Player.Crossfade ? $"{Appearance.Current.Player.CrossfadeSeconds}s" : "";
-
-    // Called by listenTracker.js once enough of a track has been heard.
-    [JSInvokable]
-    public Task OnListened(string trackId, string startedAt, double listenedSeconds) =>
-        PlayerState.RecordListenAsync(Guid.Parse(trackId), DateTimeOffset.Parse(startedAt, System.Globalization.CultureInfo.InvariantCulture), TimeSpan.FromSeconds(listenedSeconds));
-
-    // Called by player.js when the active deck starts or resumes.
-    [JSInvokable]
-    public Task OnPlaying(string trackId) => PlayerState.ReportNowPlayingAsync(Guid.Parse(trackId));
-
-    // Called by player.js when the active track ended with nothing ready to take over.
-    [JSInvokable]
-    public Task OnEnded() => PlayerState.PlayNextAsync();
-
-    // Called by player.js when the idle deck has taken over from the active one.
-    [JSInvokable]
-    public Task OnTransition(int loadVersion, string trackId) => PlayerState.AdvanceToNextAsync(loadVersion, Guid.Parse(trackId));
-
-    private void OnChanged()
-    {
-        InvokeAsync(StateHasChanged);
-    }
-
-    // Tracks after the one playing.
-    private int UpNextCount => Math.Max(0, PlayerState.Queue.Count - PlayerState.CurrentIndex - 1);
-
-    private async Task OnPreviousAsync()
-    {
-        if (_player is not null && PlayerState.StreamUrl is not null)
-        {
-            var position = await _player.InvokeAsync<double>("position");
-            if (position > RestartThresholdSeconds || !PlayerState.HasPrevious)
-            {
-                await _player.InvokeVoidAsync("restart");
-                return;
-            }
-        }
-
-        await PlayerState.PlayPreviousAsync();
-    }
-
-    private async Task DisposePlayerAsync()
-    {
-        if (_player is null)
-        {
-            return;
-        }
-
-        var player = _player;
-        _player = null;
-        await player.InvokeVoidAsync("dispose");
-        await player.DisposeAsync();
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        _disposed = true;
         PlayerState.Changed -= OnChanged;
-        Appearance.Changed -= OnChanged;
-        try
-        {
-            await DisposePlayerAsync();
-            if (_playerModule is not null)
-            {
-                await _playerModule.DisposeAsync();
-            }
-        }
-        catch (JSDisconnectedException)
-        {
-            // The page is going away; nothing to clean up.
-        }
-        _selfReference?.Dispose();
+        Host.Changed -= OnChanged;
     }
 }

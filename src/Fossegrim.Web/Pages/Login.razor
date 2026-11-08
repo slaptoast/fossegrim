@@ -4,6 +4,7 @@
 @inject TokenStore TokenStore
 @inject JwtAuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @inject Microsoft.AspNetCore.Components.WebAssembly.Hosting.IWebAssemblyHostEnvironment HostEnvironment
 
 <div class="container narrow">
@@ -44,6 +45,16 @@
         </EditForm>
     </div>
 
+    @* Custom CSS can break this page too; a full reload with ?safe-mode leaves it off. *@
+    @if (_hasCustomCss)
+    {
+        <div class="content">
+            <div class="nav-links centered">
+                <a href="/login?safe-mode" target="_top">Page looks wrong? Open without custom CSS</a>
+            </div>
+        </div>
+    }
+
     @if (_registrationOpen)
     {
         <div class="content">
@@ -63,6 +74,16 @@
     private List<string> _errors = [];
     private bool _isSubmitting;
     private bool _registrationOpen;
+    private bool _hasCustomCss;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && await JS.InvokeAsync<bool>("fossegrimTheme.hasCustomCss") && !await JS.InvokeAsync<bool>("fossegrimTheme.isSafeMode"))
+        {
+            _hasCustomCss = true;
+            StateHasChanged();
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {

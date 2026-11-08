@@ -15,9 +15,10 @@ public static class Artists
             .WithTags("Artists")
             .RequireAuthorization();
 
-        // ?q= searches; sort= and order= see LibrarySorts.ForArtists; page= and pageSize= (max 500). favorites=true: only the caller's favourites.
-        artistGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, bool? favorites, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
-            Browse.ListAsync(q, sort, order, page, pageSize, favorites ?? false, LibrarySorts.ForArtists, principal, (request, userId) => browser.ArtistsAsync(request, userId, cancellationToken)))
+        // ?q= searches; sort= and order= see LibrarySorts.ForArtists; page= and pageSize= (max 500).
+        // listened=true leaves out what the caller has never played; favorites=true keeps only their favourites.
+        artistGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, bool? listened, bool? favorites, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
+            Browse.ListAsync(q, sort, order, page, pageSize, listened ?? false, favorites ?? false, LibrarySorts.ForArtists, principal, (request, userId) => browser.ArtistsAsync(request, userId, cancellationToken)))
         .WithName("GetArtists")
         .WithOpenApi();
 

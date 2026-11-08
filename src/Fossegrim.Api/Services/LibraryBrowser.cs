@@ -9,7 +9,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Fossegrim.Api.Services;
 
 /// <summary>What a list request asked for, checked: see <see cref="LibraryBrowser.Parse"/>.</summary>
-public record BrowseRequest(string? Match, string Sort, bool Descending, int Page, int PageSize, bool FavoritesOnly = false)
+/// Listened leaves out what the caller has never played; FavoritesOnly keeps only the caller's favourites.
+public record BrowseRequest(string? Match, string Sort, bool Descending, int Page, int PageSize, bool Listened = false, bool FavoritesOnly = false)
 {
     public int Skip => (Page - 1) * PageSize;
 }
@@ -35,12 +36,12 @@ public class LibraryBrowser
     /// <summary>
     /// Checks a list request's query string. Without a sort, a search sorts
     /// by relevance and anything else by name (title for tracks); relevance
-    /// without a search falls back the same way. Favourites default to newest
-    /// first, and there relevance means that too: ranking can't be combined
-    /// with the favourites filter.
+    /// without a search falls back the same way. Ranked search results can't
+    /// be filtered, so with favourites relevance (and no sort) means newest
+    /// favourite first, and with listened it means recent.
     /// </summary>
     public static (BrowseRequest? Request, string? Error) Parse(
-        string? q, string? sort, string? order, int? page, int? pageSize, IReadOnlyList<string> sorts, bool favorites = false)
+        string? q, string? sort, string? order, int? page, int? pageSize, IReadOnlyList<string> sorts, bool listened = false, bool favorites = false)
     {
         var match = SearchIndex.MatchQuery(q);
         var fallback = favorites ? LibrarySorts.Favorited : sorts[0];
@@ -52,6 +53,10 @@ public class LibraryBrowser
         if (chosen == LibrarySorts.Relevance && (match is null || favorites))
         {
             chosen = fallback;
+        }
+        if (chosen == LibrarySorts.Relevance && listened)
+        {
+            chosen = LibrarySorts.Recent;
         }
 
         var direction = string.IsNullOrWhiteSpace(order) ? LibrarySorts.DefaultOrder(chosen) : order.Trim().ToLowerInvariant();
@@ -66,6 +71,7 @@ public class LibraryBrowser
             direction == LibrarySorts.Descending,
             Math.Max(page ?? 1, 1),
             Math.Clamp(pageSize ?? DefaultPageSize, 1, MaxPageSize),
+            listened,
             favorites), null);
     }
 
@@ -75,7 +81,7 @@ public class LibraryBrowser
         {
             var (ids, total) = await _index.RankedAsync(SearchKind.Albums, request.Match!, request.Skip, request.PageSize, cancellationToken);
             var found = await _db.Albums.Where(al => ids.Contains(al.Id)).Select(AlbumItem).ToListAsync(cancellationToken);
-            return Page(InOrder(found, ids, a => a.Id), total, request);
+            return Page(await WithLastPlayedAsync(InOrder(found, ids, a => a.Id), userId, cancellationToken), total, request);
         }
 
         var albums = _db.Albums.AsQueryable();
@@ -87,6 +93,10 @@ public class LibraryBrowser
 
         var plays = _db.PlayEvents.Where(pe => pe.UserId == userId);
         var favorites = _db.FavoriteAlbums.Where(f => f.UserId == userId);
+        if (request.Listened)
+        {
+            albums = albums.Where(al => plays.Any(pe => pe.MediaItem!.Albums.Any(x => x.Id == al.Id)));
+        }
         if (request.FavoritesOnly)
         {
             albums = albums.Where(al => favorites.Any(f => f.AlbumId == al.Id));
@@ -109,7 +119,7 @@ public class LibraryBrowser
             .Skip(request.Skip).Take(request.PageSize)
             .Select(AlbumItem)
             .ToListAsync(cancellationToken);
-        return Page(items, count, request);
+        return Page(await WithLastPlayedAsync(items, userId, cancellationToken), count, request);
     }
 
     public async Task<PagedResult<ArtistListItemDto>> ArtistsAsync(BrowseRequest request, string userId, CancellationToken cancellationToken = default)
@@ -118,7 +128,7 @@ public class LibraryBrowser
         {
             var (ids, total) = await _index.RankedAsync(SearchKind.Artists, request.Match!, request.Skip, request.PageSize, cancellationToken);
             var found = await _db.Artists.Where(a => ids.Contains(a.Id)).Select(ArtistItem).ToListAsync(cancellationToken);
-            return Page(InOrder(found, ids, a => a.Id), total, request);
+            return Page(await WithLastPlayedAsync(InOrder(found, ids, a => a.Id), userId, cancellationToken), total, request);
         }
 
         var artists = _db.Artists.AsQueryable();
@@ -130,6 +140,10 @@ public class LibraryBrowser
 
         var plays = _db.PlayEvents.Where(pe => pe.UserId == userId);
         var favorites = _db.FavoriteArtists.Where(f => f.UserId == userId);
+        if (request.Listened)
+        {
+            artists = artists.Where(a => plays.Any(pe => pe.MediaItem!.Artists.Any(x => x.Id == a.Id)));
+        }
         if (request.FavoritesOnly)
         {
             artists = artists.Where(a => favorites.Any(f => f.ArtistId == a.Id));
@@ -149,7 +163,7 @@ public class LibraryBrowser
             .Skip(request.Skip).Take(request.PageSize)
             .Select(ArtistItem)
             .ToListAsync(cancellationToken);
-        return Page(items, count, request);
+        return Page(await WithLastPlayedAsync(items, userId, cancellationToken), count, request);
     }
 
     public async Task<PagedResult<MediaItemDto>> TracksAsync(BrowseRequest request, string userId, CancellationToken cancellationToken = default)
@@ -158,7 +172,7 @@ public class LibraryBrowser
         {
             var (ids, total) = await _index.RankedAsync(SearchKind.Tracks, request.Match!, request.Skip, request.PageSize, cancellationToken);
             var found = await _db.MediaItems.Where(m => ids.Contains(m.Id)).Select(MediaItemMapping.ToDto).ToListAsync(cancellationToken);
-            return Page(InOrder(found, ids, m => m.Id), total, request);
+            return Page(await WithLastPlayedAsync(InOrder(found, ids, m => m.Id), userId, cancellationToken), total, request);
         }
 
         var tracks = _db.MediaItems.AsQueryable();
@@ -170,6 +184,10 @@ public class LibraryBrowser
 
         var plays = _db.PlayEvents.Where(pe => pe.UserId == userId);
         var favorites = _db.FavoriteTracks.Where(f => f.UserId == userId);
+        if (request.Listened)
+        {
+            tracks = tracks.Where(m => plays.Any(pe => pe.MediaItemId == m.Id));
+        }
         if (request.FavoritesOnly)
         {
             tracks = tracks.Where(m => favorites.Any(f => f.MediaItemId == m.Id));
@@ -195,7 +213,7 @@ public class LibraryBrowser
             .Skip(request.Skip).Take(request.PageSize)
             .Select(MediaItemMapping.ToDto)
             .ToListAsync(cancellationToken);
-        return Page(items, count, request);
+        return Page(await WithLastPlayedAsync(items, userId, cancellationToken), count, request);
     }
 
     private static readonly Expression<Func<Album, AlbumListItemDto>> AlbumItem = al => new AlbumListItemDto(
@@ -205,14 +223,52 @@ public class LibraryBrowser
         al.Genre,
         al.DateAdded,
         al.MediaItems.Count,
-        al.Artists.OrderBy(a => a.Name).Select(a => new ArtistSummaryDto(a.Id, a.Name)));
+        al.Artists.OrderBy(a => a.Name).Select(a => new ArtistSummaryDto(a.Id, a.Name)),
+        null);
 
     private static readonly Expression<Func<Artist, ArtistListItemDto>> ArtistItem = a => new ArtistListItemDto(
         a.Id,
         a.Name,
         a.DateAdded,
         a.Albums.Count,
-        a.MediaItems.Count);
+        a.MediaItems.Count,
+        null);
+
+    // When the caller last played each item on a page (one query per page).
+    private async Task<List<AlbumListItemDto>> WithLastPlayedAsync(List<AlbumListItemDto> items, string userId, CancellationToken cancellationToken)
+    {
+        var ids = items.Select(i => i.Id).ToList();
+        var last = await _db.PlayEvents
+            .Where(pe => pe.UserId == userId)
+            .SelectMany(pe => pe.MediaItem!.Albums.Where(al => ids.Contains(al.Id)), (pe, al) => new { al.Id, pe.PlayedAt })
+            .GroupBy(x => x.Id)
+            .Select(g => new { g.Key, Last = g.Max(x => x.PlayedAt) })
+            .ToDictionaryAsync(x => x.Key, x => x.Last, cancellationToken);
+        return items.Select(i => last.TryGetValue(i.Id, out var at) ? i with { LastPlayedAt = at } : i).ToList();
+    }
+
+    private async Task<List<ArtistListItemDto>> WithLastPlayedAsync(List<ArtistListItemDto> items, string userId, CancellationToken cancellationToken)
+    {
+        var ids = items.Select(i => i.Id).ToList();
+        var last = await _db.PlayEvents
+            .Where(pe => pe.UserId == userId)
+            .SelectMany(pe => pe.MediaItem!.Artists.Where(a => ids.Contains(a.Id)), (pe, a) => new { a.Id, pe.PlayedAt })
+            .GroupBy(x => x.Id)
+            .Select(g => new { g.Key, Last = g.Max(x => x.PlayedAt) })
+            .ToDictionaryAsync(x => x.Key, x => x.Last, cancellationToken);
+        return items.Select(i => last.TryGetValue(i.Id, out var at) ? i with { LastPlayedAt = at } : i).ToList();
+    }
+
+    private async Task<List<MediaItemDto>> WithLastPlayedAsync(List<MediaItemDto> items, string userId, CancellationToken cancellationToken)
+    {
+        var ids = items.Select(i => i.Id).ToList();
+        var last = await _db.PlayEvents
+            .Where(pe => pe.UserId == userId && ids.Contains(pe.MediaItemId))
+            .GroupBy(pe => pe.MediaItemId)
+            .Select(g => new { g.Key, Last = g.Max(pe => pe.PlayedAt) })
+            .ToDictionaryAsync(x => x.Key, x => x.Last, cancellationToken);
+        return items.Select(i => last.TryGetValue(i.Id, out var at) ? i with { LastPlayedAt = at } : i).ToList();
+    }
 
     private static PagedResult<T> Page<T>(IReadOnlyList<T> items, int total, BrowseRequest request) =>
         new(items, total, request.Page, request.PageSize);

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Fossegrim.Api.Services;
 using Fossegrim.Contracts.Dtos;
+using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services;
 using Microsoft.AspNetCore.Identity;
@@ -14,20 +15,37 @@ public static class Auth
         var authGroup = app.MapGroup("/api/auth")
             .WithTags("Auth");
 
+        // Wrong passwords count towards locking the account for a while
+        // (SignInLimits); a locked account answers 429 even to the right one.
         authGroup.MapPost("/login", async (
             LoginRequest request,
             HttpRequest http,
             UserManager<ApplicationUser> userManager,
+            IPasswordHasher<ApplicationUser> passwordHasher,
             SessionService sessions) =>
         {
-            var user = await userManager.FindByEmailAsync(request.Email);
-            if (user is null || !await userManager.CheckPasswordAsync(user, request.Password))
+            var user = string.IsNullOrWhiteSpace(request.Email) ? null : await userManager.FindByEmailAsync(request.Email);
+            if (user is null)
             {
+                SignInLimits.SpendTimeOnUnknownUser(passwordHasher, request.Password);
                 return Results.Unauthorized();
             }
 
+            if (await userManager.IsLockedOutAsync(user))
+            {
+                return LockedOut(user);
+            }
+
+            if (!await userManager.CheckPasswordAsync(user, request.Password ?? ""))
+            {
+                await userManager.AccessFailedAsync(user);
+                return await userManager.IsLockedOutAsync(user) ? LockedOut(user) : Results.Unauthorized();
+            }
+
+            await userManager.ResetAccessFailedCountAsync(user);
             return Results.Ok(await sessions.SignInAsync(user, request.ClientName, UserAgentOf(http)));
         })
+        .RequireRateLimiting(SignInLimits.Policy)
         .WithName("Login")
         .WithOpenApi();
 
@@ -86,6 +104,7 @@ public static class Auth
             RegisterRequest request,
             HttpRequest http,
             UserManager<ApplicationUser> userManager,
+            FossegrimDbContext db,
             SetupService setup,
             SessionService sessions) =>
         {
@@ -94,11 +113,16 @@ public static class Auth
                 return Results.Problem("Registration is closed. Ask an admin for an account.", statusCode: StatusCodes.Status403Forbidden);
             }
 
+            if (await AccountRules.CheckDisplayNameAsync(db, request.DisplayName) is { } nameError)
+            {
+                return Results.BadRequest(new IdentityErrorsResponse([nameError]));
+            }
+
             var user = new ApplicationUser
             {
                 UserName = request.Email,
                 Email = request.Email,
-                DisplayName = request.DisplayName,
+                DisplayName = AccountRules.Clean(request.DisplayName),
                 DateJoined = DateTime.UtcNow
             };
 
@@ -110,6 +134,7 @@ public static class Auth
 
             return Results.Ok(await sessions.SignInAsync(user, request.ClientName, UserAgentOf(http)));
         })
+        .RequireRateLimiting(SignInLimits.Policy)
         .WithName("Register")
         .WithOpenApi();
 
@@ -136,6 +161,7 @@ public static class Auth
             return Results.NoContent();
         })
         .RequireAuthorization()
+        .RequireRateLimiting(SignInLimits.Policy)
         .WithName("ChangePassword")
         .WithOpenApi();
 
@@ -159,7 +185,8 @@ public static class Auth
         authGroup.MapPut("/me", async (
             UpdateProfileRequest request,
             ClaimsPrincipal principal,
-            UserManager<ApplicationUser> userManager) =>
+            UserManager<ApplicationUser> userManager,
+            FossegrimDbContext db) =>
         {
             var user = await userManager.GetUserAsync(principal);
             if (user is null)
@@ -167,8 +194,13 @@ public static class Auth
                 return Results.Unauthorized();
             }
 
-            await userManager.SetPhoneNumberAsync(user, request.PhoneNumber);
-            user.DisplayName = request.DisplayName;
+            if ((await AccountRules.CheckDisplayNameAsync(db, request.DisplayName, user.Id) ?? AccountRules.CheckPhoneNumber(request.PhoneNumber)) is { } error)
+            {
+                return Results.BadRequest(new ApiErrorResponse(error));
+            }
+
+            await userManager.SetPhoneNumberAsync(user, string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim());
+            user.DisplayName = AccountRules.Clean(request.DisplayName);
             await userManager.UpdateAsync(user);
 
             var phoneNumber = await userManager.GetPhoneNumberAsync(user);
@@ -177,6 +209,14 @@ public static class Auth
         .RequireAuthorization()
         .WithName("UpdateProfile")
         .WithOpenApi();
+    }
+
+    private static IResult LockedOut(ApplicationUser user)
+    {
+        var minutes = Math.Max(1, (int)Math.Ceiling(((user.LockoutEnd ?? DateTimeOffset.UtcNow) - DateTimeOffset.UtcNow).TotalMinutes));
+        return Results.Problem(
+            $"Too many wrong passwords. Try again in {minutes} minute{(minutes == 1 ? "" : "s")}.",
+            statusCode: StatusCodes.Status429TooManyRequests);
     }
 
     internal static string? UserAgentOf(HttpRequest http) => http.Headers.UserAgent.ToString() is { Length: > 0 } agent ? agent : null;

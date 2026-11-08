@@ -67,6 +67,10 @@ public class AppearanceService : IPlaybackSettings
         }
     }
 
+    /// <summary>The theme in use when it's a preset or one of the user's own (null for System, Light and Dark).</summary>
+    public CustomTheme? ActiveTheme => PresetThemes.Find(Current.Theme.Choice) ?? ActiveCustomTheme;
+
+    /// <summary>The user's own theme in use, which they can edit.</summary>
     public CustomTheme? ActiveCustomTheme => Current.Theme.Choice.StartsWith(ThemeChoices.CustomPrefix, StringComparison.Ordinal)
         ? Current.Theme.Custom.FirstOrDefault(t => ThemeChoices.ForCustom(t) == Current.Theme.Choice)
         : null;
@@ -119,11 +123,11 @@ public class AppearanceService : IPlaybackSettings
 
     private async Task ApplyThemeAsync()
     {
-        var custom = ActiveCustomTheme;
+        var custom = ActiveTheme;
         var choice = Current.Theme.Choice;
         var state = custom is not null
-            ? new { choice, @base = custom.Base, colors = custom.Colors }
-            : new { choice, @base = choice is ThemeChoices.Light or ThemeChoices.Dark ? choice : null as string, colors = new Dictionary<string, string>() };
+            ? new { choice, @base = custom.Base, colors = custom.Colors, css = custom.Css }
+            : new { choice, @base = choice is ThemeChoices.Light or ThemeChoices.Dark ? choice : null as string, colors = new Dictionary<string, string>(), css = "" };
         await _js.InvokeVoidAsync("fossegrimTheme.apply", state);
     }
 

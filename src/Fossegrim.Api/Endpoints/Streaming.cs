@@ -1,3 +1,4 @@
+using Fossegrim.Api.Services;
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Services.Library;
 
@@ -25,6 +26,6 @@ public static class Streaming
         })
         .WithName("StreamMediaFile")
         .WithOpenApi()
-        .RequireAuthorization();
+        .RequireMediaAuthorization();
     }
 }

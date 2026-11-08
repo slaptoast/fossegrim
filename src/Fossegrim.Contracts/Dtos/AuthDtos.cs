@@ -4,9 +4,13 @@ namespace Fossegrim.Contracts.Dtos;
 // e.g. "Fossegrim for iOS". Without one, the list describes the user agent.
 public record LoginRequest(string Email, string Password, string? ClientName = null);
 
-// Token is the access token (a JWT, valid until ExpiresAt). Swap
-// RefreshToken for new tokens at /api/auth/refresh; it doesn't expire, but
-// each refresh returns a new one to use next time.
+// Token is the access token (a JWT, valid until ExpiresAt), for the
+// Authorization header. Swap RefreshToken for new tokens at
+// /api/auth/refresh; it doesn't expire, but each refresh returns a new one
+// to use next time. MediaToken goes in ?access_token= on /stream and /cover
+// URLs, which <audio> and <img> elements load without headers; it works
+// nowhere else, and lasts longer (until MediaTokenExpiresAt) so those URLs
+// stay stable.
 public record LoginResponse(
     string Token,
     DateTime ExpiresAt,
@@ -16,7 +20,9 @@ public record LoginResponse(
     string? DisplayName,
     IReadOnlyList<string> Roles,
     string? RefreshToken = null,
-    Guid? SessionId = null);
+    Guid? SessionId = null,
+    string? MediaToken = null,
+    DateTime? MediaTokenExpiresAt = null);
 
 public record RefreshRequest(string RefreshToken);
 

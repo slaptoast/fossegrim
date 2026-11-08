@@ -255,10 +255,15 @@ body {
 .player-track-info { display: flex; flex-direction: column; min-width: 160px; }
 .player-title { font-weight: 600; }
 .player-artist { font-size: 0.75rem; line-height: 16px; color: var(--chrome-muted); }
-.player-decks { flex: 1; min-width: 240px; display: flex; }
-.player-decks[hidden] { display: none; }
-.player-audio { flex: 1; min-width: 0; height: 32px; }
-.player-audio[hidden] { display: none; }
+/* Play/seek/volume, built by playerControls.js in each place the player shows. */
+.player-transport { flex: 1; min-width: 240px; display: flex; }
+.player-transport[hidden] { display: none; }
+.transport { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-6); }
+.transport-time { min-width: 4ch; font-size: 0.75rem; color: var(--chrome-muted); font-variant-numeric: tabular-nums; text-align: center; }
+.transport input[type="range"] { margin: 0; padding: 0; width: auto; border: none; background: none; accent-color: var(--chrome-fg); cursor: pointer; }
+.transport input[type="range"]:disabled { opacity: 0.4; cursor: default; }
+.transport-seek { flex: 1; min-width: 60px; }
+.transport-volume { flex: 0 1 88px; min-width: 48px; }
 .player-error { color: var(--player-error); }
 .player-controls { display: flex; gap: var(--space-4); }
 .player-button {
@@ -275,6 +280,37 @@ body {
 }
 .player-button:hover:not(:disabled), .player-button.active { background: var(--chip-hover); }
 .player-button:disabled { opacity: 0.4; cursor: default; }
+
+/* ---- Player panel: the player as a Library module (hides the bar) ---- */
+.layout-module > .player-panel-module { height: 100%; }
+.player-panel-module {
+    background: var(--chrome-bg);
+    color: var(--chrome-fg);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    container-type: size;
+}
+/* Wide: a square cover on the left, as tall as the panel allows. Narrow or
+   tall: the cover on top, above the controls (about 150px of them). */
+.player-panel { height: 100%; display: flex; align-items: center; gap: var(--space-16); padding: var(--space-12); box-sizing: border-box; }
+.player-panel .player-panel-cover { --cover-side: max(48px, min(calc(100cqh - 24px), 45cqw)); flex: 0 0 auto; width: var(--cover-side); height: var(--cover-side); border-radius: var(--radius-md); }
+.player-panel-cover .album-art-placeholder { font-size: 3rem; }
+.player-panel-main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: var(--space-8); }
+.player-panel .player-track-info { min-width: 0; }
+.player-panel .player-title { font-size: 1.125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-panel .player-artist { font-size: 0.8125rem; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-panel .player-transport { flex: 0 0 auto; min-width: 0; }
+/* A narrow panel puts mute and volume on a second line rather than cutting them off. */
+.player-panel .transport { flex-wrap: wrap; row-gap: var(--space-4); }
+.player-panel .transport-seek { flex: 1 1 80px; }
+.player-panel-extras { display: flex; gap: var(--space-4); }
+@container (max-aspect-ratio: 5/4) {
+    .player-panel { flex-direction: column; justify-content: center; gap: var(--space-8); }
+    .player-panel .player-panel-cover { --cover-side: max(48px, min(calc(100cqw - 24px), calc(100cqh - 180px))); }
+    .player-panel-main { flex: 0 0 auto; width: 100%; }
+}
+.player-panel-idle { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-8); padding: var(--space-12); color: var(--chrome-muted); font-size: 0.8125rem; text-align: center; }
+.player-panel-idle-icon { font-size: 2rem; }
 
 /* ---- Up next: the queue, opened from the player bar ---- */
 .up-next-panel {

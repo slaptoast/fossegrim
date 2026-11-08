@@ -8,9 +8,11 @@
    It reloads when the album art editor saves a new cover. *@
 <div class="album-art @Class" title="@(OnPlay.HasDelegate ? PlayTitle : null)" @onclick="ClickAsync">
     <span class="album-art-placeholder" aria-hidden="true">💿</span>
-    @if (_url is not null)
+    @* A cover that fails to load leaves the placeholder showing. Blazor
+       handles the error: inline handlers are blocked by the content policy. *@
+    @if (_url is not null && _url != _failedUrl)
     {
-        <img src="@_url" alt="" loading="lazy" onerror="this.style.visibility='hidden'" onload="this.style.visibility=''" />
+        <img src="@_url" alt="" loading="lazy" @onerror="() => _failedUrl = _url" />
     }
     @if (OnPlay.HasDelegate)
     {
@@ -39,6 +41,7 @@
     public string PlayTitle { get; set; } = "Play album";
 
     private string? _url;
+    private string? _failedUrl;
     private Guid? _loadedFor;
     private int _loadedSize;
 

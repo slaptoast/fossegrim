@@ -1,10 +1,13 @@
-// The playback engine behind the player bar: two <audio> "decks", created here
-// so Blazor never re-renders them. One is active and shows its native controls;
-// the other quietly loads the next track and takes over shortly before the
-// active one ends, overlapping it for a crossfade or starting right at its end
-// for gapless playback.
+// The playback engine: two <audio> "decks", created here so Blazor never
+// re-renders them. One is active; the other quietly loads the next track and
+// takes over shortly before the active one ends, overlapping it for a
+// crossfade or starting right at its end for gapless playback.
 //
-// PlayerState stays the source of truth for the queue. PlayerBar pushes what's
+// The decks live hidden in the app layout (PlayerEngine), so playback carries
+// on across pages. The visible play/seek/volume controls are mounted where the
+// player is shown (see playerControls.js), and act on the active deck.
+//
+// PlayerState stays the source of truth for the queue. PlayerEngine pushes what's
 // to play with load() and setNext(); when a deck takes over by itself this
 // reports it through OnTransition, so the state follows without a reload.
 //
@@ -15,6 +18,7 @@
 import * as graph from "./audioGraph.js";
 import { attach as attachListenTracker } from "./listenTracker.js";
 import { registerAudio } from "./visualizer.js";
+import { mountControls } from "./playerControls.js";
 
 // How long before its start the next track begins loading.
 const PRELOAD_LEAD_SECONDS = 30;
@@ -59,7 +63,6 @@ class Player {
 
     createDeck(host) {
         const audio = document.createElement("audio");
-        audio.controls = true;
         audio.preload = "metadata";
         audio.className = "player-audio";
         // Lets Web Audio read samples when the API is on another origin (local
@@ -115,7 +118,12 @@ class Player {
         return deck;
     }
 
-    // ---- Called by PlayerBar ----
+    // ---- Called by PlayerEngine and PlayerControls ----
+
+    /** Play/seek/volume controls in host, until the returned object's dispose(). */
+    mountControls(host) {
+        return mountControls(this, host);
+    }
 
     /** Hard-cuts to this track: a new queue, Next, Previous, a jump, or a reload. */
     load(url, trackId, autoPlay) {

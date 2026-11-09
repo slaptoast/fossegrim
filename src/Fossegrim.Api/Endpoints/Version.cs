@@ -12,7 +12,7 @@ public static class Version
             .WithName("GetVersion")
             .WithOpenApi();
 
-        // Admin: whether a newer release has been published to Docker Hub.
+        // Admin: whether a newer release has been published to ghcr.io.
         var updatesGroup = app.MapGroup("/api/admin/updates")
             .WithTags("Admin")
             .RequireAuthorization(policy => policy.RequireRole("Admin"));
@@ -22,7 +22,7 @@ public static class Version
             .WithOpenApi();
 
         // Works even with automatic checks turned off; that setting only
-        // stops the daily background check from contacting Docker Hub.
+        // stops the daily background check from contacting ghcr.io.
         updatesGroup.MapPost("/check", async (UpdateChecker checker, CancellationToken cancellationToken) =>
         {
             if (!checker.CanCheck)

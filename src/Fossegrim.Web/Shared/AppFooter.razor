@@ -6,7 +6,7 @@
     <footer class="app-footer">
         @if (_update is { UpdateAvailable: true })
         {
-            <a href="/admin" class="update-badge" title="A newer release is on Docker Hub">Update available: v@(_update.LatestVersion)</a>
+            <a href="/admin" class="update-badge" title="A newer release has been published">Update available: v@(_update.LatestVersion)</a>
         }
         @_displayVersion
     </footer>

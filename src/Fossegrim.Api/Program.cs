@@ -165,12 +165,12 @@ if (builder.Configuration.GetValue("Scrobbling:Enabled", true))
     builder.Services.AddHostedService<ScrobbleWorker>();
 }
 
-// Update check: compares APP_VERSION with the newest release on Docker Hub.
+// Update check: compares APP_VERSION with the newest release on ghcr.io.
 // Development builds ("dev") have nothing to compare, so get no worker.
 var appVersion = new AppVersion(builder.Configuration["APP_VERSION"] is { Length: > 0 } v ? v : "dev");
 builder.Services.AddSingleton(appVersion);
 builder.Services.AddSingleton<UpdateCheckState>();
-builder.Services.AddHttpClient<DockerHubClient>(client =>
+builder.Services.AddHttpClient<GhcrClient>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(15);
     client.DefaultRequestHeaders.UserAgent.ParseAdd($"Fossegrim/{appVersion.Value}");

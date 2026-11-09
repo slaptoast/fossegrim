@@ -81,11 +81,11 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-That one push builds the image once and pushes it to **both**:
+That one push builds the image and pushes it to the GitHub Container
+Registry:
 
 ```
 ghcr.io/slaptoast/fossegrim
-docker.io/slaptoast/fossegrim
 ```
 
 tagged `1.2.3`, `1.2`, `1`, and (as long as the tag isn't a prerelease like
@@ -93,36 +93,20 @@ tagged `1.2.3`, `1.2`, `1`, and (as long as the tag isn't a prerelease like
 workflow parses the version straight out of the tag, there's no separate
 version file to keep in sync.
 
-### One-time setup: Docker Hub credentials
-
-GHCR authenticates for free via the workflow's own `GITHUB_TOKEN` -- nothing
-to configure. Docker Hub needs its own access token, which only you can
-create (I don't have access to your Docker Hub account or this repo's
-GitHub secrets):
-
-1. Docker Hub -> your avatar -> **Account Settings** -> **Security** ->
-   **New Access Token**. Give it Read & Write permissions.
-2. In the GitHub repo -> **Settings** -> **Secrets and variables** ->
-   **Actions** -> **New repository secret**, add two:
-   - `DOCKERHUB_USERNAME` -- your Docker Hub username (`slaptoast`)
-   - `DOCKERHUB_TOKEN` -- the access token from step 1
-
-Until both secrets exist, a tag push will fail at the Docker Hub login step
-(GHCR will still succeed on its own).
+The workflow logs in to GHCR with its own `GITHUB_TOKEN`, so there are no
+secrets to set up.
 
 ## Using the published image
 
 ```bash
-docker pull docker.io/slaptoast/fossegrim:latest
-# or
 docker pull ghcr.io/slaptoast/fossegrim:latest
 ```
 
 The first time a package is published from a public repo, GHCR may create it
 as **private**. If `docker pull` gets a 403/denied for an anonymous pull, go
 to the package's page on GitHub (your profile -> Packages) -> Package
-settings -> change visibility to Public. Docker Hub repos default to public
-already.
+settings -> change visibility to Public. The update check reads the tags
+anonymously too, so it also needs the package to be public.
 
 ## Configuration
 
@@ -349,8 +333,8 @@ library") shows old -> new names before anything moves.
 
 Release images know their own version (`APP_VERSION`, from the release
 tag). About a minute after startup and then once a day, the server asks
-Docker Hub's public tags API for the newest stable release of
-`slaptoast/fossegrim` and compares the two. Floating tags (`latest`, `1.2`,
+the GitHub Container Registry (ghcr.io) for the newest stable release of
+`ghcr.io/slaptoast/fossegrim` and compares the two. Floating tags (`latest`, `1.2`,
 `1`), CI tags (`sha-...`, `pr-...`) and prereleases are ignored. When a
 newer release exists, admins see an "Update available" badge in the footer,
 and the Admin page shows the details. To update, pull the new image and
@@ -362,7 +346,7 @@ docker compose pull && docker compose up -d
 
 Admins can turn the daily check off on the Admin page. "Check Now" still
 works when it's off. Development builds (`dev`, e.g. `docker compose up
---build`) have no version to compare and never contact Docker Hub.
+--build`) have no version to compare and never contact ghcr.io.
 
 ### Backups
 
@@ -423,10 +407,9 @@ machine), use `scripts/docker-build.sh`:
 
 ```bash
 ./scripts/docker-build.sh                                    # build, tag :local
-REGISTRY=slaptoast          ./scripts/docker-build.sh --push --tag 1.2.3  # Docker Hub
 REGISTRY=ghcr.io/slaptoast  ./scripts/docker-build.sh --push --tag 1.2.3  # GHCR
 ```
 
-You'll need to be logged in to whichever registry you're pushing to
-(`docker login` / `docker login ghcr.io`) -- the script doesn't handle auth.
+You'll need to be logged in to the registry first (`docker login ghcr.io`)
+-- the script doesn't handle auth.
 Run `./scripts/docker-build.sh --help` for all options.

@@ -47,9 +47,25 @@
         {
             if (_player is null)
             {
-                _selfReference = DotNetObjectReference.Create(this);
-                _playerModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/player.js");
-                _player = await _playerModule.InvokeAsync<IJSObjectReference>("createPlayer", _decks, _selfReference);
+                // The layout can be replaced while this awaits (signing in
+                // does), disposing this engine; then stop, and don't leave a
+                // JS player behind that nothing will clean up.
+                _selfReference ??= DotNetObjectReference.Create(this);
+                _playerModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/player.js");
+                if (_disposed)
+                {
+                    await _playerModule.DisposeAsync();
+                    return;
+                }
+                var player = await _playerModule.InvokeAsync<IJSObjectReference>("createPlayer", _decks, _selfReference);
+                if (_disposed)
+                {
+                    await player.InvokeVoidAsync("dispose");
+                    await player.DisposeAsync();
+                    await _playerModule.DisposeAsync();
+                    return;
+                }
+                _player = player;
                 Host.EngineStarted(_player, PreviousAsync);
             }
 

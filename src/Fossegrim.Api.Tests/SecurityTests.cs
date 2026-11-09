@@ -121,6 +121,16 @@ public class SecurityTests : IClassFixture<FossegrimApiFactory>
     }
 
     [Fact]
+    public void ScriptPolicy_AllowsEvalForTheVisualizer_ButOnlyTheAppsOwnScripts()
+    {
+        // Butterchurn compiles MilkDrop presets with new Function(); without
+        // 'unsafe-eval' the visualizer never gets past "Loading".
+        var scriptSrc = SecurityHeaders.ContentSecurityPolicy.Split(';').Select(d => d.Trim()).Single(d => d.StartsWith("script-src "));
+
+        Assert.Equal("script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'", scriptSrc);
+    }
+
+    [Fact]
     public async Task Cors_AllowsNoOtherOriginsOutsideDevelopment()
     {
         var client = await _factory.CreateUserClientAsync();

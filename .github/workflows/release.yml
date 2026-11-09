@@ -2,7 +2,7 @@ name: Release
 
 # Publishing is version-tag-driven, not automatic on every push to main:
 #   git tag v1.2.3 && git push origin v1.2.3
-# builds once and pushes to both GHCR and Docker Hub, tagged 1.2.3, 1.2, 1,
+# builds once and pushes to GHCR (ghcr.io), tagged 1.2.3, 1.2, 1,
 # and (for a non-prerelease tag) latest. A pull_request still gets a
 # build-only sanity check with nothing pushed anywhere.
 
@@ -39,20 +39,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Derive image metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ghcr.io/${{ github.repository_owner }}/fossegrim
-            docker.io/slaptoast/fossegrim
+          images: ghcr.io/${{ github.repository_owner }}/fossegrim
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

@@ -3,7 +3,7 @@ namespace Fossegrim.Contracts.Dtos;
 public record VersionDto(string Version);
 
 // Admin view of the update check. LatestVersion is the newest stable release
-// published to Docker Hub, kept from the last successful check (Error is set
+// published to ghcr.io, kept from the last successful check (Error is set
 // when the most recent attempt failed). CanCheck is false for development
 // builds ("dev" etc.), which have no release version to compare.
 public record UpdateStatusDto(

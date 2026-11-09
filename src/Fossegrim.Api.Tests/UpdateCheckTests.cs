@@ -54,14 +54,15 @@ public class UpdateCheckTests : IClassFixture<ReleaseApiFactory>
     public UpdateCheckTests(ReleaseApiFactory factory)
     {
         _factory = factory;
-        _factory.DockerHub.FailWith = null;
+        _factory.Ghcr.FailWith = null;
+        _factory.Ghcr.RefuseToken = false;
     }
 
     [Fact]
     public async Task Check_FindsNewestStableRelease_IgnoringFloatingAndPrereleaseTags()
     {
         var admin = await _factory.CreateAdminAsync();
-        _factory.DockerHub.Pages =
+        _factory.Ghcr.Pages =
         [
             ["latest", "2.0.0-beta.1", "1.10.0", "1.10", "1", "sha-abc1234"],
             ["1.9.3", "1.2.0", "pr-7"]
@@ -74,14 +75,14 @@ public class UpdateCheckTests : IClassFixture<ReleaseApiFactory>
         Assert.True(status.UpdateAvailable);
         Assert.Null(status.Error);
         Assert.NotNull(status.CheckedAt);
-        Assert.Equal("https://hub.docker.com/r/slaptoast/fossegrim/tags?name=1.10.0", status.ReleaseUrl);
+        Assert.Equal("https://github.com/slaptoast/fossegrim/pkgs/container/fossegrim", status.ReleaseUrl);
     }
 
     [Fact]
     public async Task Check_UpToDate_WhenLatestIsTheRunningVersion()
     {
         var admin = await _factory.CreateAdminAsync();
-        _factory.DockerHub.Pages = [["latest", "1.2.0", "1.1.5"]];
+        _factory.Ghcr.Pages = [["latest", "1.2.0", "1.1.5"]];
 
         var status = await CheckAsync(admin.Client);
 
@@ -93,10 +94,10 @@ public class UpdateCheckTests : IClassFixture<ReleaseApiFactory>
     public async Task Check_Failure_ReportsErrorAndKeepsLastKnownRelease()
     {
         var admin = await _factory.CreateAdminAsync();
-        _factory.DockerHub.Pages = [["1.3.0"]];
+        _factory.Ghcr.Pages = [["1.3.0"]];
         await CheckAsync(admin.Client);
 
-        _factory.DockerHub.FailWith = HttpStatusCode.ServiceUnavailable;
+        _factory.Ghcr.FailWith = HttpStatusCode.ServiceUnavailable;
         var status = await CheckAsync(admin.Client);
 
         Assert.NotNull(status.Error);
@@ -105,16 +106,16 @@ public class UpdateCheckTests : IClassFixture<ReleaseApiFactory>
     }
 
     [Fact]
-    public async Task Check_RepositoryNotOnDockerHubYet_MeansNoReleases()
+    public async Task Check_ImageMissingOrPrivate_MeansNoReleases()
     {
         var admin = await _factory.CreateAdminAsync();
-        _factory.DockerHub.FailWith = HttpStatusCode.NotFound;
+        _factory.Ghcr.RefuseToken = true;
 
         var status = await CheckAsync(admin.Client);
 
         Assert.Null(status.LatestVersion);
         Assert.False(status.UpdateAvailable);
-        Assert.Equal("No releases found on Docker Hub.", status.Error);
+        Assert.Equal("No public releases found on GitHub Container Registry (ghcr.io).", status.Error);
     }
 
     [Fact]
@@ -130,7 +131,7 @@ public class UpdateCheckTests : IClassFixture<ReleaseApiFactory>
         Assert.False((await admin.Client.GetFromJsonAsync<UpdateStatusDto>("/api/admin/updates"))!.Enabled);
 
         // A manual check still works with automatic checks off.
-        _factory.DockerHub.Pages = [["1.2.0"]];
+        _factory.Ghcr.Pages = [["1.2.0"]];
         Assert.Equal("1.2.0", (await CheckAsync(admin.Client)).LatestVersion);
 
         var on = await admin.Client.PutAsJsonAsync("/api/admin/updates/settings", new UpdateCheckSettingsRequest(true));
@@ -167,7 +168,7 @@ public class DevelopmentBuildUpdateCheckTests : IClassFixture<FossegrimApiFactor
     }
 
     [Fact]
-    public async Task DevelopmentBuild_NeverContactsDockerHub()
+    public async Task DevelopmentBuild_NeverContactsGhcr()
     {
         var admin = await _factory.CreateAdminAsync();
 
@@ -178,7 +179,7 @@ public class DevelopmentBuildUpdateCheckTests : IClassFixture<FossegrimApiFactor
 
         var check = await admin.Client.PostAsync("/api/admin/updates/check", null);
         Assert.Equal(HttpStatusCode.Conflict, check.StatusCode);
-        Assert.Empty(_factory.DockerHub.Requests);
+        Assert.Empty(_factory.Ghcr.Requests);
     }
 
     [Fact]

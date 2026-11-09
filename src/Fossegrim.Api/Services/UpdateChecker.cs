@@ -28,9 +28,9 @@ public class UpdateCheckState
     public Snapshot Current => Volatile.Read(ref _current);
 
     public void Succeeded(DateTime checkedAt, ReleaseVersion? latest) =>
-        Volatile.Write(ref _current, new Snapshot(latest, checkedAt, latest is null ? "No releases found on Docker Hub." : null));
+        Volatile.Write(ref _current, new Snapshot(latest, checkedAt, latest is null ? "No public releases found on GitHub Container Registry (ghcr.io)." : null));
 
-    // A failed check keeps the last version found, so a Docker Hub outage
+    // A failed check keeps the last version found, so a ghcr.io outage
     // doesn't hide an update that was already known about.
     public void Failed(DateTime checkedAt, string error) =>
         Volatile.Write(ref _current, Current with { CheckedAt = checkedAt, Error = error });
@@ -39,8 +39,8 @@ public class UpdateCheckState
 }
 
 /// <summary>
-/// Compares the running version with the newest stable release tag on
-/// Docker Hub. Automatic (daily) checks can be turned off by an admin; the
+/// Compares the running version with the newest stable release tag on the
+/// GitHub Container Registry (ghcr.io). Automatic (daily) checks can be turned off by an admin; the
 /// setting lives in AppSettings and defaults to on.
 /// </summary>
 public class UpdateChecker
@@ -48,7 +48,7 @@ public class UpdateChecker
     private const string EnabledSetting = "UpdateCheck:Enabled";
 
     private readonly FossegrimDbContext _db;
-    private readonly DockerHubClient _dockerHub;
+    private readonly GhcrClient _ghcr;
     private readonly UpdateCheckState _state;
     private readonly AppVersion _version;
     private readonly TimeProvider _time;
@@ -57,7 +57,7 @@ public class UpdateChecker
 
     public UpdateChecker(
         FossegrimDbContext db,
-        DockerHubClient dockerHub,
+        GhcrClient ghcr,
         UpdateCheckState state,
         AppVersion version,
         TimeProvider time,
@@ -65,12 +65,12 @@ public class UpdateChecker
         ILogger<UpdateChecker> logger)
     {
         _db = db;
-        _dockerHub = dockerHub;
+        _ghcr = ghcr;
         _state = state;
         _version = version;
         _time = time;
         _logger = logger;
-        _repository = configuration["UpdateCheck:Repository"] is { Length: > 0 } repository ? repository : DockerHubClient.DefaultRepository;
+        _repository = configuration["UpdateCheck:Repository"] is { Length: > 0 } repository ? repository : GhcrClient.DefaultRepository;
     }
 
     public bool CanCheck => _version.Release is not null;
@@ -96,7 +96,7 @@ public class UpdateChecker
         await _db.SaveChangesAsync();
     }
 
-    /// <summary>Asks Docker Hub for the latest release; does nothing for development builds.</summary>
+    /// <summary>Asks ghcr.io for the latest release; does nothing for development builds.</summary>
     public async Task CheckAsync(CancellationToken cancellationToken = default)
     {
         if (!CanCheck)
@@ -107,7 +107,7 @@ public class UpdateChecker
         var now = _time.GetUtcNow().UtcDateTime;
         try
         {
-            var tags = await _dockerHub.GetTagNamesAsync(_repository, cancellationToken);
+            var tags = await _ghcr.GetTagNamesAsync(_repository, cancellationToken);
             var latest = tags
                 .Select(tag => ReleaseVersion.TryParse(tag, out var version) ? version : null)
                 .Where(version => version is { IsPrerelease: false })
@@ -117,8 +117,8 @@ public class UpdateChecker
         catch (Exception ex) when (ex is HttpRequestException or JsonException ||
                                    (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
         {
-            _logger.LogWarning(ex, "Update check against Docker Hub ({Repository}) failed", _repository);
-            _state.Failed(now, ex is TaskCanceledException ? "Docker Hub didn't respond in time." : $"Couldn't reach Docker Hub: {ex.Message}");
+            _logger.LogWarning(ex, "Update check against ghcr.io ({Repository}) failed", _repository);
+            _state.Failed(now, ex is TaskCanceledException ? "ghcr.io didn't respond in time." : $"Couldn't reach ghcr.io: {ex.Message}");
         }
     }
 
@@ -134,8 +134,12 @@ public class UpdateChecker
             latest is not null && latest > _version.Release!,
             CanCheck ? snapshot.CheckedAt : null,
             CanCheck ? snapshot.Error : null,
-            latest is null ? null : $"https://hub.docker.com/r/{_repository}/tags?name={latest}");
+            latest is null ? null : PackageUrl(_repository));
     }
+
+    // The image's page on GitHub ("owner/name" is published from the repo of the same name).
+    private static string PackageUrl(string repository) =>
+        $"https://github.com/{repository}/pkgs/container/{repository[(repository.LastIndexOf('/') + 1)..]}";
 }
 
 /// <summary>

@@ -1,5 +1,12 @@
 @if (Compact)
 {
+    <td class="tag-edit-file" title="@FullPath">
+        <div>@(Model.FileName ?? "—")</div>
+        @if (Model.Folder is not null)
+        {
+            <div class="tag-edit-folder">@Model.Folder/</div>
+        }
+    </td>
     <td><input type="text" @bind="Model.Title" @bind:event="oninput" placeholder="Title" /></td>
     <td><input type="text" @bind="Model.ArtistName" @bind:event="oninput" placeholder="Artist" /></td>
     <td><input type="text" @bind="Model.Album" @bind:event="oninput" placeholder="Album" /></td>
@@ -10,6 +17,19 @@
 else
 {
     <div class="tag-fields">
+        @if (!string.IsNullOrEmpty(Model.FileName))
+        {
+            <div class="form-group">
+                <label>File</label>
+                <div class="tag-edit-file" title="@FullPath">
+                    @if (Model.Folder is not null)
+                    {
+                        <span class="tag-edit-folder">@Model.Folder/</span>
+                    }
+                    @Model.FileName
+                </div>
+            </div>
+        }
         <div class="form-group">
             <label>Title</label>
             <input type="text" @bind="Model.Title" @bind:event="oninput" />
@@ -48,4 +68,7 @@ else
     // form (the single-track edit modal).
     [Parameter]
     public bool Compact { get; set; }
+
+    // Hover text: the whole path inside the media folder, in case it's cut off.
+    private string? FullPath => Model.Folder is null ? Model.FileName : $"{Model.Folder}/{Model.FileName}";
 }

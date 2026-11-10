@@ -37,6 +37,7 @@
                 <table class="tag-edit-table">
                     <thead>
                         <tr>
+                            <th>File</th>
                             <th>Title</th>
                             <th>Artist</th>
                             <th>Album</th>
@@ -54,6 +55,7 @@
                                     <button type="button" class="button-secondary" disabled="@(!_applyAll.HasAnyValue)" @onclick="ApplyToAll"
                                             title="Copy the values in this row to every track below">Apply to all</button>
                                 </td>
+                                <td></td>
                                 <td><input type="text" @bind="_applyAll.ArtistName" @bind:event="oninput" placeholder="Artist for all" /></td>
                                 <td><input type="text" @bind="_applyAll.Album" @bind:event="oninput" placeholder="Album for all" /></td>
                                 <td></td>

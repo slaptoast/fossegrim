@@ -40,6 +40,73 @@ public sealed class TagEditingTests : IClassFixture<FossegrimApiFactory>, IDispo
         Assert.Equal("Trip-Hop", item.Genre);
     }
 
+    // The tag editor shows which file it's editing: the name only, never the folders.
+    [Fact]
+    public async Task TrackDto_CarriesTheFileNameWithoutItsFolder()
+    {
+        TestMp3.Create(_musicFolder, "07 - Angel.mp3", new Mp3Tags("Angel", ["Massive Attack"], "Mezzanine", 1998, 1, ["Trip-Hop"]));
+        var item = await ScanSingleAsync();
+
+        MediaItemDto? dto = null;
+        await _factory.WithDbAsync(async db =>
+            dto = await db.MediaItems.AsNoTracking().Where(m => m.Id == item.Id).Select(MediaItemMapping.ToDto).SingleAsync());
+
+        Assert.Equal("07 - Angel.mp3", dto!.FileName);
+    }
+
+    // ...and the folders it's in below its media folder, to tell same-named files apart.
+    [Fact]
+    public async Task TrackDto_CarriesItsFolderWithinTheMediaFolder()
+    {
+        var folder = new MediaFolder { Name = "Music " + _tag, Location = _musicFolder };
+        var albumFolder = Path.Combine(_musicFolder, "Massive Attack", "Mezzanine");
+        TestMp3.Create(albumFolder, "01 - Angel.mp3", new Mp3Tags("Angel", ["Massive Attack"], "Mezzanine", 1998, 1, ["Trip-Hop"]));
+        var item = new MediaItem
+        {
+            Id = Guid.NewGuid(),
+            Title = "Angel",
+            FileLocation = Path.Combine(albumFolder, "01 - Angel.mp3"),
+            MediaFolderId = folder.Id
+        };
+        await _factory.WithDbAsync(async db =>
+        {
+            db.MediaFolders.Add(folder);
+            db.MediaItems.Add(item);
+            await db.SaveChangesAsync();
+        });
+
+        MediaItemDto? dto = null;
+        await _factory.WithDbAsync(async db =>
+            dto = await db.MediaItems.AsNoTracking().Where(m => m.Id == item.Id).Select(MediaItemMapping.ToDto).SingleAsync());
+
+        Assert.Equal("Massive Attack/Mezzanine", dto!.Folder);
+        Assert.Equal("01 - Angel.mp3", dto.FileName);
+
+        // Saving tags hands back the same folder, so the editor keeps showing it.
+        var saved = Assert.Single((await UpdateAsync(new MediaItemTagUpdate(item.Id, "Angel", null, null, null, null, null))).Updated);
+        Assert.Equal("Massive Attack/Mezzanine", saved.Folder);
+    }
+
+    [Theory]
+    [InlineData("Artist/Album/01.mp3", "Artist/Album")]
+    [InlineData("01.mp3", null)]
+    public void FolderWithin_IsRelativeToTheMediaFolder(string relativeFile, string? expected)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "media");
+        var file = Path.Combine(root, relativeFile.Replace('/', Path.DirectorySeparatorChar));
+
+        Assert.Equal(expected, MediaItemMapping.FolderWithin(file, root));
+    }
+
+    [Fact]
+    public void FolderWithin_IsNull_WithoutAMediaFolderOrOutsideIt()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "elsewhere", "Artist", "01.mp3");
+
+        Assert.Null(MediaItemMapping.FolderWithin(file, null));
+        Assert.Null(MediaItemMapping.FolderWithin(file, Path.Combine(Path.GetTempPath(), "media")));
+    }
+
     // The original bug: the database didn't have year/track/genre (scanned
     // before the scanner read them), and saving any edit blanked them in the file.
     [Fact]

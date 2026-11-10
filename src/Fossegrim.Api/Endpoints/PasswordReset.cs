@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Fossegrim.Api.Services;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
@@ -10,7 +11,8 @@ namespace Fossegrim.Api.Endpoints;
 /// <summary>
 /// "Forgot password?" (an emailed link, when an admin has set up email),
 /// resetting a password from a link, the admin's list of accounts with
-/// "Reset link", and the outgoing mail server settings.
+/// "Reset link", deleting and restoring accounts, and the outgoing mail
+/// server settings.
 /// </summary>
 public static class PasswordReset
 {
@@ -46,14 +48,16 @@ public static class PasswordReset
             .WithTags("Admin")
             .RequireAuthorization(policy => policy.RequireRole("Admin"));
 
-        adminGroup.MapGet("/users", async (FossegrimDbContext db) =>
+        // The accounts, or with ?deleted=true the deleted ones (to restore).
+        adminGroup.MapGet("/users", async (bool? deleted, FossegrimDbContext db) =>
         {
-            var adminRoleId = await db.Roles.Where(r => r.Name == "Admin").Select(r => r.Id).FirstOrDefaultAsync();
-            var adminIds = await db.UserRoles.Where(ur => ur.RoleId == adminRoleId).Select(ur => ur.UserId).ToListAsync();
+            var adminIds = await AccountDeletion.AdminIdsAsync(db);
             var now = DateTimeOffset.UtcNow;
-            var users = await db.Users.AsNoTracking().ToListAsync();
+            var users = await db.Users.AsNoTracking()
+                .Where(u => deleted == true ? u.DeletedAt != null : u.DeletedAt == null)
+                .ToListAsync();
             return Results.Ok(users
-                .Select(u => new AdminUserDto(u.Id, u.Email ?? "", u.DisplayName ?? "", adminIds.Contains(u.Id), u.LockoutEnd > now))
+                .Select(u => new AdminUserDto(u.Id, u.Email ?? "", u.DisplayName ?? "", adminIds.Contains(u.Id), u.LockoutEnd > now, u.DeletedAt))
                 .OrderBy(u => u.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ToList());
         })
@@ -61,10 +65,24 @@ public static class PasswordReset
 
         // For an admin to pass on to someone who can't get the email.
         adminGroup.MapPost("/users/{id}/reset-link", async (string id, UserManager<ApplicationUser> users, PasswordResets resets) =>
-            await users.FindByIdAsync(id) is { } user
+            await users.FindByIdAsync(id) is { DeletedAt: null } user
                 ? Results.Ok(await resets.CreateLinkAsync(user))
                 : Results.NotFound())
         .WithName("CreatePasswordResetLink");
+
+        adminGroup.MapDelete("/users/{id}", async (string id, ClaimsPrincipal principal, AccountDeletion deletion) =>
+            await deletion.DeleteAsync(id, principal) switch
+            {
+                AccountDeletion.Result.Done => Results.NoContent(),
+                AccountDeletion.Result.NotFound => Results.NotFound(),
+                AccountDeletion.Result.Self => Results.Conflict(new ApiErrorResponse("You can't delete your own account.")),
+                _ => Results.Conflict(new ApiErrorResponse("That's the only admin account. Make someone else an admin first.")),
+            })
+        .WithName("DeleteUser");
+
+        adminGroup.MapPost("/users/{id}/restore", async (string id, AccountDeletion deletion) =>
+            await deletion.RestoreAsync(id) ? Results.NoContent() : Results.NotFound())
+        .WithName("RestoreUser");
 
         adminGroup.MapGet("/email", async (EmailSettingsStore email) => Results.Ok(await email.GetDtoAsync()))
             .WithName("GetEmailSettings");

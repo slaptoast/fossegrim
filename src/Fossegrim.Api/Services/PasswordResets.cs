@@ -60,7 +60,7 @@ public class PasswordResets
     /// </summary>
     public async Task RequestByEmailAsync(string email, SmtpSettings settings)
     {
-        if (string.IsNullOrWhiteSpace(email) || await _users.FindByEmailAsync(email.Trim()) is not { Email: not null } user)
+        if (string.IsNullOrWhiteSpace(email) || await _users.FindByEmailAsync(email.Trim()) is not { Email: not null, DeletedAt: null } user)
         {
             return;
         }
@@ -89,7 +89,7 @@ public class PasswordResets
     /// </summary>
     public async Task<IReadOnlyList<string>?> ResetAsync(ResetPasswordRequest request)
     {
-        if (string.IsNullOrEmpty(request.UserId) || await _users.FindByIdAsync(request.UserId) is not { } user)
+        if (string.IsNullOrEmpty(request.UserId) || await _users.FindByIdAsync(request.UserId) is not { DeletedAt: null } user)
         {
             return [InvalidLinkMessage];
         }

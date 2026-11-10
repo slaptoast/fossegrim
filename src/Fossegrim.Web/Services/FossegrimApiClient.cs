@@ -244,22 +244,29 @@ public class FossegrimApiClient
     // Throws an ApiException with the server's message (from an ApiErrorResponse) on failure.
     private static async Task<T> ReadOrThrowAsync<T>(HttpResponseMessage response, string action)
     {
-        if (!response.IsSuccessStatusCode)
-        {
-            string? message = null;
-            try
-            {
-                message = (await response.Content.ReadFromJsonAsync<ApiErrorResponse>())?.Error;
-            }
-            catch (Exception)
-            {
-                // Not an ApiErrorResponse; use the generic message.
-            }
-            throw new ApiException(message ?? $"{action} failed with status {(int)response.StatusCode}.");
-        }
-
+        await EnsureOkOrThrowAsync(response, action);
         return await response.Content.ReadFromJsonAsync<T>()
             ?? throw new ApiException($"{action} succeeded but returned no result.");
+    }
+
+    // ReadOrThrowAsync for responses with no body.
+    private static async Task EnsureOkOrThrowAsync(HttpResponseMessage response, string action)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        string? message = null;
+        try
+        {
+            message = (await response.Content.ReadFromJsonAsync<ApiErrorResponse>())?.Error;
+        }
+        catch (Exception)
+        {
+            // Not an ApiErrorResponse; use the generic message.
+        }
+        throw new ApiException(message ?? $"{action} failed with status {(int)response.StatusCode}.");
     }
 
     public async Task<MediaItemDto?> GetMediaItemAsync(Guid id)
@@ -539,8 +546,16 @@ public class FossegrimApiClient
         return [$"Resetting the password failed ({(int)response.StatusCode})."];
     }
 
-    public async Task<IReadOnlyList<AdminUserDto>> GetUsersAsync() =>
-        await _httpClient.GetFromJsonAsync<List<AdminUserDto>>("/api/admin/users") ?? [];
+    public async Task<IReadOnlyList<AdminUserDto>> GetUsersAsync(bool deleted = false) =>
+        await _httpClient.GetFromJsonAsync<List<AdminUserDto>>(deleted ? "/api/admin/users?deleted=true" : "/api/admin/users") ?? [];
+
+    public async Task DeleteUserAsync(string userId) =>
+        await EnsureOkOrThrowAsync(
+            await _httpClient.DeleteAsync($"/api/admin/users/{Uri.EscapeDataString(userId)}"), "Deleting the account");
+
+    public async Task RestoreUserAsync(string userId) =>
+        await EnsureOkOrThrowAsync(
+            await _httpClient.PostAsync($"/api/admin/users/{Uri.EscapeDataString(userId)}/restore", null), "Restoring the account");
 
     public async Task<PasswordResetLinkDto> CreatePasswordResetLinkAsync(string userId) =>
         await ReadOrThrowAsync<PasswordResetLinkDto>(

@@ -245,7 +245,7 @@ public partial class PasswordResetTests : IClassFixture<FossegrimApiFactory>
     private static SaveEmailSettingsRequest Settings(string? password = "smtp-password") =>
         new("smtp.example.com", 587, SmtpSecurity.StartTls, "fossegrim", password, "fossegrim@example.com", null, PublicUrl + "/");
 
-    private static (string UserId, string Token) ParseLink(string text, string prefix)
+    internal static (string UserId, string Token) ParseLink(string text, string prefix)
     {
         var match = LinkPattern().Match(text);
         Assert.True(match.Success, $"No reset link in: {text}");

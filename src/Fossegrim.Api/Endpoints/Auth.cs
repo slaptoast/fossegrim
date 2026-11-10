@@ -25,7 +25,8 @@ public static class Auth
             SessionService sessions) =>
         {
             var user = string.IsNullOrWhiteSpace(request.Email) ? null : await userManager.FindByEmailAsync(request.Email);
-            if (user is null)
+            // A deleted account answers exactly like an unknown address.
+            if (user is null or { DeletedAt: not null })
             {
                 SignInLimits.SpendTimeOnUnknownUser(passwordHasher, request.Password);
                 return Results.Unauthorized();

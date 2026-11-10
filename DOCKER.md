@@ -42,6 +42,14 @@ Self-registration is **off** by default: the sign-in page has no "Create
 account" link, and admins add accounts under Settings -> Accounts (or in
 the wizard). Admins can open sign-ups there too.
 
+Admins can also **delete** an account there. That signs it out
+everywhere, stops it signing in or using a reset link, and hides it from
+the account list and from people searching for someone to share a
+playlist with. Nothing it owns is removed (playlists, plays, favourites,
+settings), so it can be **restored** from the "Deleted accounts" list
+just as it was. Its email address and display name stay taken while it's
+deleted. Admins can't delete their own account or the last admin.
+
 Installs from before the wizard already have accounts, so they count as set
 up and are never sent through it. Updating them does close
 self-registration until an admin opens it again. The old

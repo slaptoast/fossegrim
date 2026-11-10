@@ -1,10 +1,13 @@
 @inject FossegrimApiClient ApiClient
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthState
+@using System.IdentityModel.Tokens.Jwt
 
 @* Whether people can sign themselves up, the accounts there are (with reset
-   links for forgotten passwords), and adding accounts by hand. Used on the
-   Settings page and in the setup wizard. *@
+   links for forgotten passwords, and deleting), deleted accounts to restore,
+   and adding accounts by hand. Used on the Settings page and in the setup
+   wizard. *@
 
 @if (_message is not null)
 {
@@ -63,7 +66,13 @@
                             }
                             <div class="backup-hint">@user.Email</div>
                         </div>
-                        <button type="button" class="button-secondary" disabled="@_busy" @onclick="() => MakeResetLinkAsync(user)">Reset link</button>
+                        <div class="account-actions">
+                            <button type="button" class="button-secondary" disabled="@_busy" @onclick="() => MakeResetLinkAsync(user)">Reset link</button>
+                            @if (user.UserId != _myUserId)
+                            {
+                                <button type="button" class="button-danger" disabled="@_busy" @onclick="() => _confirmDelete = user">Delete</button>
+                            }
+                        </div>
                     </div>
                     @if (_resetLink is { } link && link.UserId == user.UserId)
                     {
@@ -78,6 +87,40 @@
         </ul>
     </div>
 }
+
+@if (_deletedUsers.Count > 0)
+{
+    <div class="folder-item">
+        <p class="backup-hint">
+            <strong>Deleted accounts.</strong> These can't sign in and don't show up anywhere else. Their playlists, plays and favourites are kept, so restoring one brings it back as it was.
+        </p>
+        <ul class="account-list">
+            @foreach (var user in _deletedUsers)
+            {
+                <li>
+                    <div class="account-row">
+                        <div class="account-who">
+                            <strong>@user.DisplayName</strong>
+                            @if (user.IsAdmin)
+                            {
+                                <span class="account-badge">Admin</span>
+                            }
+                            <div class="backup-hint">@user.Email · deleted @user.DeletedAt?.ToLocalTime().ToString("d")</div>
+                        </div>
+                        <button type="button" class="button-secondary" disabled="@_busy" @onclick="() => RestoreAsync(user)">Restore</button>
+                    </div>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+<ConfirmDialog IsOpen="_confirmDelete is not null"
+               Title="Delete Account"
+               Message="@($"Delete {_confirmDelete?.DisplayName}? They're signed out everywhere and can't sign in again. Their playlists, plays and favourites are kept, and you can restore the account under Deleted accounts.")"
+               ConfirmText="Delete"
+               OnConfirm="DeleteAsync"
+               OnCancel="() => _confirmDelete = null" />
 
 <EditForm Model="_input" OnValidSubmit="AddUserAsync">
     <DataAnnotationsValidator />
@@ -117,6 +160,9 @@
 
     private SetupStatusDto? _status;
     private IReadOnlyList<AdminUserDto> _users = [];
+    private IReadOnlyList<AdminUserDto> _deletedUsers = [];
+    private string? _myUserId;
+    private AdminUserDto? _confirmDelete;
     private bool? _resetByEmail;
     private (string UserId, string Url, DateTime ExpiresAt)? _resetLink;
     private bool _copied;
@@ -130,8 +176,9 @@
     {
         try
         {
+            _myUserId = (await AuthState.GetAuthenticationStateAsync()).User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
             _status = await ApiClient.GetSetupStatusAsync();
-            _users = await ApiClient.GetUsersAsync();
+            await LoadUsersAsync();
             _resetByEmail = (await ApiClient.GetPasswordResetOptionsAsync()).ByEmail;
         }
         catch (Exception ex)
@@ -172,7 +219,7 @@
             {
                 (_message, _success) = ($"Added {_input.DisplayName} ({_input.Email}){(_input.IsAdmin ? " as an admin" : "")}.", true);
                 _input = new NewUserInput();
-                _users = await ApiClient.GetUsersAsync();
+                await LoadUsersAsync();
                 await OnChanged.InvokeAsync();
             }
         }
@@ -182,6 +229,58 @@
         }
         finally
         {
+            _busy = false;
+        }
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        _users = await ApiClient.GetUsersAsync();
+        _deletedUsers = await ApiClient.GetUsersAsync(deleted: true);
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_confirmDelete is not { } user)
+        {
+            return;
+        }
+        _confirmDelete = null;
+        await ChangeAccountAsync(() => ApiClient.DeleteUserAsync(user.UserId), $"Deleted {user.DisplayName}. You can restore the account below.");
+    }
+
+    private Task RestoreAsync(AdminUserDto user) =>
+        ChangeAccountAsync(() => ApiClient.RestoreUserAsync(user.UserId), $"Restored {user.DisplayName}. They can sign in again.");
+
+    private async Task ChangeAccountAsync(Func<Task> change, string done)
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            await change();
+            (_message, _success) = (done, true);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            try
+            {
+                await LoadUsersAsync();
+            }
+            catch (Exception)
+            {
+                // Keep the lists as they were; the message above says what happened.
+            }
+            // A reset link shown for an account that's just been deleted no longer works.
+            if (_resetLink?.UserId is { } linkFor && _users.All(u => u.UserId != linkFor))
+            {
+                _resetLink = null;
+            }
             _busy = false;
         }
     }

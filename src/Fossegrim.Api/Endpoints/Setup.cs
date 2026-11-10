@@ -67,8 +67,14 @@ public static class Setup
         })
         .WithName("UpdateRegistrationSettings");
 
-        adminGroup.MapPost("/users", async (CreateUserRequest request, FossegrimDbContext db, SetupService setup) =>
+        adminGroup.MapPost("/users", async (CreateUserRequest request, FossegrimDbContext db, UserManager<ApplicationUser> users, SetupService setup) =>
         {
+            // Otherwise Identity just says the email is taken, by an account the admin can't see.
+            if (!string.IsNullOrWhiteSpace(request.Email) && await users.FindByEmailAsync(request.Email.Trim()) is { DeletedAt: not null })
+            {
+                return Results.BadRequest(new IdentityErrorsResponse(["That email belongs to a deleted account. Restore it under Deleted accounts instead."]));
+            }
+
             if (await AccountRules.CheckDisplayNameAsync(db, request.DisplayName) is { } nameError)
             {
                 return Results.BadRequest(new IdentityErrorsResponse([nameError]));

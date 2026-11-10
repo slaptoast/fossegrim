@@ -13,7 +13,8 @@ public record ResetPasswordRequest(string UserId, string Token, string NewPasswo
 // the admin's browser puts its own address in front.
 public record PasswordResetLinkDto(string Path, DateTime ExpiresAt);
 
-public record AdminUserDto(string UserId, string Email, string DisplayName, bool IsAdmin, bool LockedOut);
+// DeletedAt is only set in the list of deleted accounts (?deleted=true).
+public record AdminUserDto(string UserId, string Email, string DisplayName, bool IsAdmin, bool LockedOut, DateTime? DeletedAt = null);
 
 // The outgoing mail server. Security is one of SmtpSecurity. The password is
 // never sent back out; HasPassword says whether one is saved. PublicUrl is

@@ -57,7 +57,8 @@ The name comes from the *Fossegrimen*, a water spirit in Norwegian folklore who 
 - A Library page built from movable, resizable modules: artists, albums, tracks, visualizer, random picks, recents, favourites, up next and player.
 
 **Running it**
-- A setup wizard on first run. After that, an admin panel for media folders, accounts and sign-ups, Last.fm, backups and update checks.
+- A setup wizard on first run. After that, an admin panel for media folders, accounts and sign-ups, email, Last.fm, backups and update checks.
+- "Forgot password?" on the sign-in page: it emails a one-time reset link once an admin has set up a mail server (any SMTP server). Without one, admins can make a reset link for anyone, and a locked-out sole admin can get one with `fossegrim reset-password` ([DOCKER.md](DOCKER.md#forgotten-passwords)).
 - Scheduled and on-demand backups of the database and keys, as zip files; [DOCKER.md](DOCKER.md#backups) explains how to restore from one.
 - Release builds check once a day for a newer version and show an "Update available" badge to admins.
 - Security: sign-in rate limiting and lockout, renewable sessions you can sign out per device, short-lived media tokens for stream URLs, and a strict Content-Security-Policy.

@@ -208,6 +208,35 @@ beside them), and resized when a client asks for a smaller one
 by `Covers__CacheDirectory`). The cache is never backed up and can be
 deleted at any time; covers are re-extracted as they're requested.
 
+### Forgotten passwords
+
+"Forgot password?" on the sign-in page works in one of two ways:
+
+- **With email set up** (Settings -> Email): it emails the person a reset
+  link. Enter any SMTP server (your email provider's, often with an app
+  password, or a service like Mailgun or Postmark), the address emails come
+  from, and the address people open Fossegrim on, which emailed links start
+  with. "Send a test email" checks it. The SMTP password is stored
+  encrypted, like the Last.fm secret.
+- **Without email**: it tells the person to ask an admin, who makes them a
+  link under Settings -> Accounts -> Reset link and sends it however they
+  like.
+
+A link works once, for 24 hours. Using it unlocks the account if too many
+wrong passwords had locked it, and signs it out on every device. The page
+never says whether an address has an account, and each account gets at most
+one reset email every five minutes.
+
+If you're the only admin and can't sign in, get a link from inside the
+container:
+
+```sh
+docker compose exec fossegrim fossegrim reset-password you@example.com
+```
+
+It prints the link (starting with Fossegrim's address if email is set up;
+otherwise put the address you open Fossegrim on in front of it).
+
 ### Last.fm
 
 Each user can link their own Last.fm account from their Profile page, after

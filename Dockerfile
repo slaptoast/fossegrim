@@ -36,9 +36,13 @@ WORKDIR /app
 ARG VERSION=dev
 
 # tzdata: backup schedules run at a wall-clock time in a chosen time zone.
+# /usr/local/bin/fossegrim runs the app's commands, e.g.
+# `fossegrim reset-password you@example.com` (see DOCKER.md).
 RUN apk add --no-cache tzdata \
     && addgroup -S fossegrim && adduser -S fossegrim -G fossegrim \
     && mkdir -p /data /music /backups \
+    && printf '#!/bin/sh\nexec dotnet /app/Fossegrim.Api.dll "$@"\n' > /usr/local/bin/fossegrim \
+    && chmod 755 /usr/local/bin/fossegrim \
     && chown -R fossegrim:fossegrim /app /data /music /backups
 
 COPY --from=build /app .

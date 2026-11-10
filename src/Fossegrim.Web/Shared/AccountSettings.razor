@@ -1,7 +1,10 @@
 @inject FossegrimApiClient ApiClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
 
-@* Whether people can sign themselves up, and adding accounts by hand.
-   Used on the Settings page and in the setup wizard. *@
+@* Whether people can sign themselves up, the accounts there are (with reset
+   links for forgotten passwords), and adding accounts by hand. Used on the
+   Settings page and in the setup wizard. *@
 
 @if (_message is not null)
 {
@@ -28,6 +31,49 @@
             @foreach (var error in _errors)
             {
                 <li>@error</li>
+            }
+        </ul>
+    </div>
+}
+
+@if (_users.Count > 0)
+{
+    <div class="folder-item">
+        <p class="backup-hint">
+            Someone forgot their password? Make them a reset link and send it to them. It works once, for 24 hours, and signs them out everywhere.
+            @if (_resetByEmail is false)
+            {
+                <span>Set up email below and they can get one themselves from "Forgot password?" on the sign-in page.</span>
+            }
+        </p>
+        <ul class="account-list">
+            @foreach (var user in _users)
+            {
+                <li>
+                    <div class="account-row">
+                        <div class="account-who">
+                            <strong>@user.DisplayName</strong>
+                            @if (user.IsAdmin)
+                            {
+                                <span class="account-badge">Admin</span>
+                            }
+                            @if (user.LockedOut)
+                            {
+                                <span class="account-badge warning" title="Too many wrong passwords; a reset unlocks it">Locked</span>
+                            }
+                            <div class="backup-hint">@user.Email</div>
+                        </div>
+                        <button type="button" class="button-secondary" disabled="@_busy" @onclick="() => MakeResetLinkAsync(user)">Reset link</button>
+                    </div>
+                    @if (_resetLink is { } link && link.UserId == user.UserId)
+                    {
+                        <div class="reset-link">
+                            <input type="text" readonly value="@link.Url" aria-label="Reset link for @user.DisplayName" />
+                            <button type="button" class="button-secondary" @onclick="CopyLinkAsync">@(_copied ? "Copied" : "Copy")</button>
+                        </div>
+                        <p class="backup-hint">Valid until @link.ExpiresAt.ToLocalTime().ToString("g"). Making another link for @user.DisplayName replaces this one.</p>
+                    }
+                </li>
             }
         </ul>
     </div>
@@ -70,6 +116,10 @@
     public EventCallback OnChanged { get; set; }
 
     private SetupStatusDto? _status;
+    private IReadOnlyList<AdminUserDto> _users = [];
+    private bool? _resetByEmail;
+    private (string UserId, string Url, DateTime ExpiresAt)? _resetLink;
+    private bool _copied;
     private NewUserInput _input = new();
     private List<string> _errors = [];
     private string? _message;
@@ -81,6 +131,8 @@
         try
         {
             _status = await ApiClient.GetSetupStatusAsync();
+            _users = await ApiClient.GetUsersAsync();
+            _resetByEmail = (await ApiClient.GetPasswordResetOptionsAsync()).ByEmail;
         }
         catch (Exception ex)
         {
@@ -120,6 +172,7 @@
             {
                 (_message, _success) = ($"Added {_input.DisplayName} ({_input.Email}){(_input.IsAdmin ? " as an admin" : "")}.", true);
                 _input = new NewUserInput();
+                _users = await ApiClient.GetUsersAsync();
                 await OnChanged.InvokeAsync();
             }
         }
@@ -130,6 +183,44 @@
         finally
         {
             _busy = false;
+        }
+    }
+
+    private async Task MakeResetLinkAsync(AdminUserDto user)
+    {
+        _busy = true;
+        _message = null;
+        _copied = false;
+        try
+        {
+            var link = await ApiClient.CreatePasswordResetLinkAsync(user.UserId);
+            _resetLink = (user.UserId, Navigation.BaseUri.TrimEnd('/') + link.Path, link.ExpiresAt);
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CopyLinkAsync()
+    {
+        if (_resetLink is not { } link)
+        {
+            return;
+        }
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", link.Url);
+            _copied = true;
+        }
+        catch (JSException)
+        {
+            // No clipboard access (e.g. plain http); the link can still be selected and copied by hand.
+            (_message, _success) = ("Couldn't copy automatically; select the link and copy it.", false);
         }
     }
 

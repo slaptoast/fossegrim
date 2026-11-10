@@ -93,8 +93,14 @@ tagged `1.2.3`, `1.2`, `1`, and (as long as the tag isn't a prerelease like
 workflow parses the version straight out of the tag, there's no separate
 version file to keep in sync.
 
-The workflow logs in to GHCR with its own `GITHUB_TOKEN`, so there are no
-secrets to set up.
+Once the image is pushed, the workflow creates a
+[GitHub Release](https://github.com/slaptoast/fossegrim/releases) for the
+tag. Its notes are generated from the pull requests merged since the
+previous release, and tags with a hyphen (`v1.2.3-rc.1`) are marked as
+prereleases.
+
+The workflow logs in to GHCR and creates the release with its own
+`GITHUB_TOKEN`, so there are no secrets to set up.
 
 ## Using the published image
 

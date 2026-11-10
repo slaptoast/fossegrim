@@ -4,7 +4,7 @@
 
 **A self-hosted music server and web player for the music collection you already own.**
 
-[![Tests](https://github.com/slaptoast/fossegrim/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/slaptoast/fossegrim/actions/workflows/test.yml) [![Latest release](https://img.shields.io/github/v/release/slaptoast/fossegrim?sort=semver&label=release)](https://github.com/slaptoast/fossegrim/releases/latest) [![Docker image](https://img.shields.io/badge/image-ghcr.io%2Fslaptoast%2Ffossegrim-2496ED?logo=docker&logoColor=white)](https://github.com/slaptoast/fossegrim/pkgs/container/fossegrim) [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/) [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![Tests](https://github.com/slaptoast/fossegrim/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/slaptoast/fossegrim/actions/workflows/test.yml) [![Latest release](https://img.shields.io/github/v/release/slaptoast/fossegrim?sort=semver&label=release)](https://github.com/slaptoast/fossegrim/releases/latest) [![Docker image](https://img.shields.io/badge/image-ghcr.io%2Fslaptoast%2Ffossegrim-2496ED?logo=docker&logoColor=white)](https://github.com/slaptoast/fossegrim/pkgs/container/fossegrim) [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-slaptoast%2Ffossegrim-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/slaptoast/fossegrim) [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/) [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 ![The Library page: artists, albums and tracks, a MilkDrop visualizer, and the player bar](docs/screenshots/library.png)
 
@@ -111,6 +111,8 @@ docker run -d --name fossegrim -p 8080:8080 \
   ghcr.io/slaptoast/fossegrim:latest
 ```
 
+The same images are on Docker Hub as `slaptoast/fossegrim` and `slaptoast/fossegrim-proxy`, if you'd rather pull from there.
+
 With Compose, open **http://localhost** (the bundled proxy listens on port 80); with `docker run`, **http://localhost:8080**. The setup wizard walks you through creating the admin account (the only required step), adding `/music` as a media folder, and optionally Last.fm, accounts, backups and update checks.
 
 > [!IMPORTANT]
@@ -167,7 +169,7 @@ dotnet test src/Fossegrim.sln      # the full test suite
 | `src/Fossegrim.Contracts` | DTOs shared by the API and the web app. |
 | `src/Fossegrim.Api.Tests` | xUnit tests that run the real API in-process against a throwaway database. |
 
-Every pull request runs the tests and a Docker build. Pushing a `vX.Y.Z` tag publishes the image to GHCR and creates a [GitHub Release](https://github.com/slaptoast/fossegrim/releases) with generated notes. More detail is in **[DEV-README.md](DEV-README.md)**.
+Every pull request runs the tests and a Docker build. Pushing a `vX.Y.Z` tag publishes the images to GHCR and Docker Hub and creates a [GitHub Release](https://github.com/slaptoast/fossegrim/releases) with generated notes. More detail is in **[DEV-README.md](DEV-README.md)**.
 
 ### Built with
 

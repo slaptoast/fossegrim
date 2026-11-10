@@ -5,7 +5,8 @@ namespace Fossegrim.Api.Services;
 /// <summary>
 /// Browser hardening headers on every response. The content security policy
 /// allows what the Blazor WebAssembly app needs and nothing else: its own
-/// scripts (plus compiling WebAssembly), inline styles (Blazor and Gridstack
+/// scripts (plus compiling WebAssembly, and eval, which the visualizer's
+/// Butterchurn needs to compile MilkDrop presets), inline styles (Blazor and Gridstack
 /// set style attributes, and custom themes can include CSS), and images from
 /// the app and the cover providers only (cover search results are shown
 /// straight from them). Tokens live in localStorage, so keeping injected
@@ -16,7 +17,8 @@ public static class SecurityHeaders
 {
     public static readonly string ContentSecurityPolicy =
         "default-src 'self'; " +
-        "script-src 'self' 'wasm-unsafe-eval'; " +
+        // No inline or third-party scripts, so eval only runs code the app's own scripts hand it.
+        "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; " +
         "style-src 'self' 'unsafe-inline'; " +
         $"img-src 'self' data: blob: {string.Join(' ', CoverImages.BrowserImageSources)}; " +
         "media-src 'self' blob:; " +

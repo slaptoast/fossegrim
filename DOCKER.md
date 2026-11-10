@@ -167,12 +167,17 @@ git push origin v1.2.3
 ```
 
 That one push builds the images and pushes them to the GitHub Container
-Registry:
+Registry and Docker Hub:
 
 ```
 ghcr.io/slaptoast/fossegrim
 ghcr.io/slaptoast/fossegrim-proxy
+docker.io/slaptoast/fossegrim
+docker.io/slaptoast/fossegrim-proxy
 ```
+
+Each image is built once, so both registries carry the same image under
+the same tags.
 
 Both are built for `linux/amd64` and `linux/arm64` (a Raspberry Pi 3, 4
 or 5 running a 64-bit OS); Docker pulls the right one. The app's .NET build
@@ -191,14 +196,38 @@ tag. Its notes are generated from the pull requests merged since the
 previous release, and tags with a hyphen (`v1.2.3-rc.1`) are marked as
 prereleases.
 
+On a stable release, the workflow also copies `README.md` (and
+`proxy/README.md` for the proxy) to the Docker Hub repository pages, which
+don't follow the GitHub repo by themselves.
+
 The workflow logs in to GHCR and creates the release with its own
-`GITHUB_TOKEN`, so there are no secrets to set up.
+`GITHUB_TOKEN`. Docker Hub needs two repository secrets (Settings ->
+Secrets and variables -> Actions):
+
+- `DOCKERHUB_USERNAME`: the Docker Hub account (`slaptoast`).
+- `DOCKERHUB_TOKEN`: a Docker Hub personal access token with **Read, Write,
+  Delete** scope. Pushing only needs Read & Write; updating the repository
+  description needs Delete as well.
+
+Create the `fossegrim` and `fossegrim-proxy` repositories on Docker Hub (as
+public) before the first release. If the login or push to Docker Hub fails,
+the whole release fails, GHCR push included, so the two never drift apart.
+To check the setup without cutting a release, run the workflow by hand on
+`main` (Actions -> Release -> Run workflow): it pushes only a `sha-...` tag
+and creates no GitHub Release.
 
 ## Using the published image
 
 ```bash
 docker pull ghcr.io/slaptoast/fossegrim:latest
+# or, from Docker Hub
+docker pull slaptoast/fossegrim:latest
 ```
+
+To use the Docker Hub images with Compose, change the two `image:` lines in
+`docker-compose.yml` to `slaptoast/fossegrim:latest` and
+`slaptoast/fossegrim-proxy:latest`. The update check always reads
+ghcr.io, whichever registry you pull from; the tags are the same.
 
 The first time a package is published from a public repo, GHCR may create it
 as **private**. If `docker pull` gets a 403/denied for an anonymous pull, go
@@ -548,8 +577,10 @@ machine), use `scripts/docker-build.sh`:
 ```bash
 ./scripts/docker-build.sh                                    # build, tag :local
 REGISTRY=ghcr.io/slaptoast  ./scripts/docker-build.sh --push --tag 1.2.3  # GHCR
+REGISTRY=docker.io/slaptoast ./scripts/docker-build.sh --push --tag 1.2.3  # Docker Hub
 ```
 
-You'll need to be logged in to the registry first (`docker login ghcr.io`)
+You'll need to be logged in to the registry first (`docker login ghcr.io`,
+or `docker login` for Docker Hub)
 -- the script doesn't handle auth.
 Run `./scripts/docker-build.sh --help` for all options.

@@ -2,10 +2,15 @@ name: Release
 
 # Publishing is version-tag-driven, not automatic on every push to main:
 #   git tag v1.2.3 && git push origin v1.2.3
-# builds once and pushes the app and its proxy to GHCR (ghcr.io), tagged 1.2.3, 1.2, 1,
-# and (for a non-prerelease tag) latest, then creates a GitHub Release with
-# notes generated from the pull requests merged since the last one. A
-# pull_request still gets a build-only sanity check with nothing pushed.
+# builds once and pushes the app and its proxy to GHCR (ghcr.io) and Docker
+# Hub (docker.io), tagged 1.2.3, 1.2, 1, and (for a non-prerelease tag)
+# latest, then creates a GitHub Release with notes generated from the pull
+# requests merged since the last one. A pull_request still gets a build-only
+# sanity check with nothing pushed.
+#
+# Docker Hub needs two repo secrets: DOCKERHUB_USERNAME and DOCKERHUB_TOKEN
+# (a personal access token with Read, Write, Delete scope; Delete is what
+# lets the README sync below update the repository descriptions).
 
 on:
   push:
@@ -40,11 +45,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Derive image metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/fossegrim
+          images: |
+            ghcr.io/${{ github.repository_owner }}/fossegrim
+            docker.io/slaptoast/fossegrim
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -78,7 +92,9 @@ jobs:
         id: proxy-meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/fossegrim-proxy
+          images: |
+            ghcr.io/${{ github.repository_owner }}/fossegrim-proxy
+            docker.io/slaptoast/fossegrim-proxy
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -99,6 +115,32 @@ jobs:
           cache-from: type=gha,scope=proxy
           cache-to: type=gha,mode=max,scope=proxy
 
+      # Docker Hub repository pages show their own README, which doesn't
+      # follow the repo's. Refresh both on a stable release, so the page
+      # matches what `latest` is. Relative links are made absolute so they
+      # point back at GitHub.
+      - name: Sync README to Docker Hub
+        if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: slaptoast/fossegrim
+          short-description: A self-hosted music server and web player for the music collection you already own
+          readme-filepath: README.md
+          enable-url-completion: true
+
+      - name: Sync proxy README to Docker Hub
+        if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: slaptoast/fossegrim-proxy
+          short-description: The nginx proxy that runs in front of Fossegrim, with HTTPS
+          readme-filepath: proxy/README.md
+          enable-url-completion: true
+
       # Only after the image is pushed, so a release never points at an image
       # that doesn't exist. Tags with a hyphen (v1.2.3-rc.1) are prereleases.
       - name: Create GitHub Release
@@ -112,4 +154,4 @@ jobs:
           if [[ "$TAG" == *-* ]]; then prerelease="--prerelease"; fi
           gh release create "$TAG" --verify-tag --generate-notes $prerelease \
             --title "Fossegrim $TAG" \
-            --notes "Docker images: \`ghcr.io/${{ github.repository_owner }}/fossegrim:$VERSION\` and \`ghcr.io/${{ github.repository_owner }}/fossegrim-proxy:$VERSION\`"
+            --notes "Docker images: \`ghcr.io/${{ github.repository_owner }}/fossegrim:$VERSION\` and \`ghcr.io/${{ github.repository_owner }}/fossegrim-proxy:$VERSION\`, also on Docker Hub as \`slaptoast/fossegrim:$VERSION\` and \`slaptoast/fossegrim-proxy:$VERSION\`"

@@ -44,7 +44,12 @@ public record MediaItemDto(
     string? ContentType = null,
     // When the caller last played it: filled in by the list endpoint
     // (/api/mediaitems), null elsewhere and for tracks never played.
-    DateTime? LastPlayedAt = null);
+    DateTime? LastPlayedAt = null,
+    // Just the file's name (no folders), e.g. for the tag editor.
+    string? FileName = null,
+    // The file's folder inside its media folder, "/"-separated (e.g.
+    // "Massive Attack/Mezzanine"); null when it sits at the top of one.
+    string? Folder = null);
 
 public static class MediaItemOrder
 {

@@ -29,7 +29,31 @@ public static class MediaItemMapping
         m.FileSize,
         // Runs client-side: it's the last step of the query.
         m.FileLocation == null ? null : AudioFormats.ContentType(m.FileLocation),
-        null);
+        null,
+        m.FileLocation == null ? null : Path.GetFileName(m.FileLocation),
+        FolderWithin(m.FileLocation, m.MediaFolder == null ? null : m.MediaFolder.Location));
+
+    /// <summary>
+    /// A file's folder relative to its media folder, with "/" separators. Null
+    /// at the top of the media folder, or when the file isn't inside it (only
+    /// folder names are shown, never the server's full paths).
+    /// </summary>
+    public static string? FolderWithin(string? fileLocation, string? mediaFolder)
+    {
+        if (fileLocation is null || string.IsNullOrEmpty(mediaFolder))
+        {
+            return null;
+        }
+
+        var relative = Path.GetRelativePath(mediaFolder, fileLocation);
+        if (relative == fileLocation || relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative))
+        {
+            return null;
+        }
+
+        var folder = Path.GetDirectoryName(relative);
+        return string.IsNullOrEmpty(folder) ? null : folder.Replace(Path.DirectorySeparatorChar, '/');
+    }
 
     private static readonly Func<MediaItem, MediaItemDto> Compiled = ToDto.Compile();
 

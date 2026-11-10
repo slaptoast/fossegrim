@@ -5,6 +5,9 @@ namespace Fossegrim.Web.Services;
 public class MediaItemTagEditModel
 {
     public Guid Id { get; set; }
+    // Read-only: shown so you can tell which file you're editing.
+    public string? FileName { get; init; }
+    public string? Folder { get; init; }
     public string? Title { get; set; }
     public string? ArtistName { get; set; }
     public string? Album { get; set; }
@@ -15,6 +18,8 @@ public class MediaItemTagEditModel
     public static MediaItemTagEditModel FromMediaItem(MediaItemDto item) => new()
     {
         Id = item.Id,
+        FileName = item.FileName,
+        Folder = item.Folder,
         Title = item.Title,
         ArtistName = item.ArtistName,
         Album = item.Album,

@@ -82,6 +82,7 @@ public class MediaLibraryService
             var item = await _db.MediaItems
                 .Include(m => m.Artists)
                 .Include(m => m.Albums)
+                .Include(m => m.MediaFolder)
                 .FirstOrDefaultAsync(m => m.Id == update.Id);
 
             if (item is null)

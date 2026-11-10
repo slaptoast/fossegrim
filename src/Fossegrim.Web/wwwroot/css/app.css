@@ -1021,6 +1021,10 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 .tag-edit-table td { padding: var(--space-2) var(--space-4); max-width: none; }
 .tag-edit-table input { min-width: 90px; }
 .tag-edit-table input[type="number"] { min-width: 64px; }
+.tag-edit-file { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.tag-edit-folder { font-size: 0.75rem; opacity: 0.75; }
+.tag-edit-table td.tag-edit-file { max-width: 260px; }
+.tag-edit-table td.tag-edit-file > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tag-edit-apply-row { background: var(--surface-muted); border-bottom: 1px solid var(--border-strong); }
 .tag-edit-apply-row button { white-space: nowrap; }
 .tag-edit-actions { display: flex; justify-content: flex-end; gap: var(--space-8); padding: var(--space-8) var(--space-12); border-top: 1px solid var(--border); }

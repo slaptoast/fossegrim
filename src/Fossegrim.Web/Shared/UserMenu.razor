@@ -6,7 +6,8 @@
 @inject AppearanceService Appearance
 
 <div class="user-menu">
-    <button type="button" class="user-menu-toggle" @onclick="ToggleOpen">@_displayName ▾</button>
+    @* On phones only the icon shows; the name stays readable to screen readers. *@
+    <button type="button" class="user-menu-toggle" @onclick="ToggleOpen" title="@_displayName"><span class="user-menu-icon" aria-hidden="true">👤</span><span class="user-menu-name">@_displayName</span> ▾</button>
 
     @if (_isOpen)
     {

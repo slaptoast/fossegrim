@@ -145,11 +145,12 @@ body {
     align-items: center;
     gap: var(--space-16);
 }
-.topbar-title { font-size: 0.875rem; font-weight: 700; letter-spacing: 0.01em; }
+.topbar-title { font-size: 0.875rem; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
 .topbar-nav { display: flex; gap: var(--space-2); flex: 1; }
 .topbar-nav a {
     color: var(--chrome-fg);
     text-decoration: none;
+    white-space: nowrap;
     font-size: 0.8125rem;
     padding: var(--space-4) var(--space-8);
     border-radius: var(--radius-md);
@@ -183,13 +184,43 @@ body {
 .topbar-search input::placeholder { color: var(--chrome-muted); }
 .topbar-search input:focus { outline: none; border-color: var(--brand-indigo); box-shadow: var(--shadow-focus); }
 
-@media (max-width: 720px) {
+/* The library stats are the first thing to go as the bar narrows. */
+@media (max-width: 1100px) {
     .topbar-stats { display: none; }
-    .topbar-search { width: auto; flex: 1; }
+}
+
+/* Phones and narrow tablets: two rows. The title, pages and account menu
+   share the first; the library search gets the whole second row. */
+@media (max-width: 760px) {
+    .topbar {
+        height: auto;
+        flex-wrap: wrap;
+        row-gap: var(--space-6);
+        column-gap: var(--space-8);
+        padding: var(--space-6) var(--space-12) var(--space-8);
+    }
+    .topbar-nav { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+    .topbar-nav::-webkit-scrollbar { display: none; }
+    .topbar-nav a { padding: var(--space-4) var(--space-6); }
+    .topbar-search { order: 1; flex: 1 0 100%; width: auto; }
+    .topbar-search input { height: 32px; font-size: 1rem; } /* 16px stops iOS zooming in on focus */
+    .user-menu-toggle { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* Phones: the account button shrinks to an icon, and on the smallest
+   screens the title to its note. Both names stay readable to screen readers. */
+@media (max-width: 480px) {
+    .user-menu-toggle .user-menu-icon { display: inline; }
+    .user-menu-toggle .user-menu-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+@media (max-width: 360px) {
+    .topbar-title-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 
 .user-menu { position: relative; }
+.user-menu-icon { display: none; }
 .user-menu-toggle {
+    white-space: nowrap;
     background: var(--chip);
     color: var(--chrome-fg);
     border: none;

@@ -39,6 +39,8 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         // Tests run backups on demand, into this factory's own folder.
         builder.UseSetting("Backup:WorkerEnabled", "false");
         builder.UseSetting("Backup:Directory", BackupDirectory);
+        // Tests request certificates on demand (HttpsTests), from a fake Let's Encrypt.
+        builder.UseSetting("Https:WorkerEnabled", "false");
         builder.UseSetting("Covers:CacheDirectory", Path.Combine(_directory, "cover-cache"));
         // Every test signs in from the same address; SignInRateLimitTests sets its own.
         builder.UseSetting("RateLimiting:SignInPerMinute", SignInPerMinute.ToString());
@@ -57,6 +59,9 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
     public int SignInPerMinute { get; init; } = 100_000;
 
     public string BackupDirectory => Path.Combine(_directory, "backups");
+
+    /// <summary>Only used when a test factory sets Https:CertificateDirectory to it.</summary>
+    public string CertificateDirectory => Path.Combine(_directory, "certs");
 
     /// <summary>Stands in for ws.audioscrobbler.com; every Last.fm call goes here.</summary>
     public FakeLastFmHandler LastFm { get; } = new();

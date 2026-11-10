@@ -5,8 +5,12 @@ services:
       dockerfile: Dockerfile
     image: ghcr.io/slaptoast/fossegrim:latest
     restart: unless-stopped
-    ports:
-      - "${PORT:-8080}:8080"
+    # Not published: everything comes in through the proxy. If you'd rather
+    # use your own reverse proxy instead, delete the proxy service, publish
+    # this one ("8080:8080") and remove the two Https/forwarded-headers
+    # settings below. See DOCKER.md.
+    expose:
+      - "8080"
     environment:
       # Optional: left empty, a key is generated into /data/jwt.key on first run.
       Jwt__Key: ${JWT_KEY:-}
@@ -15,6 +19,12 @@ services:
       Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-60}
       LastFm__ApiKey: ${LASTFM_API_KEY:-}
       LastFm__ApiSecret: ${LASTFM_API_SECRET:-}
+      # Let's Encrypt certificates go here for the proxy (Settings -> HTTPS).
+      Https__CertificateDirectory: /certs
+      # Trust the proxy's X-Forwarded-For/-Proto, so sign-in limits apply
+      # per client rather than to the proxy's address. Safe because only
+      # the proxy can reach this container.
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
     volumes:
       - fossegrim-data:/data
       # Read-write: the app edits ID3 tags in place and will eventually
@@ -23,6 +33,26 @@ services:
       # Backup zips (database + keys). Point this somewhere off the data
       # volume -- ideally another disk -- so a backup survives losing /data.
       - ${BACKUP_PATH:-./backups}:/backups
+      - fossegrim-certs:/certs
+
+  # nginx in front of the app: plain HTTP on HTTP_PORT, plus HTTPS on
+  # HTTPS_PORT once there's a certificate in /certs.
+  proxy:
+    build:
+      context: proxy
+    image: ghcr.io/slaptoast/fossegrim-proxy:latest
+    restart: unless-stopped
+    depends_on:
+      - fossegrim
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      # Redirects to HTTPS go to this port.
+      HTTPS_PORT: ${HTTPS_PORT:-443}
+    volumes:
+      - fossegrim-certs:/certs:ro
 
 volumes:
   fossegrim-data:
+  fossegrim-certs:

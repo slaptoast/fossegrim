@@ -2,7 +2,7 @@ name: Release
 
 # Publishing is version-tag-driven, not automatic on every push to main:
 #   git tag v1.2.3 && git push origin v1.2.3
-# builds once and pushes to GHCR (ghcr.io), tagged 1.2.3, 1.2, 1,
+# builds once and pushes the app and its proxy to GHCR (ghcr.io), tagged 1.2.3, 1.2, 1,
 # and (for a non-prerelease tag) latest, then creates a GitHub Release with
 # notes generated from the pull requests merged since the last one. A
 # pull_request still gets a build-only sanity check with nothing pushed.
@@ -67,6 +67,37 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # The nginx proxy in front of the app (proxy/), tagged the same way.
+      # It's only nginx and a shell script, so it's cheap to build for
+      # 64-bit ARM (e.g. a Raspberry Pi) too.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Derive proxy image metadata
+        id: proxy-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/fossegrim-proxy
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=ref,event=pr
+            type=sha,format=short
+          flavor: |
+            latest=auto
+
+      - name: Build and push proxy
+        uses: docker/build-push-action@v6
+        with:
+          context: proxy
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.proxy-meta.outputs.tags }}
+          labels: ${{ steps.proxy-meta.outputs.labels }}
+          cache-from: type=gha,scope=proxy
+          cache-to: type=gha,mode=max,scope=proxy
+
       # Only after the image is pushed, so a release never points at an image
       # that doesn't exist. Tags with a hyphen (v1.2.3-rc.1) are prereleases.
       - name: Create GitHub Release
@@ -80,4 +111,4 @@ jobs:
           if [[ "$TAG" == *-* ]]; then prerelease="--prerelease"; fi
           gh release create "$TAG" --verify-tag --generate-notes $prerelease \
             --title "Fossegrim $TAG" \
-            --notes "Docker image: \`ghcr.io/${{ github.repository_owner }}/fossegrim:$VERSION\`"
+            --notes "Docker images: \`ghcr.io/${{ github.repository_owner }}/fossegrim:$VERSION\` and \`ghcr.io/${{ github.repository_owner }}/fossegrim-proxy:$VERSION\`"

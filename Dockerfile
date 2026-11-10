@@ -40,10 +40,10 @@ ARG VERSION=dev
 # `fossegrim reset-password you@example.com` (see DOCKER.md).
 RUN apk add --no-cache tzdata \
     && addgroup -S fossegrim && adduser -S fossegrim -G fossegrim \
-    && mkdir -p /data /music /backups \
+    && mkdir -p /data /music /backups /certs \
     && printf '#!/bin/sh\nexec dotnet /app/Fossegrim.Api.dll "$@"\n' > /usr/local/bin/fossegrim \
     && chmod 755 /usr/local/bin/fossegrim \
-    && chown -R fossegrim:fossegrim /app /data /music /backups
+    && chown -R fossegrim:fossegrim /app /data /music /backups /certs
 
 COPY --from=build /app .
 
@@ -56,7 +56,9 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     APP_VERSION=$VERSION
 
 EXPOSE 8080
-VOLUME ["/data", "/music", "/backups"]
+# /certs is only used with the proxy (see docker-compose.yml), which sets
+# Https__CertificateDirectory; without it the app has no HTTPS settings.
+VOLUME ["/data", "/music", "/backups", "/certs"]
 USER fossegrim
 
 ENTRYPOINT ["dotnet", "Fossegrim.Api.dll"]

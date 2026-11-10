@@ -568,6 +568,22 @@ public class FossegrimApiClient
         }
     }
 
+    public async Task<HttpsStatusDto> GetHttpsStatusAsync() =>
+        await ReadOrThrowAsync<HttpsStatusDto>(await _httpClient.GetAsync("/api/admin/https"), "Loading the HTTPS status");
+
+    // Saves the settings and starts a certificate request; poll the status for the outcome.
+    public async Task<HttpsStatusDto> SaveLetsEncryptAsync(SaveLetsEncryptRequest request) =>
+        await ReadOrThrowAsync<HttpsStatusDto>(await _httpClient.PutAsJsonAsync("/api/admin/https/letsencrypt", request), "Requesting the certificate");
+
+    public async Task<HttpsStatusDto> RenewCertificateAsync() =>
+        await ReadOrThrowAsync<HttpsStatusDto>(await _httpClient.PostAsync("/api/admin/https/letsencrypt/renew", null), "Renewing the certificate");
+
+    public async Task<HttpsStatusDto> TurnOffLetsEncryptAsync() =>
+        await ReadOrThrowAsync<HttpsStatusDto>(await _httpClient.DeleteAsync("/api/admin/https/letsencrypt"), "Turning off Let's Encrypt");
+
+    public async Task<HttpsStatusDto> SetHttpsRedirectAsync(bool enabled) =>
+        await ReadOrThrowAsync<HttpsStatusDto>(await _httpClient.PutAsJsonAsync("/api/admin/https/redirect", new HttpsRedirectRequest(enabled)), "Saving the redirect setting");
+
     // Ends this browser's session on the Api. Best effort: signing out
     // locally goes ahead even if the Api can't be reached.
     public async Task LogoutAsync()

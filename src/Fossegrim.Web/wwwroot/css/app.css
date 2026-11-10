@@ -466,6 +466,8 @@ body {
 .app-footer { text-align: right; padding: var(--space-4) var(--space-8); font-size: 0.75rem; color: var(--text-muted); }
 .app-footer .update-badge { margin-right: var(--space-8); padding: var(--space-2) var(--space-6); border-radius: var(--radius-md); background: var(--info-bg); color: var(--info-fg); text-decoration: none; font-weight: 600; }
 .app-footer .update-badge:hover { text-decoration: underline; }
+.app-footer .https-badge { background: var(--error-bg); color: var(--danger-fg); }
+.https-staging { color: var(--warning-fg); }
 
 /* ---- Setup wizard: a wider card on the sign-in canvas ---- */
 .container.setup-wizard { max-width: 760px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }

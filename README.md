@@ -57,8 +57,9 @@ The name comes from the *Fossegrimen*, a water spirit in Norwegian folklore who 
 - A Library page built from movable, resizable modules: artists, albums, tracks, visualizer, random picks, recents, favourites, up next and player.
 
 **Running it**
-- A setup wizard on first run. After that, an admin panel for media folders, accounts and sign-ups, email, Last.fm, backups and update checks.
+- A setup wizard on first run. After that, an admin panel for media folders, accounts and sign-ups, email, Last.fm, HTTPS, backups and update checks.
 - "Forgot password?" on the sign-in page: it emails a one-time reset link once an admin has set up a mail server (any SMTP server). Without one, admins can make a reset link for anyone, and a locked-out sole admin can get one with `fossegrim reset-password` ([DOCKER.md](DOCKER.md#forgotten-passwords)).
+- HTTPS through a bundled nginx proxy: plain HTTP by default (for when another proxy handles TLS), or free Let's Encrypt certificates that renew themselves, for a server on its own such as a Raspberry Pi ([DOCKER.md](DOCKER.md#https)).
 - Scheduled and on-demand backups of the database and keys, as zip files; [DOCKER.md](DOCKER.md#backups) explains how to restore from one.
 - Release builds check once a day for a newer version and show an "Update available" badge to admins.
 - Security: sign-in rate limiting and lockout, renewable sessions you can sign out per device, short-lived media tokens for stream URLs, and a strict Content-Security-Policy.
@@ -110,10 +111,10 @@ docker run -d --name fossegrim -p 8080:8080 \
   ghcr.io/slaptoast/fossegrim:latest
 ```
 
-Then open **http://localhost:8080**. The setup wizard walks you through creating the admin account (the only required step), adding `/music` as a media folder, and optionally Last.fm, accounts, backups and update checks.
+With Compose, open **http://localhost** (the bundled proxy listens on port 80); with `docker run`, **http://localhost:8080**. The setup wizard walks you through creating the admin account (the only required step), adding `/music` as a media folder, and optionally Last.fm, accounts, backups and update checks.
 
 > [!IMPORTANT]
-> Until the first admin account exists, whoever reaches the wizard first becomes the admin. Finish setup before exposing the server to the internet, and put it behind HTTPS (a reverse proxy such as Caddy, Traefik or nginx).
+> Until the first admin account exists, whoever reaches the wizard first becomes the admin. Finish setup before exposing the server to the internet, and use HTTPS: either get a free Let's Encrypt certificate under Settings → HTTPS ([DOCKER.md](DOCKER.md#https)) or put it behind your own reverse proxy (Caddy, Traefik, nginx, ...).
 
 ### Configuration
 
@@ -123,7 +124,7 @@ Everything is configured with environment variables. The common ones:
 |---|---|---|
 | `MUSIC_LIBRARY_PATH` | `./music` | Your music folder, mounted read-write at `/music` (the tag editor and renamer write to it). |
 | `BACKUP_PATH` | `./backups` | Where backup zips go. Ideally a different disk from `/data`. |
-| `PORT` | `8080` | Host port to publish. |
+| `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | Host ports for the bundled proxy. HTTPS starts once there's a certificate. |
 | `JWT_KEY` | *generated* | Token signing key. Left empty, one is generated into `/data` on first run. |
 | `LASTFM_API_KEY` / `LASTFM_API_SECRET` | | Optional. Usually entered on the admin Settings page instead. |
 

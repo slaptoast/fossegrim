@@ -13,6 +13,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Fossegrim.Api.Endpoints;
 using Fossegrim.Api.Services;
+using Fossegrim.Api.Services.Https;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -203,6 +204,19 @@ if (builder.Configuration.GetValue("Backup:WorkerEnabled", true))
     builder.Services.AddHostedService<BackupWorker>();
 }
 
+// HTTPS (optional): Let's Encrypt certificates written to the folder the
+// bundled proxy serves them from (Https:CertificateDirectory, /certs in
+// Docker Compose). Without that folder there's nothing to manage.
+builder.Services.AddSingleton<CertificateFiles>();
+builder.Services.AddSingleton<CertificateCoordinator>();
+builder.Services.AddSingleton<AcmeChallenges>();
+builder.Services.AddSingleton<IAcmeIssuer, LetsEncryptIssuer>();
+builder.Services.AddScoped<CertificateService>();
+if (builder.Configuration.GetValue("Https:WorkerEnabled", true))
+{
+    builder.Services.AddHostedService<CertificateWorker>();
+}
+
 // Data Protection encrypts stored secrets (Last.fm session keys). Its keys
 // must outlive the container or those secrets become unreadable, so Docker
 // points DataProtection:KeysDirectory at the /data volume. Unset, the
@@ -248,6 +262,7 @@ using (var scope = app.Services.CreateScope())
     await RoleSeeder.SeedRolesAndAdminAsync(scope.ServiceProvider, seedDefaultAdmin: app.Environment.IsDevelopment());
     await scope.ServiceProvider.GetRequiredService<SetupService>().MarkExistingInstallCompleteAsync();
     await scope.ServiceProvider.GetRequiredService<LastFmSettingsStore>().LoadAsync();
+    await scope.ServiceProvider.GetRequiredService<CertificateService>().SyncRedirectAsync();
 }
 
 // Configure the HTTP request pipeline.
@@ -256,11 +271,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-if (!app.Environment.IsDevelopment())
-{
-    // Only sent over HTTPS, i.e. when Kestrel itself serves TLS.
-    app.UseHsts();
-}
+// No HSTS: behind the proxy, HTTPS can be turned off again from the
+// Settings page, and HSTS would leave browsers refusing plain HTTP.
 app.UseHttpsRedirection();
 app.UseSecurityHeaders();
 
@@ -303,6 +315,7 @@ app.MapRandomEndpoints();
 app.MapSearchEndpoints();
 app.MapFavoriteEndpoints();
 app.MapPasswordResetEndpoints();
+app.MapHttpsEndpoints();
 
 app.MapFallbackToFile("index.html");
 

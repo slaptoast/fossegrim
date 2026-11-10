@@ -171,8 +171,14 @@ Registry:
 
 ```
 ghcr.io/slaptoast/fossegrim
-ghcr.io/slaptoast/fossegrim-proxy    # linux/amd64 and linux/arm64
+ghcr.io/slaptoast/fossegrim-proxy
 ```
+
+Both are built for `linux/amd64` and `linux/arm64` (a Raspberry Pi 3, 4
+or 5 running a 64-bit OS); Docker pulls the right one. The app's .NET build
+always runs on the build machine's own platform and only picks the target
+platform's native libraries, so building for arm64 doesn't run the SDK
+under emulation (see the Dockerfile). 32-bit ARM isn't built.
 
 tagged `1.2.3`, `1.2`, `1`, and (as long as the tag isn't a prerelease like
 `v1.2.3-beta.1`) `latest`. Use semver tags (`vMAJOR.MINOR.PATCH`) -- the

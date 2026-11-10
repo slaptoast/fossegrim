@@ -91,7 +91,7 @@ The name comes from the *Fossegrimen*, a water spirit in Norwegian folklore who 
 
 ## Quick start
 
-You need [Docker](https://docs.docker.com/get-docker/) with Compose.
+You need [Docker](https://docs.docker.com/get-docker/) with Compose. Images are published for 64-bit x86 and ARM, so a Raspberry Pi 3, 4 or 5 running a 64-bit OS works too.
 
 ```bash
 git clone https://github.com/slaptoast/fossegrim.git

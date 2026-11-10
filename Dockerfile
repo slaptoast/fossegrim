@@ -6,17 +6,29 @@
 # already builds Web and drops its output into the Api's wwwroot -- see
 # Program.cs's UseBlazorFrameworkFiles/UseStaticFiles/MapFallbackToFile.
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+# The build stage always runs on the build machine's own platform
+# ($BUILDPLATFORM), even when the image is for another one: the app is
+# framework-dependent, so building for arm64 only means picking arm64's
+# native libraries (SkiaSharp, SQLite), and there's no need to run the SDK
+# under emulation. Only the small runtime stage below is per-platform.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+# Set by BuildKit from --platform (amd64 or arm64).
+ARG TARGETARCH
 WORKDIR /src
 
 COPY src/Fossegrim.Api/Fossegrim.Api.csproj src/Fossegrim.Api/
 COPY src/Fossegrim.Web/Fossegrim.Web.csproj src/Fossegrim.Web/
 COPY src/Fossegrim.Lib/Fossegrim.Lib.csproj src/Fossegrim.Lib/
 COPY src/Fossegrim.Contracts/Fossegrim.Contracts.csproj src/Fossegrim.Contracts/
-# Built for this SDK image's own platform (linux-musl-x64 or -arm64), so only
-# that platform's native libraries (SkiaSharp, SQLite) go into the image.
-# See ApiRuntimeIdentifier in Fossegrim.Api.csproj.
-RUN dotnet --info | awk '$1 == "RID:" { print $2; exit }' > /tmp/rid \
+# Built for the target platform (linux-musl-x64 or -arm64), so only that
+# platform's native libraries go into the image. See ApiRuntimeIdentifier
+# in Fossegrim.Api.csproj. Without BuildKit, TARGETARCH is empty and the
+# build machine's own platform is used.
+RUN case "${TARGETARCH:-$(uname -m)}" in \
+        amd64|x86_64) echo linux-musl-x64 ;; \
+        arm64|aarch64) echo linux-musl-arm64 ;; \
+        *) echo "Unsupported platform: ${TARGETARCH:-$(uname -m)}" >&2; exit 1 ;; \
+    esac > /tmp/rid \
     && dotnet restore src/Fossegrim.Api/Fossegrim.Api.csproj -p:ApiRuntimeIdentifier=$(cat /tmp/rid)
 
 COPY src/Fossegrim.Api/ src/Fossegrim.Api/

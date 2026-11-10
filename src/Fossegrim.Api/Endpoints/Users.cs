@@ -43,7 +43,7 @@ public static class Users
             var pattern = $"%{EscapeLike(query)}%";
             var normalizedEmail = userManager.NormalizeEmail(query);
             var matches = await db.Users
-                .Where(u => u.Id != user.Id)
+                .Where(u => u.Id != user.Id && u.DeletedAt == null)
                 .Where(u => EF.Functions.Like(u.DisplayName, pattern, LikeEscape) || u.NormalizedEmail == normalizedEmail)
                 .OrderBy(u => u.DisplayName)
                 .Take(MaxResults)

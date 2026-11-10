@@ -72,7 +72,8 @@ public class SessionService
         var session = await _db.UserSessions
             .Include(s => s.User)
             .FirstOrDefaultAsync(s => s.RefreshTokenHash == hash || s.PreviousRefreshTokenHash == hash);
-        if (session?.User is null)
+        // Deleting an account removes its sessions; this is in case one survives.
+        if (session?.User is null or { DeletedAt: not null })
         {
             return null;
         }

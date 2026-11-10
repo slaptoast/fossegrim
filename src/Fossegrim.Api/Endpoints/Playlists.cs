@@ -515,7 +515,7 @@ public static class Playlists
                 return Results.BadRequest(new ApiErrorResponse("Cannot share a playlist with its owner."));
             }
 
-            var targetUser = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId);
+            var targetUser = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId && u.DeletedAt == null);
             if (targetUser is null)
             {
                 return Results.BadRequest(new ApiErrorResponse("Target user does not exist."));

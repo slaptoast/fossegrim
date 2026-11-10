@@ -194,6 +194,7 @@ builder.Services.AddSingleton<EmailQueue>();
 builder.Services.AddHostedService<EmailWorker>();
 builder.Services.AddSingleton<ResetEmailThrottle>();
 builder.Services.AddScoped<PasswordResets>();
+builder.Services.AddScoped<AccountDeletion>();
 
 // Backups: zips of the database and its key material, written to
 // Backup:Directory on demand or on the admin's schedule.

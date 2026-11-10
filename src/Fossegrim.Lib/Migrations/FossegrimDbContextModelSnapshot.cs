@@ -15,7 +15,7 @@ namespace fossegrim.lib.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.14");
 
             modelBuilder.Entity("AlbumArtist", b =>
                 {
@@ -170,6 +170,9 @@ namespace fossegrim.lib.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("DateJoined")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("DisplayName")

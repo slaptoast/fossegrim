@@ -11,5 +11,5 @@ starts it alongside the app. See
 [DOCKER.md](https://github.com/slaptoast/fossegrim/blob/main/DOCKER.md#https)
 for how HTTPS and Let's Encrypt work.
 
-Published to `ghcr.io/slaptoast/fossegrim-proxy` and `slaptoast/fossegrim-proxy`
+Published to `ghcr.io/slaptoast/fossegrim-proxy` and `fossegrimmy/fossegrim-proxy`
 on Docker Hub, for `linux/amd64` and `linux/arm64`.

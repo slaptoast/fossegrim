@@ -172,8 +172,8 @@ Registry and Docker Hub:
 ```
 ghcr.io/slaptoast/fossegrim
 ghcr.io/slaptoast/fossegrim-proxy
-docker.io/slaptoast/fossegrim
-docker.io/slaptoast/fossegrim-proxy
+docker.io/fossegrimmy/fossegrim
+docker.io/fossegrimmy/fossegrim-proxy
 ```
 
 Each image is built once, so both registries carry the same image under
@@ -204,7 +204,7 @@ The workflow logs in to GHCR and creates the release with its own
 `GITHUB_TOKEN`. Docker Hub needs two repository secrets (Settings ->
 Secrets and variables -> Actions):
 
-- `DOCKERHUB_USERNAME`: the Docker Hub account (`slaptoast`).
+- `DOCKERHUB_USERNAME`: the Docker Hub account (`fossegrimmy`).
 - `DOCKERHUB_TOKEN`: a Docker Hub personal access token with **Read, Write,
   Delete** scope. Pushing only needs Read & Write; updating the repository
   description needs Delete as well.
@@ -221,12 +221,12 @@ and creates no GitHub Release.
 ```bash
 docker pull ghcr.io/slaptoast/fossegrim:latest
 # or, from Docker Hub
-docker pull slaptoast/fossegrim:latest
+docker pull fossegrimmy/fossegrim:latest
 ```
 
 To use the Docker Hub images with Compose, change the two `image:` lines in
-`docker-compose.yml` to `slaptoast/fossegrim:latest` and
-`slaptoast/fossegrim-proxy:latest`. The update check always reads
+`docker-compose.yml` to `fossegrimmy/fossegrim:latest` and
+`fossegrimmy/fossegrim-proxy:latest`. The update check always reads
 ghcr.io, whichever registry you pull from; the tags are the same.
 
 The first time a package is published from a public repo, GHCR may create it
@@ -577,7 +577,7 @@ machine), use `scripts/docker-build.sh`:
 ```bash
 ./scripts/docker-build.sh                                    # build, tag :local
 REGISTRY=ghcr.io/slaptoast  ./scripts/docker-build.sh --push --tag 1.2.3  # GHCR
-REGISTRY=docker.io/slaptoast ./scripts/docker-build.sh --push --tag 1.2.3  # Docker Hub
+REGISTRY=docker.io/fossegrimmy ./scripts/docker-build.sh --push --tag 1.2.3  # Docker Hub
 ```
 
 You'll need to be logged in to the registry first (`docker login ghcr.io`,

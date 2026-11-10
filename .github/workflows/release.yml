@@ -58,7 +58,7 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/fossegrim
-            docker.io/slaptoast/fossegrim
+            docker.io/fossegrimmy/fossegrim
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -94,7 +94,7 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/fossegrim-proxy
-            docker.io/slaptoast/fossegrim-proxy
+            docker.io/fossegrimmy/fossegrim-proxy
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -125,7 +125,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: slaptoast/fossegrim
+          repository: fossegrimmy/fossegrim
           short-description: A self-hosted music server and web player for the music collection you already own
           readme-filepath: README.md
           enable-url-completion: true
@@ -136,7 +136,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: slaptoast/fossegrim-proxy
+          repository: fossegrimmy/fossegrim-proxy
           short-description: The nginx proxy that runs in front of Fossegrim, with HTTPS
           readme-filepath: proxy/README.md
           enable-url-completion: true
@@ -154,4 +154,4 @@ jobs:
           if [[ "$TAG" == *-* ]]; then prerelease="--prerelease"; fi
           gh release create "$TAG" --verify-tag --generate-notes $prerelease \
             --title "Fossegrim $TAG" \
-            --notes "Docker images: \`ghcr.io/${{ github.repository_owner }}/fossegrim:$VERSION\` and \`ghcr.io/${{ github.repository_owner }}/fossegrim-proxy:$VERSION\`, also on Docker Hub as \`slaptoast/fossegrim:$VERSION\` and \`slaptoast/fossegrim-proxy:$VERSION\`"
+            --notes "Docker images: \`ghcr.io/${{ github.repository_owner }}/fossegrim:$VERSION\` and \`ghcr.io/${{ github.repository_owner }}/fossegrim-proxy:$VERSION\`, also on Docker Hub as \`fossegrimmy/fossegrim:$VERSION\` and \`fossegrimmy/fossegrim-proxy:$VERSION\`"

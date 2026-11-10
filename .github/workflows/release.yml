@@ -54,11 +54,17 @@ jobs:
           flavor: |
             latest=auto
 
+      # For 64-bit ARM (e.g. a Raspberry Pi), the runtime stage runs under
+      # QEMU; the .NET build itself doesn't (see the Dockerfile).
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
+          platforms: linux/amd64,linux/arm64
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
           push: ${{ github.event_name != 'pull_request' }}
@@ -68,11 +74,6 @@ jobs:
           cache-to: type=gha,mode=max
 
       # The nginx proxy in front of the app (proxy/), tagged the same way.
-      # It's only nginx and a shell script, so it's cheap to build for
-      # 64-bit ARM (e.g. a Raspberry Pi) too.
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Derive proxy image metadata
         id: proxy-meta
         uses: docker/metadata-action@v5

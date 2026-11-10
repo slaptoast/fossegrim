@@ -22,7 +22,8 @@ cp .env.example .env
 docker compose up --build
 ```
 
-- App: http://localhost:8080 (API and Web UI, same origin)
+- App: http://localhost (API and Web UI, same origin, through the proxy on
+  `HTTP_PORT`, default 80)
 - The first visit opens the setup wizard. Create your admin account (the
   only required step), then optionally add media folders (your library is
   at `/music`), Last.fm, accounts and sign-ups, backups and update checks.
@@ -49,18 +50,20 @@ local development (`run-dev.sh`), where the wizard never starts on its own.
 
 ### Security
 
-**Use HTTPS.** The container serves plain HTTP on port 8080. Before
-exposing it beyond your own network, put it behind a reverse proxy that
-terminates TLS (Caddy, Traefik, nginx, ...). Otherwise passwords and
-tokens cross the network in the clear.
+**Use HTTPS.** Out of the box the server answers on plain HTTP. Before
+exposing it beyond your own network, either let Fossegrim get a Let's
+Encrypt certificate (see [HTTPS](#https)) or put it behind a reverse proxy
+of your own that handles TLS (Caddy, Traefik, nginx, ...). Otherwise
+passwords and tokens cross the network in the clear.
 
 **Password guessing.** Ten wrong passwords in a row lock an account for
 five minutes (the sign-in page says so), and each client address gets 20
-sign-in attempts a minute (`RateLimiting__SignInPerMinute`). Behind a
-reverse proxy every request comes from the proxy's address, so that limit
-is shared by everyone signing in at once, which is still plenty for a
-household. If your proxy can rate-limit by the real client address, that
-adds a per-client limit on top.
+sign-in attempts a minute (`RateLimiting__SignInPerMinute`). The bundled
+proxy passes on the client's address, so that limit applies per client.
+If another proxy sits in front of it, every request comes from that
+proxy's address, so the limit is shared by everyone signing in at once,
+which is still plenty for a household. If that proxy can rate-limit by the
+real client address, that adds a per-client limit on top.
 
 **Stream and cover URLs.** `<audio>` and `<img>` elements can't send an
 Authorization header, so their URLs carry a token. It's a separate media
@@ -68,6 +71,88 @@ token that only `/stream` and `/cover` accept, so one that turns up in a
 proxy's access log can play music but not reach anything else, and it
 stops working when that device is signed out. Normal access tokens are
 never accepted in a URL.
+
+## HTTPS
+
+`docker-compose.yml` runs two containers: the app, and **the proxy**
+(`ghcr.io/slaptoast/fossegrim-proxy`, nginx with Fossegrim's config). Only
+the proxy is published:
+
+- **Plain HTTP on `HTTP_PORT`** (default 80) always works. This is what you
+  want if another reverse proxy elsewhere on your network already handles
+  HTTPS: point it at this port.
+- **HTTPS on `HTTPS_PORT`** (default 443) starts as soon as there's a
+  certificate in the shared `/certs` volume. The proxy checks every 30
+  seconds and reloads nginx when the certificate changes, so renewals need
+  no restart. A certificate nginx can't load (say, a key that doesn't
+  match) is logged and ignored, and plain HTTP carries on.
+
+### Let's Encrypt
+
+For a server that faces the internet on its own (a Raspberry Pi on a home
+connection, say), Fossegrim can get free certificates from
+[Let's Encrypt](https://letsencrypt.org/) and renew them itself. Admins set
+it up under **Settings -> HTTPS**: enter the domain name(s), optionally an
+email address, agree to the subscriber agreement, and press **Get
+Certificate**. It usually takes under a minute.
+
+Before you do:
+
+1. Point the domain's DNS at your public IP address (a dynamic DNS name
+   works).
+2. Forward ports **80** and **443** on your router to the server.
+   Let's Encrypt checks each domain by fetching
+   `http://<domain>/.well-known/acme-challenge/...` on port 80 (the
+   HTTP-01 challenge), so port 80 must be reachable from the internet,
+   and `HTTP_PORT` must be 80 or have port 80 forwarded to it. Wildcard
+   certificates aren't supported (they need DNS challenges).
+3. Try **Test mode** first. It uses Let's Encrypt's staging service, whose
+   certificates browsers don't trust, but whose limits are far looser
+   than the real service's (5 failed checks per domain per hour). Once a
+   test certificate comes through, turn test mode off and get a real one.
+
+Once a certificate is in place:
+
+- **Renewal** is automatic. The app checks every hour and renews when a
+  third of the certificate's lifetime is left (30 days for today's 90-day
+  certificates). If a request fails, it tries again after 1 hour, then 2,
+  4, ... up to once a day. Admins see "HTTPS certificate problem" in the
+  footer until it succeeds, and the Settings card says what went wrong.
+- **Plain HTTP redirects to HTTPS**, except Let's Encrypt's checks. Turn
+  that off on the Settings card if something still needs plain HTTP. (It
+  writes an `http-redirect-off` file into `/certs` for the proxy.) There's
+  no HSTS, so turning HTTPS off later never leaves browsers stuck.
+- **Turn Off** stops renewing and deletes the certificate, so the proxy
+  goes back to plain HTTP.
+
+The ACME account keys are stored in the database, encrypted with the
+Data Protection keys. The certificate and its key are in the
+`fossegrim-certs` volume, and backups include them (under `certs/`).
+
+### Your own certificate
+
+The proxy doesn't care where the certificate came from. To use one you
+already have, put the full chain (server certificate first) and its
+private key into the volume as `fullchain.pem` and `privkey.pem`:
+
+```bash
+docker compose cp fullchain.pem fossegrim:/certs/fullchain.pem
+docker compose cp privkey.pem fossegrim:/certs/privkey.pem
+```
+
+Settings -> HTTPS shows it. Fossegrim never renews or replaces it unless
+you set up Let's Encrypt there.
+
+### Using your own reverse proxy instead
+
+If you'd rather not run the bundled proxy at all, delete the `proxy`
+service from `docker-compose.yml` and, in the `fossegrim` service, replace
+`expose` with `ports: ["8080:8080"]` and remove `Https__CertificateDirectory`
+and `ASPNETCORE_FORWARDEDHEADERS_ENABLED`. Settings -> HTTPS then just
+says HTTPS is handled elsewhere. (Keep
+`ASPNETCORE_FORWARDEDHEADERS_ENABLED` only if nothing but your proxy can
+reach port 8080: it makes the app believe the client address in
+`X-Forwarded-For`.)
 
 ## Cutting a release
 
@@ -81,11 +166,12 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-That one push builds the image and pushes it to the GitHub Container
+That one push builds the images and pushes them to the GitHub Container
 Registry:
 
 ```
 ghcr.io/slaptoast/fossegrim
+ghcr.io/slaptoast/fossegrim-proxy    # linux/amd64 and linux/arm64
 ```
 
 tagged `1.2.3`, `1.2`, `1`, and (as long as the tag isn't a prerelease like
@@ -125,7 +211,8 @@ into the image for a given deployment.
 | `JWT_ISSUER` / `JWT_AUDIENCE` / `JWT_EXPIRY_MINUTES` | JWT claims, and how long an access token lasts (default 60 minutes; apps renew them with their refresh token). Stream and cover URLs use separate media tokens, which last `Jwt__MediaExpiryMinutes` (default 7 days). |
 | `RateLimiting__SignInPerMinute` | Sign-in, registration and password-change attempts allowed per client address per minute (default 20). See [Security](#security). |
 | `MUSIC_LIBRARY_PATH` | Host path to your music library; mounted **read-write** at `/music` in the container. After startup, register `/music` (or a subfolder) as a media folder from the admin UI. |
-| `PORT` | Host-side port to publish. |
+| `HTTP_PORT` | Host port the proxy serves plain HTTP on (default 80). Let's Encrypt needs port 80 to reach it. See [HTTPS](#https). |
+| `HTTPS_PORT` | Host port the proxy serves HTTPS on once there's a certificate (default 443). |
 | `BACKUP_PATH` | Host folder for backup zips, mounted at `/backups`. Must be writable by uid 100 / gid 101. See [Backups](#backups). |
 | `LASTFM_API_KEY` / `LASTFM_API_SECRET` | Last.fm API application credentials. Optional -- usually entered on the admin Settings page instead; when set, these override it. See [Last.fm](#lastfm). |
 
@@ -322,15 +409,15 @@ nothing else:
 
 ```bash
 # Scan every media folder (quick scan)
-curl -X POST -H "X-Api-Key: fsg_..." http://localhost:8080/api/external/scan
+curl -X POST -H "X-Api-Key: fsg_..." http://localhost/api/external/scan
 
 # Scan one folder, e.g. from a Lidarr "on import" custom script
 curl -X POST -H "X-Api-Key: fsg_..." -H "Content-Type: application/json" \
   -d '{"path": "/music/Artist/Album", "full": false}' \
-  http://localhost:8080/api/external/scan
+  http://localhost/api/external/scan
 
 # Queue, current scan with progress, and recent results
-curl -H "X-Api-Key: fsg_..." http://localhost:8080/api/external/scan
+curl -H "X-Api-Key: fsg_..." http://localhost/api/external/scan
 ```
 
 `path` is as Fossegrim sees it, inside the container, so it must be inside
@@ -395,6 +482,7 @@ fossegrim-backup-20261029-030000.zip
 ├── fossegrim.db            # consistent copy, taken with SQLite's online backup API
 ├── jwt.key                 # sign-in key (when generated into /data)
 ├── dataprotection-keys/    # decrypt the saved Last.fm secret and session keys
+├── certs/                  # the HTTPS certificate and key, if there is one
 └── manifest.json           # app version, time, last applied migration
 ```
 
@@ -430,8 +518,19 @@ docker run --rm -v fossegrim_fossegrim-data:/data -v /path/to/backups:/backups a
 docker compose up -d
 ```
 
-(Check the volume name with `docker volume ls`. It's prefixed with the
-compose project name.) Restoring onto an older Fossegrim version than the
+To restore the HTTPS certificate too (otherwise Fossegrim just asks Let's
+Encrypt for a new one), copy `certs/` into the certificate volume before
+starting again:
+
+```bash
+docker run --rm -v fossegrim_fossegrim-certs:/certs -v /path/to/backups:/backups alpine \
+  sh -c 'unzip -o -j /backups/fossegrim-backup-20261029-030000.zip "certs/*" -d /certs \
+         && chown -R 100:101 /certs && chmod 600 /certs/privkey.pem'
+```
+
+The restore above puts a `certs/` folder into `/data` too; it's harmless
+there, or delete it. (Check the volume names with `docker volume ls`.
+They're prefixed with the compose project name.) Restoring onto an older Fossegrim version than the
 one that made the backup isn't supported. `manifest.json` records which
 version that was.
 

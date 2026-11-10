@@ -1,0 +1,312 @@
+@implements IDisposable
+@inject FossegrimApiClient ApiClient
+@inject NavigationManager Navigation
+
+@* HTTPS for a server that faces the internet itself: Let's Encrypt
+   certificates for the bundled proxy, renewed automatically. *@
+
+@if (_status is null)
+{
+    @if (_message is not null)
+    {
+        <div class="error-message">@_message</div>
+    }
+    else
+    {
+        <div class="loading"><h2>Loading HTTPS settings</h2></div>
+    }
+}
+else if (!_status.Available)
+{
+    <p>
+        This server isn't running with the bundled proxy, so HTTPS is handled elsewhere (or not at all).
+        To have Fossegrim get free certificates from Let's Encrypt itself, run it with the proxy from the
+        Docker Compose file. See DOCKER.md.
+    </p>
+}
+else
+{
+    <p>
+        Optional. If another reverse proxy already handles HTTPS for this server, leave this off: plain HTTP keeps working.
+        If this server faces the internet on its own (a Raspberry Pi on your home connection, say), Fossegrim can get a free
+        certificate from <a href="https://letsencrypt.org/" target="_blank" rel="noopener">Let's Encrypt</a> and renew it automatically.
+    </p>
+
+    @if (_message is not null)
+    {
+        <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+    }
+
+    <div class="folder-item">
+        @if (_status.Certificate is { } certificate)
+        {
+            <p><strong>Certificate:</strong> @string.Join(", ", certificate.Domains)</p>
+            <p>
+                <strong>Issued by:</strong> @certificate.Issuer
+                @if (certificate.Staging)
+                {
+                    <span class="https-staging">&nbsp;(test certificate: browsers will show a warning)</span>
+                }
+            </p>
+            <p>
+                <strong>Valid until:</strong> @certificate.NotAfter.ToLocalTime().ToString("g")
+                @if (certificate.NotAfter < DateTime.UtcNow)
+                {
+                    <span class="https-staging">&nbsp;(expired)</span>
+                }
+            </p>
+        }
+        else
+        {
+            <p><strong>Certificate:</strong> none. The server is reached over plain HTTP only.</p>
+        }
+
+        @if (_status.Running)
+        {
+            <div class="info-text">Asking Let's Encrypt for a certificate. This usually takes under a minute.</div>
+        }
+        else if (_status.LetsEncrypt is not null && _status.LastError is not null)
+        {
+            <div class="error-message">
+                @_status.LastError
+                @if (_status.NextAttemptAt is { } retry)
+                {
+                    <br /><span>Trying again automatically around @retry.ToLocalTime().ToString("g").</span>
+                }
+            </div>
+        }
+        else if (_status.LetsEncrypt is not null && _status.NextAttemptAt is { } next && _status.Certificate is not null)
+        {
+            <p class="backup-hint">Renews automatically around @next.ToLocalTime().ToString("g").</p>
+        }
+
+        @if (_status.Certificate is not null)
+        {
+            <label class="checkbox-row">
+                <input type="checkbox" checked="@_status.RedirectHttp" disabled="@_busy" @onchange="SetRedirectAsync" />
+                Redirect plain HTTP to HTTPS
+            </label>
+            <p class="backup-hint">Turn this off if another proxy talks to this server over plain HTTP.</p>
+        }
+    </div>
+
+    <EditForm Model="_input" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <div class="folder-item">
+            <h3 class="setup-title">Let's Encrypt</h3>
+
+            @if (_status.LetsEncrypt is null && _status.Certificate is not null)
+            {
+                <div class="info-text">The current certificate was put in the certificate folder by hand. Getting one from Let's Encrypt replaces it.</div>
+            }
+
+            <div class="form-group">
+                <label for="httpsDomains">Domain Names</label>
+                <InputText id="httpsDomains" @bind-Value="_input.Domains" placeholder="music.example.com" autocomplete="off" />
+                <ValidationMessage For="() => _input.Domains" />
+                <p class="backup-hint">
+                    The name(s) people use to reach this server, separated by commas. Each one must point at this server,
+                    and port 80 must be reachable from the internet (forward ports 80 and 443 on your router), so Let's Encrypt can check it.
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label for="httpsEmail">Email (optional)</label>
+                <InputText id="httpsEmail" type="email" @bind-Value="_input.Email" autocomplete="email" />
+                <ValidationMessage For="() => _input.Email" />
+                <p class="backup-hint">Let's Encrypt only uses it for important notices about your account. Fossegrim warns admins here if renewing fails.</p>
+            </div>
+
+            <label class="checkbox-row">
+                <InputCheckbox @bind-Value="_input.Staging" />
+                Test mode (Let's Encrypt's staging service)
+            </label>
+            <p class="backup-hint">
+                Gets an untrusted test certificate, which is useful while you get the port forwarding right: failed attempts
+                there don't count towards Let's Encrypt's limits. Turn it off for a real certificate.
+            </p>
+
+            <label class="checkbox-row">
+                <InputCheckbox @bind-Value="_input.AgreeToTerms" />
+                <span>I agree to the <a href="https://letsencrypt.org/repository/" target="_blank" rel="noopener">Let's Encrypt Subscriber Agreement</a></span>
+            </label>
+
+            <button type="submit" class="button-secondary" disabled="@(_busy || _status.Running || !_input.AgreeToTerms)">
+                @(_status.LetsEncrypt is null ? "Get Certificate" : "Save and Get Certificate")
+            </button>
+            @if (_status.LetsEncrypt is not null)
+            {
+                <button type="button" class="button-secondary" disabled="@(_busy || _status.Running)" @onclick="RenewAsync">Renew Now</button>
+                <button type="button" class="button-danger" disabled="@(_busy || _status.Running)" @onclick="() => _confirmTurnOff = true">Turn Off</button>
+            }
+        </div>
+    </EditForm>
+}
+
+<ConfirmDialog IsOpen="_confirmTurnOff"
+               Title="Turn Off Let's Encrypt"
+               Message="Stop renewing and remove the certificate? The server goes back to plain HTTP, so anyone using an https:// address will need to switch."
+               ConfirmText="Turn Off"
+               OnConfirm="TurnOffAsync"
+               OnCancel="() => _confirmTurnOff = false" />
+
+@code {
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
+
+    private HttpsStatusDto? _status;
+    private HttpsInput _input = new();
+    private string? _message;
+    private bool _success;
+    private bool _busy;
+    private bool _confirmTurnOff;
+    private CancellationTokenSource? _polling;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            SetStatus(await ApiClient.GetHttpsStatusAsync(), resetInput: true);
+            if (_status!.LetsEncrypt is null)
+            {
+                // The address this admin is using is the best first guess.
+                var host = new Uri(Navigation.BaseUri).Host;
+                if (host.Contains('.') && !System.Net.IPAddress.TryParse(host, out _))
+                {
+                    _input.Domains = host;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"Failed to load HTTPS settings: {ex.Message}";
+        }
+    }
+
+    private void SetStatus(HttpsStatusDto status, bool resetInput = false)
+    {
+        var wasRunning = _status?.Running == true;
+        _status = status;
+        if (resetInput && status.LetsEncrypt is { } settings)
+        {
+            _input = new HttpsInput
+            {
+                Domains = string.Join(", ", settings.Domains),
+                Email = settings.Email,
+                Staging = settings.Staging,
+                AgreeToTerms = true
+            };
+        }
+
+        if (status.Running)
+        {
+            StartPolling();
+        }
+        else if (wasRunning)
+        {
+            (_message, _success) = status.LastError is null
+                ? (status.Certificate?.Staging == true
+                    ? "Got a test certificate. Turn off test mode to get a real one."
+                    : "Got the certificate. The proxy starts using it within a minute.", true)
+                : (null, false);
+        }
+    }
+
+    private void StartPolling()
+    {
+        if (_polling is not null)
+        {
+            return;
+        }
+        _polling = new CancellationTokenSource();
+        _ = PollAsync(_polling.Token);
+    }
+
+    private async Task PollAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(PollInterval, cancellationToken);
+                var status = await ApiClient.GetHttpsStatusAsync();
+                if (!status.Running)
+                {
+                    _polling = null;
+                }
+                SetStatus(status);
+                StateHasChanged();
+                if (!status.Running)
+                {
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _polling = null;
+            (_message, _success) = ($"Lost track of the certificate request: {ex.Message}", false);
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var domains = _input.Domains.Split([',', ' ', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            SetStatus(await ApiClient.SaveLetsEncryptAsync(new SaveLetsEncryptRequest(
+                domains, string.IsNullOrWhiteSpace(_input.Email) ? null : _input.Email, _input.Staging, _input.AgreeToTerms)));
+        });
+    }
+
+    private Task RenewAsync() => RunAsync(async () => SetStatus(await ApiClient.RenewCertificateAsync()));
+
+    private async Task TurnOffAsync()
+    {
+        _confirmTurnOff = false;
+        await RunAsync(async () =>
+        {
+            SetStatus(await ApiClient.TurnOffLetsEncryptAsync());
+            (_message, _success) = ("Let's Encrypt is off and the certificate is removed.", true);
+        });
+    }
+
+    private Task SetRedirectAsync(ChangeEventArgs e) =>
+        RunAsync(async () => SetStatus(await ApiClient.SetHttpsRedirectAsync(e.Value is true)));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public void Dispose() => _polling?.Cancel();
+
+    private class HttpsInput
+    {
+        [Required(ErrorMessage = "Enter the domain name this server is reached on.")]
+        public string Domains { get; set; } = "";
+
+        [EmailAddress]
+        public string? Email { get; set; }
+
+        public bool Staging { get; set; }
+
+        public bool AgreeToTerms { get; set; }
+    }
+}

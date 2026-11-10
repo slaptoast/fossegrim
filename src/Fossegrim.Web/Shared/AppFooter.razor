@@ -8,6 +8,10 @@
         {
             <a href="/admin" class="update-badge" title="A newer release has been published">Update available: v@(_update.LatestVersion)</a>
         }
+        @if (_https is { LetsEncrypt: not null, LastError: not null, Running: false })
+        {
+            <a href="/settings#https" class="update-badge https-badge" title="@_https.LastError">HTTPS certificate problem</a>
+        }
         @_displayVersion
     </footer>
 }
@@ -15,6 +19,7 @@
 @code {
     private string? _displayVersion;
     private UpdateStatusDto? _update;
+    private HttpsStatusDto? _https;
 
     protected override async Task OnInitializedAsync()
     {
@@ -35,6 +40,8 @@
             if (state.User.IsInRole("Admin"))
             {
                 _update = await ApiClient.GetUpdateStatusAsync();
+                // A failed certificate renewal needs an admin before it expires.
+                _https = await ApiClient.GetHttpsStatusAsync();
             }
         }
         catch

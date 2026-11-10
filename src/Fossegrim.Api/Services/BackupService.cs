@@ -1,3 +1,4 @@
+using Fossegrim.Api.Services.Https;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text.Json;
@@ -64,6 +65,7 @@ public partial class BackupService
     private readonly FossegrimDbContext _db;
     private readonly BackupCoordinator _coordinator;
     private readonly IConfiguration _configuration;
+    private readonly CertificateFiles _certificates;
     private readonly TimeProvider _time;
     private readonly ILogger<BackupService> _logger;
 
@@ -72,12 +74,14 @@ public partial class BackupService
         BackupCoordinator coordinator,
         IConfiguration configuration,
         IHostEnvironment environment,
+        CertificateFiles certificates,
         TimeProvider time,
         ILogger<BackupService> logger)
     {
         _db = db;
         _coordinator = coordinator;
         _configuration = configuration;
+        _certificates = certificates;
         _time = time;
         _logger = logger;
         // Docker sets Backup:Directory to the /backups volume; locally it's
@@ -270,6 +274,15 @@ public partial class BackupService
                         zip.CreateEntryFromFile(keyPath, entryName);
                         files.Add(entryName);
                     }
+                }
+
+                // The HTTPS certificate, so a restore doesn't have to ask
+                // Let's Encrypt again (it limits repeat certificates).
+                foreach (var certificatePath in _certificates.ExistingFiles())
+                {
+                    var entryName = $"certs/{Path.GetFileName(certificatePath)}";
+                    zip.CreateEntryFromFile(certificatePath, entryName);
+                    files.Add(entryName);
                 }
 
                 var manifest = new

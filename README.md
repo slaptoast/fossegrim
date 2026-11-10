@@ -4,7 +4,7 @@
 
 **A self-hosted music server and web player for the music collection you already own.**
 
-[![Tests](https://github.com/slaptoast/fossegrim/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/slaptoast/fossegrim/actions/workflows/test.yml) [![Latest release](https://img.shields.io/github/v/release/slaptoast/fossegrim?sort=semver&label=release)](https://github.com/slaptoast/fossegrim/releases/latest) [![Docker image](https://img.shields.io/badge/image-ghcr.io%2Fslaptoast%2Ffossegrim-2496ED?logo=docker&logoColor=white)](https://github.com/slaptoast/fossegrim/pkgs/container/fossegrim) [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/) [![License: AGPL-3.0](https://img.shields.io/github/license/slaptoast/fossegrim)](LICENSE)
+[![Tests](https://github.com/slaptoast/fossegrim/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/slaptoast/fossegrim/actions/workflows/test.yml) [![Latest release](https://img.shields.io/github/v/release/slaptoast/fossegrim?sort=semver&label=release)](https://github.com/slaptoast/fossegrim/releases/latest) [![Docker image](https://img.shields.io/badge/image-ghcr.io%2Fslaptoast%2Ffossegrim-2496ED?logo=docker&logoColor=white)](https://github.com/slaptoast/fossegrim/pkgs/container/fossegrim) [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/) [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 ![The Library page: artists, albums and tracks, a MilkDrop visualizer, and the player bar](docs/screenshots/library.png)
 

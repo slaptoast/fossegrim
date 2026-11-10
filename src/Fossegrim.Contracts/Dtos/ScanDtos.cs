@@ -13,7 +13,8 @@ public enum ScanPhase
     Counting,
     // Reading tags from new and changed files (every file on a full scan).
     Reading,
-    // Writing the results to the database.
+    // Removing tracks whose files are gone and refreshing search (new and
+    // changed tracks are saved during Reading).
     Saving,
     Done
 }
@@ -32,7 +33,10 @@ public record ScanSummary(
     IReadOnlyList<string> Warnings);
 
 // Source says who asked: "admin", "api:<key name>" or "rescan".
-// Processed/Total count files in the Reading phase.
+// Processed/Total count files in the Reading phase; Saved counts the read
+// files already in the library (new and changed ones are saved in batches
+// while the scan runs). SecondsLeft is an estimate for the Reading phase,
+// null until there's one (the first comes 5 seconds in).
 public record ScanJobDto(
     Guid Id,
     string Description,
@@ -46,7 +50,9 @@ public record ScanJobDto(
     DateTime? StartedAt,
     DateTime? FinishedAt,
     ScanSummary? Summary,
-    string? Error);
+    string? Error,
+    int Saved = 0,
+    int? SecondsLeft = null);
 
 public record ScanStatusDto(ScanJobDto? Current, IReadOnlyList<ScanJobDto> Queued, IReadOnlyList<ScanJobDto> Recent);
 

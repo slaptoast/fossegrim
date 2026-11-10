@@ -199,14 +199,63 @@ public sealed class LibraryScannerTests : IClassFixture<FossegrimApiFactory>, ID
         Assert.Equal(ScanPhase.Done, reports.Last().Phase);
     }
 
+    [Fact]
+    public async Task Tracks_AreSavedInBatches_WhileTheScanReads()
+    {
+        for (var i = 1; i <= 5; i++)
+        {
+            TestMp3.Create(_music, $"{i:00}.mp3", Tags($"Track {i}", (uint)i));
+        }
+        var reports = new List<ScanProgress>();
+        var inLibraryMidScan = -1;
+        var progress = new SynchronousProgress(reports, report =>
+        {
+            // The first time a batch is saved, it's already in the library.
+            if (report is { Phase: ScanPhase.Reading, Saved: > 0 } && inLibraryMidScan < 0)
+            {
+                inLibraryMidScan = 0;
+                _factory.WithDbAsync(async db => inLibraryMidScan = await db.MediaItems.CountAsync(m => m.FileLocation!.StartsWith(_music))).GetAwaiter().GetResult();
+            }
+        });
+
+        var summary = await ScanAsync(progress: progress, saveBatchSize: 2);
+
+        Assert.Equal(5, summary.Added);
+        Assert.Equal(2, inLibraryMidScan);
+        Assert.Contains(reports, r => r is { Phase: ScanPhase.Reading, Saved: 2 });
+        Assert.Contains(reports, r => r is { Phase: ScanPhase.Reading, Saved: 4 });
+        Assert.Equal(5, reports.Last().Saved);
+        Assert.Equal(5, (await ItemsAsync()).Count);
+    }
+
+    [Fact]
+    public async Task MovedFile_IsMatched_EvenWhenSavedInBatches()
+    {
+        TestMp3.Create(Path.Combine(_music, "a"), "01.mp3", Tags("Stays", 1));
+        var moving = TestMp3.Create(Path.Combine(_music, "a"), "02.mp3", Tags("Moves", 2));
+        await ScanAsync();
+        var id = (await ItemsAsync()).Single(i => i.Title == "Moves").Id;
+
+        Directory.CreateDirectory(Path.Combine(_music, "z"));
+        File.Move(moving, Path.Combine(_music, "z", "02.mp3"));
+        var summary = await ScanAsync(saveBatchSize: 1);
+
+        Assert.Equal((1, 0, 0), (summary.Moved, summary.Added, summary.Removed));
+        Assert.Equal(id, (await ItemsAsync()).Single(i => i.Title == "Moves").Id);
+    }
+
     private Mp3Tags Tags(string title, uint track, string? album = null) =>
         new(title, ["Band"], album ?? $"Album {_tag}", 2001, track, []);
 
-    private async Task<ScanSummary> ScanAsync(bool full = false, ScanTarget? target = null, IProgress<ScanProgress>? progress = null)
+    private async Task<ScanSummary> ScanAsync(bool full = false, ScanTarget? target = null, IProgress<ScanProgress>? progress = null, int? saveBatchSize = null)
     {
         using var scope = _factory.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<LibraryScanner>()
-            .ScanAsync([target ?? new ScanTarget(_music)], full, progress);
+        var scanner = scope.ServiceProvider.GetRequiredService<LibraryScanner>();
+        if (saveBatchSize is { } size)
+        {
+            scanner.SaveBatchSize = size;
+        }
+        return await scanner.ScanAsync([target ?? new ScanTarget(_music)], full, progress);
     }
 
     private async Task<List<MediaItem>> ItemsAsync()
@@ -217,13 +266,14 @@ public sealed class LibraryScannerTests : IClassFixture<FossegrimApiFactory>, ID
         return items;
     }
 
-    private sealed class SynchronousProgress(List<ScanProgress> reports) : IProgress<ScanProgress>
+    private sealed class SynchronousProgress(List<ScanProgress> reports, Action<ScanProgress>? onReport = null) : IProgress<ScanProgress>
     {
         public void Report(ScanProgress value)
         {
             lock (reports)
             {
                 reports.Add(value);
+                onReport?.Invoke(value);
             }
         }
     }

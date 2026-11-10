@@ -1,4 +1,5 @@
-using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Threading.Channels;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
@@ -10,12 +11,14 @@ namespace Fossegrim.Lib.Services.Library;
 /// <summary>A folder to scan; Recursive = false scans only the files directly in it.</summary>
 public record ScanTarget(string Path, bool Recursive = true);
 
-public record ScanProgress(ScanPhase Phase, int Processed, int Total);
+/// <summary>Saved: how many of the read files are in the library so far.</summary>
+public record ScanProgress(ScanPhase Phase, int Processed, int Total, int Saved = 0);
 
 /// <summary>
 /// Brings the library in line with what's on disk under the given folders.
 /// It counts the audio files first (so progress has a total), then reads
-/// tags. A quick scan reads only new files and ones whose size or
+/// tags, saving in small batches as it goes so new music shows up in the
+/// library before the scan finishes. A quick scan reads only new files and ones whose size or
 /// last-write time changed; a full scan reads them all. Tracks whose file
 /// is gone are removed, except that a file that reappears elsewhere with
 /// the same size and tags is treated as moved (keeping its history and
@@ -26,6 +29,8 @@ public class LibraryScanner
 {
     private const int MaxWarnings = 50;
     private const int BatchSize = 500;
+    private static readonly TimeSpan SaveInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan SearchRebuildInterval = TimeSpan.FromSeconds(60);
 
     private readonly FossegrimDbContext _db;
     private readonly ILogger<LibraryScanner> _logger;
@@ -37,6 +42,9 @@ public class LibraryScanner
     }
 
     public int MaxDegreeOfParallelism { get; set; } = 4;
+
+    /// <summary>How many read files are saved at once while scanning (or fewer, every 2 seconds).</summary>
+    public int SaveBatchSize { get; set; } = 200;
 
     public async Task<ScanSummary> ScanAsync(
         IReadOnlyList<ScanTarget> targets,
@@ -107,104 +115,177 @@ public class LibraryScanner
             }
         }
 
-        // 2. Read: tags from new and changed files (all files on a full scan).
-        var total = files.Count;
-        var processed = 0;
-        var unchanged = 0;
-        var failed = 0;
-        var read = new ConcurrentBag<ScannedFile>();
-        progress?.Report(new ScanProgress(ScanPhase.Reading, 0, total));
-
-        await Parallel.ForEachAsync(files, new ParallelOptions { MaxDegreeOfParallelism = MaxDegreeOfParallelism, CancellationToken = cancellationToken }, (path, _) =>
-        {
-            try
-            {
-                var info = new FileInfo(path);
-                var size = info.Length;
-                var modifiedAt = info.LastWriteTimeUtc;
-
-                if (!full && existing.TryGetValue(path, out var known) && known.FileSize == size && known.FileModifiedAt == modifiedAt)
-                {
-                    Interlocked.Increment(ref unchanged);
-                }
-                else
-                {
-                    read.Add(new ScannedFile(path, size, modifiedAt, TagReader.Read(path)));
-                }
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                Interlocked.Increment(ref failed);
-                Warn($"Couldn't read {path}: {ex.Message}");
-            }
-
-            var done = Interlocked.Increment(ref processed);
-            progress?.Report(new ScanProgress(ScanPhase.Reading, done, total));
-            return ValueTask.CompletedTask;
-        });
-
-        // 3. Save.
-        progress?.Report(new ScanProgress(ScanPhase.Saving, total, total));
+        // 2. Read and save: tags from new and changed files (all files on a
+        // full scan), saved in small batches as they're read so the music
+        // shows up in the library while the scan runs. Files are read in path
+        // order, so a batch is mostly whole albums.
         var folders = await _db.MediaFolders.ToListAsync(cancellationToken);
         var links = await LibraryLinks.LoadAsync(_db, cancellationToken);
         var unlinkedArtists = new HashSet<Guid>();
         var unlinkedAlbums = new HashSet<Guid>();
 
+        // Known up front: tracks whose file wasn't found. A new file matching
+        // one of these by size and tags is that file, moved.
         var missing = existing.Values
             .Where(m => !files.Contains(m.Path) && !unreachable.Any(t => IsUnder(m.Path, t)))
             .ToList();
 
-        var changed = read.Where(f => existing.ContainsKey(f.Path)).ToList();
-        var added = read.Where(f => !existing.ContainsKey(f.Path)).OrderBy(f => f.Path, StringComparer.Ordinal).ToList();
+        var total = files.Count;
+        var processed = 0;
+        var unchanged = 0;
+        var failed = 0;
+        var saved = 0;
+        var added = 0;
+        var changed = 0;
+        var moved = 0;
+        void ReportReading() =>
+            progress?.Report(new ScanProgress(ScanPhase.Reading, Volatile.Read(ref processed), total, Volatile.Read(ref saved)));
+        ReportReading();
 
-        // A new file matching a missing one by size and tags is that file, moved.
-        var moves = new Dictionary<Guid, ScannedFile>();
-        foreach (var file in added.ToList())
+        var channel = Channel.CreateBounded<ScannedFile>(new BoundedChannelOptions(SaveBatchSize * 2) { SingleReader = true });
+
+        // If saving fails, stop reading: the readers would otherwise wait on a full channel.
+        using var readCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        async Task SaveAllAsync()
         {
-            var match = missing.FirstOrDefault(m =>
-                m.FileSize == file.Size &&
-                SameText(m.Title, file.Tags.Title) &&
-                SameText(m.ArtistName, file.Tags.ArtistName) &&
-                SameText(m.Album, file.Tags.Album));
-            if (match is not null)
+            var batch = new List<ScannedFile>();
+            var batchAge = new Stopwatch();
+            var sinceIndex = Stopwatch.StartNew();
+            var reader = channel.Reader;
+            Task<bool>? readable = null;
+
+            async Task FlushAsync()
             {
-                moves[match.Id] = file;
-                missing.Remove(match);
-                added.Remove(file);
+                if (batch.Count == 0)
+                {
+                    return;
+                }
+                var (a, c, m) = await SaveBatchAsync(batch, existing, missing, folders, links, unlinkedArtists, unlinkedAlbums, cancellationToken);
+                (added, changed, moved) = (added + a, changed + c, moved + m);
+                Interlocked.Add(ref saved, batch.Count);
+                batch.Clear();
+                ReportReading();
+
+                // Keep search roughly in step on long scans; it's rebuilt again at the end.
+                if (sinceIndex.Elapsed >= SearchRebuildInterval)
+                {
+                    await new SearchIndex(_db).RebuildAsync(cancellationToken);
+                    sinceIndex.Restart();
+                }
+            }
+
+            try
+            {
+                while (true)
+                {
+                    readable ??= reader.WaitToReadAsync(cancellationToken).AsTask();
+                    if (batch.Count > 0)
+                    {
+                        // Save a part-filled batch once it's SaveInterval old, so a slow trickle still shows up.
+                        var left = SaveInterval - batchAge.Elapsed;
+                        if (left > TimeSpan.Zero)
+                        {
+                            await Task.WhenAny(readable, Task.Delay(left, cancellationToken));
+                        }
+                    }
+                    else
+                    {
+                        await Task.WhenAny(readable);
+                    }
+
+                    if (readable.IsCompleted)
+                    {
+                        var more = await readable;
+                        readable = null;
+                        if (!more)
+                        {
+                            break;
+                        }
+                        while (batch.Count < SaveBatchSize && reader.TryRead(out var file))
+                        {
+                            if (batch.Count == 0)
+                            {
+                                batchAge.Restart();
+                            }
+                            batch.Add(file);
+                        }
+                    }
+
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (batch.Count >= SaveBatchSize || (batch.Count > 0 && batchAge.Elapsed >= SaveInterval))
+                    {
+                        await FlushAsync();
+                    }
+                }
+                await FlushAsync();
+            }
+            catch
+            {
+                readCancellation.Cancel();
+                throw;
             }
         }
 
-        var updates = changed.ToDictionary(f => existing[f.Path].Id);
-        foreach (var (id, file) in moves)
+        var saving = SaveAllAsync();
+        var ordered = files.OrderBy(f => f, StringComparer.Ordinal).ToList();
+        try
         {
-            updates[id] = file;
-        }
-
-        foreach (var batch in updates.Keys.Chunk(BatchSize))
-        {
-            var items = await _db.MediaItems
-                .Include(m => m.Artists)
-                .Include(m => m.Albums)
-                .Where(m => batch.Contains(m.Id))
-                .ToListAsync(cancellationToken);
-            foreach (var item in items)
+            await Parallel.ForEachAsync(ordered, new ParallelOptions { MaxDegreeOfParallelism = MaxDegreeOfParallelism, CancellationToken = readCancellation.Token }, async (path, token) =>
             {
-                Apply(item, updates[item.Id], folders);
-                var (artists, albums) = links.Relink(item);
-                unlinkedArtists.UnionWith(artists);
-                unlinkedAlbums.UnionWith(albums);
-            }
-            await _db.SaveChangesAsync(cancellationToken);
-        }
+                ScannedFile? scanned = null;
+                try
+                {
+                    var info = new FileInfo(path);
+                    var size = info.Length;
+                    var modifiedAt = info.LastWriteTimeUtc;
 
-        foreach (var file in added)
-        {
-            var item = new MediaItem { Id = Guid.NewGuid(), DateAdded = DateTime.UtcNow };
-            Apply(item, file, folders);
-            links.Relink(item);
-            _db.MediaItems.Add(item);
+                    if (!full && existing.TryGetValue(path, out var known) && known.FileSize == size && known.FileModifiedAt == modifiedAt)
+                    {
+                        Interlocked.Increment(ref unchanged);
+                    }
+                    else
+                    {
+                        scanned = new ScannedFile(path, size, modifiedAt, TagReader.Read(path));
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    Interlocked.Increment(ref failed);
+                    Warn($"Couldn't read {path}: {ex.Message}");
+                }
+
+                if (scanned is not null)
+                {
+                    await channel.Writer.WriteAsync(scanned, token);
+                }
+                Interlocked.Increment(ref processed);
+                ReportReading();
+            });
         }
-        await _db.SaveChangesAsync(cancellationToken);
+        catch
+        {
+            // Whatever was read is still saved (unless that's what failed),
+            // so a later quick scan carries on from there.
+            channel.Writer.TryComplete();
+            try
+            {
+                await saving;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            throw;
+        }
+        channel.Writer.Complete();
+        await saving;
+
+        // 3. Tidy up: remove what's gone, refresh search.
+        progress?.Report(new ScanProgress(ScanPhase.Saving, total, total, saved));
 
         foreach (var batch in missing.Select(m => m.Id).Chunk(BatchSize))
         {
@@ -234,8 +315,81 @@ public class LibraryScanner
         // Tracks, albums and artists may all have changed.
         await new SearchIndex(_db).RebuildAsync(cancellationToken);
 
-        progress?.Report(new ScanProgress(ScanPhase.Done, total, total));
-        return new ScanSummary(total, added.Count, changed.Count, unchanged, moves.Count, missing.Count, failed, warnings);
+        progress?.Report(new ScanProgress(ScanPhase.Done, total, total, saved));
+        return new ScanSummary(total, added, changed, unchanged, moved, missing.Count, failed, warnings);
+    }
+
+    /// <summary>
+    /// Saves one batch of read files: updates for known paths, moves for new
+    /// paths matching a missing track (removed from <paramref name="missing"/>),
+    /// and new tracks for the rest. Returns how many of each.
+    /// </summary>
+    private async Task<(int Added, int Changed, int Moved)> SaveBatchAsync(
+        IReadOnlyList<ScannedFile> batch,
+        IReadOnlyDictionary<string, ExistingItem> existing,
+        List<ExistingItem> missing,
+        IReadOnlyList<MediaFolder> folders,
+        LibraryLinks links,
+        HashSet<Guid> unlinkedArtists,
+        HashSet<Guid> unlinkedAlbums,
+        CancellationToken cancellationToken)
+    {
+        var updates = new Dictionary<Guid, ScannedFile>();
+        var added = new List<ScannedFile>();
+        var (changed, moved) = (0, 0);
+        foreach (var file in batch)
+        {
+            if (existing.TryGetValue(file.Path, out var known))
+            {
+                updates[known.Id] = file;
+                changed++;
+                continue;
+            }
+
+            var match = missing.FirstOrDefault(m =>
+                m.FileSize == file.Size &&
+                SameText(m.Title, file.Tags.Title) &&
+                SameText(m.ArtistName, file.Tags.ArtistName) &&
+                SameText(m.Album, file.Tags.Album));
+            if (match is not null)
+            {
+                missing.Remove(match);
+                updates[match.Id] = file;
+                moved++;
+            }
+            else
+            {
+                added.Add(file);
+            }
+        }
+
+        if (updates.Count > 0)
+        {
+            var ids = updates.Keys.ToList();
+            var items = await _db.MediaItems
+                .Include(m => m.Artists)
+                .Include(m => m.Albums)
+                .Where(m => ids.Contains(m.Id))
+                .ToListAsync(cancellationToken);
+            foreach (var item in items)
+            {
+                Apply(item, updates[item.Id], folders);
+                var (artists, albums) = links.Relink(item);
+                unlinkedArtists.UnionWith(artists);
+                unlinkedAlbums.UnionWith(albums);
+            }
+        }
+
+        foreach (var file in added)
+        {
+            var item = new MediaItem { Id = Guid.NewGuid(), DateAdded = DateTime.UtcNow };
+            Apply(item, file, folders);
+            links.Relink(item);
+            _db.MediaItems.Add(item);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return (added.Count, changed, moved);
     }
 
     private static void Apply(MediaItem item, ScannedFile file, IReadOnlyList<MediaFolder> folders)

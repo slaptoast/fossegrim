@@ -77,9 +77,19 @@
     {
         ScanPhase.Waiting => "Waiting",
         ScanPhase.Counting => job.Total > 0 ? $"Counting files ({job.Total:N0} so far)" : "Counting files",
-        ScanPhase.Reading => $"{job.Processed:N0} of {job.Total:N0} files ({Percent(job)}%)",
-        ScanPhase.Saving => "Saving",
+        ScanPhase.Reading => $"{job.Processed:N0} of {job.Total:N0} files ({Percent(job)}%){TimeLeftText(job)}",
+        ScanPhase.Saving => "Finishing up",
         _ => "Done"
+    };
+
+    // " · about 4 min left", or " · estimating time left" for the first 5 seconds.
+    public static string TimeLeftText(ScanJobDto job) => job.SecondsLeft switch
+    {
+        null when job.Processed < job.Total => " · estimating time left",
+        null => "",
+        < 60 => " · less than a minute left",
+        { } s when s < 3600 => $" · about {(int)Math.Round(s / 60.0)} min left",
+        { } s => $" · about {s / 3600} h {(s % 3600) / 60} min left",
     };
 
     public void Dispose() => Scans.Changed -= OnChanged;

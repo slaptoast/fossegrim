@@ -88,7 +88,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        Scans.ScanFinished += OnScanFinished;
+        Scans.LibraryChanged += OnLibraryChanged;
         Favorites.Changed += OnFavoritesChanged;
         _isAdmin = (await AuthStateProvider.GetAuthenticationStateAsync()).User.IsInRole("Admin");
     }
@@ -144,8 +144,8 @@
         }
     }
 
-    // A scan can add, rename or remove artists.
-    private void OnScanFinished(ScanJobDto job) => InvokeAsync(async () =>
+    // A scan (while it runs, and when it finishes) can add, rename or remove artists.
+    private void OnLibraryChanged() => InvokeAsync(async () =>
     {
         await LoadAsync(_page);
         StateHasChanged();
@@ -200,7 +200,7 @@
 
     public void Dispose()
     {
-        Scans.ScanFinished -= OnScanFinished;
+        Scans.LibraryChanged -= OnLibraryChanged;
         Favorites.Changed -= OnFavoritesChanged;
     }
 }

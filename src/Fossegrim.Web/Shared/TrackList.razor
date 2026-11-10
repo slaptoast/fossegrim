@@ -197,7 +197,7 @@
     {
         if (FromServer)
         {
-            Scans.ScanFinished += OnScanFinished;
+            Scans.LibraryChanged += OnLibraryChanged;
             Favorites.Changed += OnFavoritesChanged;
         }
         var state = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -265,8 +265,8 @@
         }
     }
 
-    // A scan can add, change or remove tracks.
-    private void OnScanFinished(ScanJobDto job) => InvokeAsync(async () =>
+    // A scan (while it runs, and when it finishes) can add, change or remove tracks.
+    private void OnLibraryChanged() => InvokeAsync(async () =>
     {
         await LoadAsync(_currentPage);
         StateHasChanged();
@@ -424,7 +424,7 @@
     {
         if (FromServer)
         {
-            Scans.ScanFinished -= OnScanFinished;
+            Scans.LibraryChanged -= OnLibraryChanged;
             Favorites.Changed -= OnFavoritesChanged;
         }
     }

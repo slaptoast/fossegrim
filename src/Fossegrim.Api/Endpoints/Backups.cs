@@ -17,8 +17,7 @@ public static class Backups
             .RequireAuthorization(policy => policy.RequireRole("Admin"));
 
         backupGroup.MapGet("/", async (BackupService backups) => Results.Ok(await backups.GetStatusAsync()))
-            .WithName("GetBackupStatus")
-            .WithOpenApi();
+            .WithName("GetBackupStatus");
 
         backupGroup.MapPut("/schedule", async (BackupScheduleDto schedule, BackupService backups) =>
         {
@@ -30,8 +29,7 @@ public static class Backups
             await backups.SaveScheduleAsync(schedule);
             return Results.Ok(await backups.GetStatusAsync());
         })
-        .WithName("UpdateBackupSchedule")
-        .WithOpenApi();
+        .WithName("UpdateBackupSchedule");
 
         // Runs synchronously: even a large library's database backs up in
         // seconds, and the caller wants to know how it went.
@@ -44,25 +42,21 @@ public static class Backups
 
             return Results.Ok(await backups.GetStatusAsync());
         })
-        .WithName("RunBackup")
-        .WithOpenApi();
+        .WithName("RunBackup");
 
         backupGroup.MapGet("/files/{fileName}", (string fileName, BackupService backups) =>
             backups.FindBackup(fileName) is { } path
                 ? Results.File(path, "application/zip", fileName)
                 : Results.NotFound())
-        .WithName("DownloadBackup")
-        .WithOpenApi();
+        .WithName("DownloadBackup");
 
         backupGroup.MapDelete("/files/{fileName}", (string fileName, BackupService backups) =>
             backups.DeleteBackup(fileName) ? Results.NoContent() : Results.NotFound())
-        .WithName("DeleteBackup")
-        .WithOpenApi();
+        .WithName("DeleteBackup");
 
         // IANA ids on Linux and macOS, i.e. what a schedule's TimeZone accepts here.
         backupGroup.MapGet("/time-zones", () =>
             Results.Ok(TimeZoneInfo.GetSystemTimeZones().Select(z => z.Id).Order(StringComparer.Ordinal).ToList()))
-        .WithName("GetBackupTimeZones")
-        .WithOpenApi();
+        .WithName("GetBackupTimeZones");
     }
 }

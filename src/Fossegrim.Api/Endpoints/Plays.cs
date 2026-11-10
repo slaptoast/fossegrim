@@ -76,8 +76,7 @@ public static class Plays
 
             return Results.Created($"/api/plays/{playEvent.Id}", ToPlayEventDto(playEvent));
         })
-        .WithName("RecordPlay")
-        .WithOpenApi();
+        .WithName("RecordPlay");
 
         // The calling user's listening history, newest first, a page at a
         // time. q narrows it to plays whose track matches every word in it,
@@ -116,8 +115,7 @@ public static class Plays
 
             return Results.Ok(new PlayHistoryPageDto(plays.Select(ToPlayEventDto).ToList(), totalCount, pageNumber, size));
         })
-        .WithName("GetPlayHistory")
-        .WithOpenApi();
+        .WithName("GetPlayHistory");
 
         // One of the calling user's plays (the Location returned by POST).
         playGroup.MapGet("/{id:guid}", async (
@@ -138,8 +136,7 @@ public static class Plays
 
             return play is null ? Results.NotFound() : Results.Ok(ToPlayEventDto(play));
         })
-        .WithName("GetPlay")
-        .WithOpenApi();
+        .WithName("GetPlay");
     }
 
     private static string? ValidateRecordPlay(RecordPlayRequest request, DateTime playedAt, DateTime now)

@@ -42,7 +42,6 @@ public static class Covers
             return Results.File(cover.Path, cover.ContentType);
         })
         .WithName("GetAlbumCover")
-        .WithOpenApi()
         .RequireMediaAuthorization();
     }
 

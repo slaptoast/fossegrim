@@ -26,25 +26,21 @@ public static class RandomPicks
 
         group.MapGet("/tracks", (string? mode, int? count, ClaimsPrincipal principal, UserManager<ApplicationUser> userManager, FossegrimDbContext db, TimeProvider time) =>
                 RandomTracksAsync(new RandomPickRequest(mode, count, null), principal, userManager, db, time))
-            .WithName("GetRandomTracks")
-            .WithOpenApi();
+            .WithName("GetRandomTracks");
 
         // The same, leaving out ExcludeIds (e.g. tracks already in the queue).
         // If that leaves nothing, the whole library is a candidate again.
         group.MapPost("/tracks", RandomTracksAsync)
-            .WithName("PickRandomTracks")
-            .WithOpenApi();
+            .WithName("PickRandomTracks");
 
         group.MapGet("/albums", (string? mode, int? count, ClaimsPrincipal principal, UserManager<ApplicationUser> userManager, FossegrimDbContext db, TimeProvider time) =>
                 RandomAlbumsAsync(new RandomPickRequest(mode, count, null), principal, userManager, db, time))
-            .WithName("GetRandomAlbums")
-            .WithOpenApi();
+            .WithName("GetRandomAlbums");
 
         // The same, leaving out ExcludeIds (e.g. albums already played this
         // session). If that leaves nothing, every album is a candidate again.
         group.MapPost("/albums", RandomAlbumsAsync)
-            .WithName("PickRandomAlbums")
-            .WithOpenApi();
+            .WithName("PickRandomAlbums");
     }
 
     private static async Task<IResult> RandomTracksAsync(

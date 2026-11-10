@@ -37,7 +37,6 @@ public static class Browse
         })
         .WithTags("Search")
         .WithName("Search")
-        .WithOpenApi()
         .RequireAuthorization();
     }
 

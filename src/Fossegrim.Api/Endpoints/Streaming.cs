@@ -25,7 +25,6 @@ public static class Streaming
             return Results.File(mediaItem.FileLocation, contentType, enableRangeProcessing: true);
         })
         .WithName("StreamMediaFile")
-        .WithOpenApi()
         .RequireMediaAuthorization();
     }
 }

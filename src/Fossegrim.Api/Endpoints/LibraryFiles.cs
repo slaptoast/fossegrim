@@ -27,8 +27,7 @@ public static class LibraryFiles
                 var template = await renamer.GetTemplateAsync();
                 return Results.Ok(new RenameTemplateDto(template, FileRenamer.Example(template)));
             })
-            .WithName("GetRenameTemplate")
-            .WithOpenApi();
+            .WithName("GetRenameTemplate");
 
         group.MapPut("/rename/template", async (UpdateRenameTemplateRequest request, FileRenamer renamer) =>
             {
@@ -41,15 +40,13 @@ public static class LibraryFiles
                 var template = await renamer.GetTemplateAsync();
                 return Results.Ok(new RenameTemplateDto(template, FileRenamer.Example(template)));
             })
-            .WithName("UpdateRenameTemplate")
-            .WithOpenApi();
+            .WithName("UpdateRenameTemplate");
 
         group.MapPost("/rename/preview", async (RenameRequest request, FileRenamer renamer) =>
                 Ids(request) is var (ids, error) && error is not null
                     ? Results.BadRequest(new ApiErrorResponse(error))
                     : Results.Ok(await renamer.PlanAsync(ids)))
-            .WithName("PreviewRename")
-            .WithOpenApi();
+            .WithName("PreviewRename");
 
         group.MapPost("/rename", async (RenameRequest request, FileRenamer renamer, LibraryLock libraryLock) =>
             {
@@ -72,8 +69,7 @@ public static class LibraryFiles
                     libraryLock.Release();
                 }
             })
-            .WithName("Rename")
-            .WithOpenApi();
+            .WithName("Rename");
 
         group.MapGet("/library-health", async (FossegrimDbContext db, FileRenamer renamer) =>
             {
@@ -84,8 +80,7 @@ public static class LibraryFiles
                     plan.Entries.Count(e => e.Status == RenameStatus.NotInMediaFolder),
                     plan.Entries.Count(e => e.Status == RenameStatus.FileMissing)));
             })
-            .WithName("GetLibraryHealth")
-            .WithOpenApi();
+            .WithName("GetLibraryHealth");
 
         group.MapGet("/library-health/tag-versions", async (FossegrimDbContext db) =>
             {
@@ -97,8 +92,7 @@ public static class LibraryFiles
                 return Results.Ok(items.Select(m => new TagVersionMismatchDto(
                     m.Id, m.Title, m.ArtistName, m.Album, m.FileLocation!, m.TagVersionMismatch!.Split(','))));
             })
-            .WithName("GetTagVersionMismatches")
-            .WithOpenApi();
+            .WithName("GetTagVersionMismatches");
 
         // Rewrites each file's ID3v1 tag from its ID3v2 tag, which is what Fossegrim reads.
         group.MapPost("/library-health/tag-versions/fix", async (FixTagVersionsRequest request, FossegrimDbContext db, LibraryLock libraryLock) =>
@@ -143,8 +137,7 @@ public static class LibraryFiles
                     libraryLock.Release();
                 }
             })
-            .WithName("FixTagVersionMismatches")
-            .WithOpenApi();
+            .WithName("FixTagVersionMismatches");
     }
 
     private static (IReadOnlyCollection<Guid>? Ids, string? Error) Ids(RenameRequest request) =>

@@ -20,8 +20,7 @@ public static class PasswordReset
 
         authGroup.MapGet("/password-reset", async (EmailSettingsStore email) =>
             Results.Ok(new PasswordResetOptionsDto(await email.IsConfiguredAsync())))
-        .WithName("GetPasswordResetOptions")
-        .WithOpenApi();
+        .WithName("GetPasswordResetOptions");
 
         // Always 202, whether or not the address has an account.
         authGroup.MapPost("/forgot-password", async (ForgotPasswordRequest request, EmailSettingsStore email, PasswordResets resets) =>
@@ -34,16 +33,14 @@ public static class PasswordReset
             return Results.Accepted();
         })
         .RequireRateLimiting(SignInLimits.Policy)
-        .WithName("ForgotPassword")
-        .WithOpenApi();
+        .WithName("ForgotPassword");
 
         authGroup.MapPost("/reset-password", async (ResetPasswordRequest request, PasswordResets resets) =>
             await resets.ResetAsync(request) is { } errors
                 ? Results.BadRequest(new IdentityErrorsResponse(errors.ToList()))
                 : Results.NoContent())
         .RequireRateLimiting(SignInLimits.Policy)
-        .WithName("ResetPassword")
-        .WithOpenApi();
+        .WithName("ResetPassword");
 
         var adminGroup = app.MapGroup("/api/admin")
             .WithTags("Admin")
@@ -60,20 +57,17 @@ public static class PasswordReset
                 .OrderBy(u => u.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ToList());
         })
-        .WithName("GetUsers")
-        .WithOpenApi();
+        .WithName("GetUsers");
 
         // For an admin to pass on to someone who can't get the email.
         adminGroup.MapPost("/users/{id}/reset-link", async (string id, UserManager<ApplicationUser> users, PasswordResets resets) =>
             await users.FindByIdAsync(id) is { } user
                 ? Results.Ok(await resets.CreateLinkAsync(user))
                 : Results.NotFound())
-        .WithName("CreatePasswordResetLink")
-        .WithOpenApi();
+        .WithName("CreatePasswordResetLink");
 
         adminGroup.MapGet("/email", async (EmailSettingsStore email) => Results.Ok(await email.GetDtoAsync()))
-            .WithName("GetEmailSettings")
-            .WithOpenApi();
+            .WithName("GetEmailSettings");
 
         adminGroup.MapPut("/email", async (SaveEmailSettingsRequest request, EmailSettingsStore email) =>
         {
@@ -85,16 +79,14 @@ public static class PasswordReset
             await email.SaveAsync(settings);
             return Results.Ok(await email.GetDtoAsync());
         })
-        .WithName("SaveEmailSettings")
-        .WithOpenApi();
+        .WithName("SaveEmailSettings");
 
         adminGroup.MapDelete("/email", async (EmailSettingsStore email) =>
         {
             await email.ClearAsync();
             return Results.NoContent();
         })
-        .WithName("ClearEmailSettings")
-        .WithOpenApi();
+        .WithName("ClearEmailSettings");
 
         // Sends straight away (not through the queue) so the admin sees what went wrong.
         adminGroup.MapPost("/email/test", async (TestEmailRequest request, EmailSettingsStore email, IMailTransport transport, CancellationToken cancellationToken) =>
@@ -120,7 +112,6 @@ public static class PasswordReset
             }
             return Results.NoContent();
         })
-        .WithName("SendTestEmail")
-        .WithOpenApi();
+        .WithName("SendTestEmail");
     }
 }

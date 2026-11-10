@@ -30,8 +30,7 @@ public static class Favorites
                 await db.FavoriteAlbums.Where(f => f.UserId == userId).Select(f => f.AlbumId).ToListAsync(),
                 await db.FavoriteArtists.Where(f => f.UserId == userId).Select(f => f.ArtistId).ToListAsync()));
         })
-        .WithName("GetFavorites")
-        .WithOpenApi();
+        .WithName("GetFavorites");
 
         group.MapPut("/{kind}/{id:guid}", async (string kind, Guid id, ClaimsPrincipal principal, FossegrimDbContext db, TimeProvider time) =>
         {
@@ -77,8 +76,7 @@ public static class Favorites
             }
             return Results.NoContent();
         })
-        .WithName("AddFavorite")
-        .WithOpenApi();
+        .WithName("AddFavorite");
 
         group.MapDelete("/{kind}/{id:guid}", async (string kind, Guid id, ClaimsPrincipal principal, FossegrimDbContext db) =>
         {
@@ -103,8 +101,7 @@ public static class Favorites
             }
             return Results.NoContent();
         })
-        .WithName("RemoveFavorite")
-        .WithOpenApi();
+        .WithName("RemoveFavorite");
     }
 
     private static IResult UnknownKind() =>

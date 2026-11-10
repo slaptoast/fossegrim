@@ -22,7 +22,6 @@ public static class Library
 
             return Results.Ok(new LibraryStatsDto(artistCount, albumCount, trackCount, totalBytes));
         })
-        .WithName("GetLibraryStats")
-        .WithOpenApi();
+        .WithName("GetLibraryStats");
     }
 }

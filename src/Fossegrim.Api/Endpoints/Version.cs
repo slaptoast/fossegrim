@@ -9,8 +9,7 @@ public static class Version
     {
         // Public: the footer that displays this loads before login.
         app.MapGet("/api/version", (AppVersion version) => Results.Ok(new VersionDto(version.Value)))
-            .WithName("GetVersion")
-            .WithOpenApi();
+            .WithName("GetVersion");
 
         // Admin: whether a newer release has been published to ghcr.io.
         var updatesGroup = app.MapGroup("/api/admin/updates")
@@ -18,8 +17,7 @@ public static class Version
             .RequireAuthorization(policy => policy.RequireRole("Admin"));
 
         updatesGroup.MapGet("/", async (UpdateChecker checker) => Results.Ok(await checker.GetStatusAsync()))
-            .WithName("GetUpdateStatus")
-            .WithOpenApi();
+            .WithName("GetUpdateStatus");
 
         // Works even with automatic checks turned off; that setting only
         // stops the daily background check from contacting ghcr.io.
@@ -33,15 +31,13 @@ public static class Version
             await checker.CheckAsync(cancellationToken);
             return Results.Ok(await checker.GetStatusAsync());
         })
-        .WithName("CheckForUpdates")
-        .WithOpenApi();
+        .WithName("CheckForUpdates");
 
         updatesGroup.MapPut("/settings", async (UpdateCheckSettingsRequest request, UpdateChecker checker) =>
         {
             await checker.SetEnabledAsync(request.Enabled);
             return Results.Ok(await checker.GetStatusAsync());
         })
-        .WithName("UpdateUpdateCheckSettings")
-        .WithOpenApi();
+        .WithName("UpdateUpdateCheckSettings");
     }
 }

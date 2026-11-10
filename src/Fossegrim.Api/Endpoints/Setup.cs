@@ -18,8 +18,7 @@ public static class Setup
         var setupGroup = app.MapGroup("/api/setup").WithTags("Setup");
 
         setupGroup.MapGet("/", async (SetupService setup) => Results.Ok(await setup.GetStatusAsync()))
-            .WithName("GetSetupStatus")
-            .WithOpenApi();
+            .WithName("GetSetupStatus");
 
         setupGroup.MapPost("/admin", async (
             CreateFirstAdminRequest request,
@@ -47,8 +46,7 @@ public static class Setup
             return Results.Ok(await sessions.SignInAsync(user, request.ClientName, Auth.UserAgentOf(http)));
         })
         .RequireRateLimiting(SignInLimits.Policy)
-        .WithName("CreateFirstAdmin")
-        .WithOpenApi();
+        .WithName("CreateFirstAdmin");
 
         setupGroup.MapPost("/complete", async (SetupService setup) =>
         {
@@ -56,8 +54,7 @@ public static class Setup
             return Results.Ok(await setup.GetStatusAsync());
         })
         .RequireAuthorization(policy => policy.RequireRole("Admin"))
-        .WithName("CompleteSetup")
-        .WithOpenApi();
+        .WithName("CompleteSetup");
 
         var adminGroup = app.MapGroup("/api/admin")
             .WithTags("Admin")
@@ -68,8 +65,7 @@ public static class Setup
             await setup.SetRegistrationOpenAsync(request.Open);
             return Results.Ok(await setup.GetStatusAsync());
         })
-        .WithName("UpdateRegistrationSettings")
-        .WithOpenApi();
+        .WithName("UpdateRegistrationSettings");
 
         adminGroup.MapPost("/users", async (CreateUserRequest request, FossegrimDbContext db, SetupService setup) =>
         {
@@ -86,7 +82,6 @@ public static class Setup
 
             return Results.Created($"/api/users/{user.Id}", new CreatedUserDto(user.Id, user.Email!, user.DisplayName ?? "", request.IsAdmin));
         })
-        .WithName("CreateUser")
-        .WithOpenApi();
+        .WithName("CreateUser");
     }
 }

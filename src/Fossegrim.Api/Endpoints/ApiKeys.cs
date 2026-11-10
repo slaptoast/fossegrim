@@ -14,8 +14,7 @@ public static class ApiKeys
             .RequireAuthorization(policy => policy.RequireRole("Admin"));
 
         group.MapGet("/", async (ApiKeyService keys) => Results.Ok((await keys.ListAsync()).Select(ToDto)))
-            .WithName("GetApiKeys")
-            .WithOpenApi();
+            .WithName("GetApiKeys");
 
         group.MapPost("/", async (CreateApiKeyRequest request, ApiKeyService keys) =>
             {
@@ -27,13 +26,11 @@ public static class ApiKeys
                 var (key, secret) = await keys.CreateAsync(request.Name);
                 return Results.Created($"/api/admin/api-keys/{key.Id}", new CreatedApiKeyDto(ToDto(key), secret));
             })
-            .WithName("CreateApiKey")
-            .WithOpenApi();
+            .WithName("CreateApiKey");
 
         group.MapDelete("/{id:guid}", async (Guid id, ApiKeyService keys) =>
                 await keys.DeleteAsync(id) ? Results.NoContent() : Results.NotFound())
-            .WithName("RevokeApiKey")
-            .WithOpenApi();
+            .WithName("RevokeApiKey");
     }
 
     private static ApiKeyDto ToDto(ApiKey key) => new(key.Id, key.Name, key.Prefix, key.CreatedAt, key.LastUsedAt);

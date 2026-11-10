@@ -18,8 +18,7 @@ public static class AlbumCovers
 
         // Where each provider stands, to show before (and between) searches.
         group.MapGet("/providers", (CoverSearchService search) => Results.Ok(search.GetStatuses()))
-            .WithName("GetCoverProviders")
-            .WithOpenApi();
+            .WithName("GetCoverProviders");
 
         group.MapGet("/search", async (string? album, string? artist, CoverSearchService search, CancellationToken cancellationToken) =>
         {
@@ -30,8 +29,7 @@ public static class AlbumCovers
 
             return Results.Ok(await search.SearchAsync(album, artist, cancellationToken));
         })
-        .WithName("SearchCovers")
-        .WithOpenApi();
+        .WithName("SearchCovers");
 
         // The body is the image itself (JPEG or PNG; the browser shrinks large ones first).
         group.MapPut("/albums/{albumId:guid}", async (Guid albumId, HttpRequest request, MediaLibraryService library, CancellationToken cancellationToken) =>
@@ -49,8 +47,7 @@ public static class AlbumCovers
 
             return await SaveAsync(albumId, data, library);
         })
-        .WithName("UploadAlbumCover")
-        .WithOpenApi();
+        .WithName("UploadAlbumCover");
 
         group.MapPost("/albums/{albumId:guid}/from-search", async (Guid albumId, SetCoverFromSearchRequest body, CoverDownloader downloader, MediaLibraryService library, CancellationToken cancellationToken) =>
         {
@@ -62,8 +59,7 @@ public static class AlbumCovers
 
             return await SaveAsync(albumId, download.Data, library);
         })
-        .WithName("SetAlbumCoverFromSearch")
-        .WithOpenApi();
+        .WithName("SetAlbumCoverFromSearch");
     }
 
     private static async Task<IResult> SaveAsync(Guid albumId, byte[] data, MediaLibraryService library)

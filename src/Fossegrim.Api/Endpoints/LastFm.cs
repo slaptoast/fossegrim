@@ -42,8 +42,7 @@ public static class LastFm
             var account = lastFm.IsConfigured ? await accounts.GetAsync(user) : null;
             return Results.Ok(new LastFmStatusDto(lastFm.IsConfigured, account is not null, account?.UserName));
         })
-        .WithName("GetLastFmStatus")
-        .WithOpenApi();
+        .WithName("GetLastFmStatus");
 
         // callback is the client page Last.fm should send the user back to;
         // Last.fm appends ?token=... which the client then POSTs to /session.
@@ -62,8 +61,7 @@ public static class LastFm
 
             return Results.Ok(new LastFmAuthUrlDto(lastFm.GetAuthorizeUrl(callbackUri.ToString())));
         })
-        .WithName("GetLastFmAuthUrl")
-        .WithOpenApi();
+        .WithName("GetLastFmAuthUrl");
 
         lastFmGroup.MapPost("/session", async (
             LastFmLinkRequest request,
@@ -98,8 +96,7 @@ public static class LastFm
             await accounts.SetAsync(user, session.SessionKey!, session.UserName);
             return Results.Ok(new LastFmStatusDto(true, true, session.UserName));
         })
-        .WithName("LinkLastFm")
-        .WithOpenApi();
+        .WithName("LinkLastFm");
 
         lastFmGroup.MapDelete("/session", async (
             ClaimsPrincipal principal,
@@ -116,8 +113,7 @@ public static class LastFm
             await accounts.RemoveAsync(user);
             return Results.Ok(new LastFmStatusDto(lastFm.IsConfigured, false, null));
         })
-        .WithName("UnlinkLastFm")
-        .WithOpenApi();
+        .WithName("UnlinkLastFm");
 
         // Best-effort: returns 204 when there's nothing to do (Last.fm not
         // configured or not linked) so the player can call it unconditionally.
@@ -177,8 +173,7 @@ public static class LastFm
 
             return Results.Problem($"Last.fm now-playing failed: {result.ErrorMessage}", statusCode: StatusCodes.Status502BadGateway);
         })
-        .WithName("UpdateLastFmNowPlaying")
-        .WithOpenApi();
+        .WithName("UpdateLastFmNowPlaying");
 
         // Admin: the server's Last.fm API application credentials.
         var settingsGroup = app.MapGroup("/api/admin/lastfm")
@@ -187,8 +182,7 @@ public static class LastFm
 
         settingsGroup.MapGet("/", async (LastFmSettingsStore settings, LastFmClient lastFm) =>
             Results.Ok(await ToDtoAsync(settings, lastFm)))
-        .WithName("GetLastFmSettings")
-        .WithOpenApi();
+        .WithName("GetLastFmSettings");
 
         settingsGroup.MapPut("/", async (
             UpdateLastFmSettingsRequest request,
@@ -229,16 +223,14 @@ public static class LastFm
             await settings.SaveAsync(apiKey, apiSecret);
             return Results.Ok(await ToDtoAsync(settings, lastFm));
         })
-        .WithName("UpdateLastFmSettings")
-        .WithOpenApi();
+        .WithName("UpdateLastFmSettings");
 
         settingsGroup.MapDelete("/", async (LastFmSettingsStore settings, LastFmClient lastFm) =>
         {
             await settings.ClearAsync();
             return Results.Ok(await ToDtoAsync(settings, lastFm));
         })
-        .WithName("ClearLastFmSettings")
-        .WithOpenApi();
+        .WithName("ClearLastFmSettings");
     }
 
     private static async Task<LastFmSettingsDto> ToDtoAsync(LastFmSettingsStore settings, LastFmClient lastFm)

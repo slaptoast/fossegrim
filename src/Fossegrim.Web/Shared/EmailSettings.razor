@@ -1,0 +1,244 @@
+@inject FossegrimApiClient ApiClient
+@inject NavigationManager Navigation
+
+@* The outgoing mail server, so "Forgot password?" can email reset links.
+   Used on the Settings page and in the setup wizard. *@
+
+@if (_settings is null)
+{
+    @if (_message is not null)
+    {
+        <div class="error-message">@_message</div>
+    }
+    else
+    {
+        <div class="loading"><h2>Loading email settings</h2></div>
+    }
+}
+else
+{
+    <p>
+        Optional. With a mail server set up, "Forgot password?" on the sign-in page emails people a reset link.
+        Without one, an admin makes the link for them under Accounts.
+        Any SMTP server works: your email provider's (often with an app password), or a service like Mailgun or Postmark.
+    </p>
+
+    @if (_message is not null)
+    {
+        <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+    }
+
+    <EditForm Model="_input" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+
+        <div class="folder-item">
+            <div class="backup-grid">
+                <div class="form-group">
+                    <label for="smtpHost">SMTP Server</label>
+                    <InputText id="smtpHost" @bind-Value="_input.Host" placeholder="smtp.example.com" autocomplete="off" />
+                    <ValidationMessage For="() => _input.Host" />
+                </div>
+                <div class="form-group">
+                    <label for="smtpPort">Port</label>
+                    <InputNumber id="smtpPort" @bind-Value="_input.Port" />
+                    <ValidationMessage For="() => _input.Port" />
+                </div>
+                <div class="form-group">
+                    <label for="smtpSecurity">Security</label>
+                    <InputSelect id="smtpSecurity" @bind-Value="_input.Security">
+                        <option value="@SmtpSecurity.StartTls">STARTTLS (usually 587)</option>
+                        <option value="@SmtpSecurity.SslOnConnect">TLS (usually 465)</option>
+                        <option value="@SmtpSecurity.None">None (local relays only)</option>
+                    </InputSelect>
+                </div>
+            </div>
+
+            <div class="backup-grid">
+                <div class="form-group">
+                    <label for="smtpUser">Username</label>
+                    <InputText id="smtpUser" @bind-Value="_input.UserName" placeholder="Blank if none" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                    <label for="smtpPassword">Password</label>
+                    <InputText id="smtpPassword" type="password" @bind-Value="_input.Password" autocomplete="new-password"
+                               placeholder="@(_settings.HasPassword ? "Saved; leave blank to keep it" : "")" />
+                </div>
+            </div>
+
+            <div class="backup-grid">
+                <div class="form-group">
+                    <label for="smtpFrom">From Address</label>
+                    <InputText id="smtpFrom" type="email" @bind-Value="_input.FromAddress" placeholder="fossegrim@example.com" autocomplete="off" />
+                    <ValidationMessage For="() => _input.FromAddress" />
+                </div>
+                <div class="form-group">
+                    <label for="smtpFromName">From Name</label>
+                    <InputText id="smtpFromName" @bind-Value="_input.FromName" placeholder="Fossegrim" autocomplete="off" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="publicUrl">Fossegrim's Address</label>
+                <InputText id="publicUrl" @bind-Value="_input.PublicUrl" autocomplete="off" />
+                <ValidationMessage For="() => _input.PublicUrl" />
+                <p class="backup-hint">Where people open Fossegrim. Emailed links start with this, so use an address that works for everyone, not just on this computer.</p>
+            </div>
+
+            <button type="submit" class="button-secondary" disabled="@_busy">Save</button>
+            @if (_settings.Configured)
+            {
+                <button type="button" class="button-danger" disabled="@_busy" @onclick="ClearAsync">Turn Off Email</button>
+            }
+        </div>
+    </EditForm>
+
+    @if (_settings.Configured)
+    {
+        <div class="folder-item">
+            <div class="form-group">
+                <label for="testTo">Send a Test Email To</label>
+                <div class="reset-link">
+                    <input id="testTo" type="email" @bind="_testTo" autocomplete="email" />
+                    <button type="button" class="button-secondary" disabled="@(_busy || string.IsNullOrWhiteSpace(_testTo))" @onclick="SendTestAsync">@(_busy ? "Sending..." : "Send")</button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    // Raised after the settings are saved or removed.
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private EmailSettingsDto? _settings;
+    private EmailInput _input = new();
+    private string? _testTo;
+    private string? _message;
+    private bool _success;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            SetSettings(await ApiClient.GetEmailSettingsAsync());
+            try
+            {
+                _testTo = (await ApiClient.GetProfileAsync())?.Email;
+            }
+            catch
+            {
+                // Just no prefilled test address.
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"Failed to load email settings: {ex.Message}";
+        }
+    }
+
+    private void SetSettings(EmailSettingsDto settings)
+    {
+        _settings = settings;
+        _input = new EmailInput
+        {
+            Host = settings.Host ?? "",
+            Port = settings.Port,
+            Security = settings.Security,
+            UserName = settings.UserName,
+            FromAddress = settings.FromAddress ?? "",
+            FromName = settings.FromName,
+            // The address this admin is using is the best first guess.
+            PublicUrl = settings.PublicUrl ?? Navigation.BaseUri.TrimEnd('/')
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            SetSettings(await ApiClient.SaveEmailSettingsAsync(new SaveEmailSettingsRequest(
+                _input.Host, _input.Port, _input.Security, _input.UserName,
+                string.IsNullOrEmpty(_input.Password) ? null : _input.Password,
+                _input.FromAddress, _input.FromName, _input.PublicUrl)));
+            (_message, _success) = ("Saved. Send a test email to check it works.", true);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ClearAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            await ApiClient.ClearEmailSettingsAsync();
+            SetSettings(await ApiClient.GetEmailSettingsAsync());
+            (_message, _success) = ("Email is off. Admins can still make reset links under Accounts.", true);
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = ($"Failed to turn off email: {ex.Message}", false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SendTestAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            await ApiClient.SendTestEmailAsync(_testTo!);
+            (_message, _success) = ($"Sent a test email to {_testTo}.", true);
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private class EmailInput
+    {
+        [Required(ErrorMessage = "Enter the mail server's host name.")]
+        public string Host { get; set; } = "";
+
+        [Range(1, 65535)]
+        public int Port { get; set; } = 587;
+
+        public string Security { get; set; } = SmtpSecurity.StartTls;
+
+        public string? UserName { get; set; }
+
+        public string? Password { get; set; }
+
+        [Required(ErrorMessage = "Enter the address emails are sent from.")]
+        [EmailAddress]
+        public string FromAddress { get; set; } = "";
+
+        public string? FromName { get; set; }
+
+        [Required(ErrorMessage = "Enter the address people open Fossegrim on.")]
+        [Url]
+        public string PublicUrl { get; set; } = "";
+    }
+}

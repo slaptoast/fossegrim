@@ -94,6 +94,11 @@
                     <AccountSettings OnChanged="() => MarkChanged(Step.Accounts)" />
                     break;
 
+                case Step.Email:
+                    <h2 class="setup-title">Email</h2>
+                    <EmailSettings OnChanged="() => MarkChanged(Step.Email)" />
+                    break;
+
                 case Step.Backups:
                     <h2 class="setup-title">Backups</h2>
                     <BackupSettings OnChanged="() => MarkChanged(Step.Backups)" />
@@ -149,7 +154,7 @@
 </div>
 
 @code {
-    private enum Step { Account, Library, LastFm, Accounts, Backups, Updates, Done }
+    private enum Step { Account, Library, LastFm, Accounts, Email, Backups, Updates, Done }
 
     private static readonly Dictionary<Step, string> Titles = new()
     {
@@ -157,12 +162,13 @@
         [Step.Library] = "Media folders",
         [Step.LastFm] = "Last.fm",
         [Step.Accounts] = "Accounts",
+        [Step.Email] = "Email",
         [Step.Backups] = "Backups",
         [Step.Updates] = "Updates",
         [Step.Done] = "Done",
     };
 
-    private static readonly Step[] SettingSteps = [Step.Library, Step.LastFm, Step.Accounts, Step.Backups, Step.Updates, Step.Done];
+    private static readonly Step[] SettingSteps = [Step.Library, Step.LastFm, Step.Accounts, Step.Email, Step.Backups, Step.Updates, Step.Done];
 
     private SetupStatusDto? _status;
     private List<Step> _steps = [];
@@ -284,6 +290,11 @@
         {
             var lastFm = await ApiClient.GetLastFmSettingsAsync();
             return lastFm.Configured ? ("on", true) : ("off", false);
+        });
+        await AddAsync("Email", async () =>
+        {
+            var email = await ApiClient.GetEmailSettingsAsync();
+            return email.Configured ? ($"on, via {email.Host}", true) : ("off (admins make reset links)", false);
         });
         await AddAsync("Sign-ups", async () =>
         {

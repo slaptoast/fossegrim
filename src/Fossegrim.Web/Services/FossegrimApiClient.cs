@@ -499,6 +499,75 @@ public class FossegrimApiClient
         return errors?.Errors ?? ["Failed to change password."];
     }
 
+    public async Task<PasswordResetOptionsDto> GetPasswordResetOptionsAsync() =>
+        await _httpClient.GetFromJsonAsync<PasswordResetOptionsDto>("/api/auth/password-reset") ?? new PasswordResetOptionsDto(false);
+
+    // Errors to show, or none when the request went through (whether or not
+    // the address has an account; the Api doesn't say).
+    public async Task<IReadOnlyList<string>> ForgotPasswordAsync(string email)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/auth/forgot-password", new ForgotPasswordRequest(email));
+        return response.IsSuccessStatusCode
+            ? []
+            : [await ReadProblemDetailAsync(response) ?? $"Sending the reset link failed ({(int)response.StatusCode})."];
+    }
+
+    public async Task<IReadOnlyList<string>> ResetPasswordAsync(string userId, string token, string newPassword)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/auth/reset-password", new ResetPasswordRequest(userId, token, newPassword));
+        if (response.IsSuccessStatusCode)
+        {
+            return [];
+        }
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            return ["Too many attempts. Wait a minute and try again."];
+        }
+
+        try
+        {
+            var errors = await response.Content.ReadFromJsonAsync<IdentityErrorsResponse>();
+            if (errors?.Errors is { Count: > 0 } list)
+            {
+                return list;
+            }
+        }
+        catch (Exception)
+        {
+            // Not an IdentityErrorsResponse; use the generic message.
+        }
+        return [$"Resetting the password failed ({(int)response.StatusCode})."];
+    }
+
+    public async Task<IReadOnlyList<AdminUserDto>> GetUsersAsync() =>
+        await _httpClient.GetFromJsonAsync<List<AdminUserDto>>("/api/admin/users") ?? [];
+
+    public async Task<PasswordResetLinkDto> CreatePasswordResetLinkAsync(string userId) =>
+        await ReadOrThrowAsync<PasswordResetLinkDto>(
+            await _httpClient.PostAsync($"/api/admin/users/{Uri.EscapeDataString(userId)}/reset-link", null), "Making the reset link");
+
+    public async Task<EmailSettingsDto> GetEmailSettingsAsync() =>
+        await ReadOrThrowAsync<EmailSettingsDto>(await _httpClient.GetAsync("/api/admin/email"), "Loading the email settings");
+
+    public async Task<EmailSettingsDto> SaveEmailSettingsAsync(SaveEmailSettingsRequest request) =>
+        await ReadOrThrowAsync<EmailSettingsDto>(await _httpClient.PutAsJsonAsync("/api/admin/email", request), "Saving the email settings");
+
+    public async Task ClearEmailSettingsAsync()
+    {
+        var response = await _httpClient.DeleteAsync("/api/admin/email");
+        response.EnsureSuccessStatusCode();
+    }
+
+    // Throws an ApiException saying why, when sending fails.
+    public async Task SendTestEmailAsync(string to)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/admin/email/test", new TestEmailRequest(to));
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadErrorAsync(response) ?? $"Sending the test email failed ({(int)response.StatusCode}).");
+        }
+    }
+
     // Ends this browser's session on the Api. Best effort: signing out
     // locally goes ahead even if the Api can't be reached.
     public async Task LogoutAsync()

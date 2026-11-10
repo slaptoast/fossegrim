@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Fossegrim.Api.Services;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
@@ -48,6 +49,7 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
             services.AddHttpClient<CoverSearchService>().ConfigurePrimaryHttpMessageHandler(() => Covers);
             services.AddHttpClient<CoverDownloader>().ConfigurePrimaryHttpMessageHandler(() => Covers);
             services.AddHttpClient<GhcrClient>().ConfigurePrimaryHttpMessageHandler(() => Ghcr);
+            services.AddSingleton<IMailTransport>(Mail);
         });
     }
 
@@ -64,6 +66,9 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
 
     /// <summary>Stands in for ghcr.io's token and tags API.</summary>
     public FakeGhcrHandler Ghcr { get; } = new();
+
+    /// <summary>Stands in for the SMTP server; records every email instead of sending it.</summary>
+    public FakeMailTransport Mail { get; } = new();
 
     /// <summary>Creates a brand-new user and returns a client signed in as them.</summary>
     public async Task<HttpClient> CreateUserClientAsync() => (await CreateUserAsync()).Client;

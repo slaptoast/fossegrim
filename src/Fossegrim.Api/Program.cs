@@ -48,7 +48,10 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
         options.Lockout.AllowedForNewUsers = true;
     })
     .AddRoles<IdentityRole>()
-    .AddEntityFrameworkStores<FossegrimDbContext>();
+    .AddEntityFrameworkStores<FossegrimDbContext>()
+    // Password reset links (Services/PasswordResets.cs).
+    .AddDefaultTokenProviders();
+builder.Services.Configure<DataProtectionTokenProviderOptions>(options => options.TokenLifespan = PasswordResets.LinkLifetime);
 
 // Configure JWT bearer authentication. The resolved key is written back into
 // configuration so token issuing (Services/SessionService.cs) signs with the same key.
@@ -183,6 +186,14 @@ if (appVersion.Release is not null && builder.Configuration.GetValue("UpdateChec
 
 builder.Services.AddScoped<SetupService>();
 
+// Email (optional, set up on the Settings page): "Forgot password?" links.
+builder.Services.AddScoped<EmailSettingsStore>();
+builder.Services.AddSingleton<IMailTransport, SmtpMailTransport>();
+builder.Services.AddSingleton<EmailQueue>();
+builder.Services.AddHostedService<EmailWorker>();
+builder.Services.AddSingleton<ResetEmailThrottle>();
+builder.Services.AddScoped<PasswordResets>();
+
 // Backups: zips of the database and its key material, written to
 // Backup:Directory on demand or on the admin's schedule.
 builder.Services.AddSingleton<BackupCoordinator>();
@@ -204,6 +215,13 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeysDirectory))
 }
 
 var app = builder.Build();
+
+// `fossegrim reset-password <email>` (see DOCKER.md): prints a reset link
+// for an admin who can't sign in, then exits without starting the server.
+if (args is ["reset-password", ..])
+{
+    return await ResetPasswordCommand.RunAsync(app, args[1..]);
+}
 
 switch (jwtKeySource)
 {
@@ -284,7 +302,9 @@ app.MapLibraryFileEndpoints();
 app.MapRandomEndpoints();
 app.MapSearchEndpoints();
 app.MapFavoriteEndpoints();
+app.MapPasswordResetEndpoints();
 
 app.MapFallbackToFile("index.html");
 
 app.Run();
+return 0;

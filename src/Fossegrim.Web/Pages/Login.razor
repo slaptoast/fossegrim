@@ -14,6 +14,11 @@
     </div>
 
     <div class="content">
+        @if (Reset is not null)
+        {
+            <div class="success-message">Your password has been changed. Sign in with the new one.</div>
+        }
+
         @if (_errors.Count > 0)
         {
             <div class="validation-summary">
@@ -43,6 +48,10 @@
 
             <button type="submit" class="button" disabled="@_isSubmitting">@(_isSubmitting ? "Signing in..." : "Sign in")</button>
         </EditForm>
+
+        <div class="nav-links centered">
+            <a href="/forgot-password">Forgot password?</a>
+        </div>
     </div>
 
     @* Custom CSS can break this page too; a full reload with ?safe-mode leaves it off. *@
@@ -69,6 +78,11 @@
     [Parameter]
     [SupplyParameterFromQuery]
     public string? ReturnUrl { get; set; }
+
+    // Set by the reset password page after a new password is saved.
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? Reset { get; set; }
 
     private readonly LoginInput _input = new();
     private List<string> _errors = [];

@@ -21,11 +21,11 @@
         // Scans and tag edits happen on other pages, so refresh on navigation
         // to keep the counts current without wiring every page to this bar.
         Navigation.LocationChanged += OnLocationChanged;
-        Scans.ScanFinished += OnScanFinished;
+        Scans.LibraryChanged += OnLibraryChanged;
         await LoadAsync();
     }
 
-    private async void OnScanFinished(ScanJobDto job)
+    private async void OnLibraryChanged()
     {
         await LoadAsync();
         await InvokeAsync(StateHasChanged);
@@ -67,6 +67,6 @@
     public void Dispose()
     {
         Navigation.LocationChanged -= OnLocationChanged;
-        Scans.ScanFinished -= OnScanFinished;
+        Scans.LibraryChanged -= OnLibraryChanged;
     }
 }

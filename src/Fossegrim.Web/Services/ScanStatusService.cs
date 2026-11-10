@@ -11,9 +11,13 @@ namespace Fossegrim.Web.Services;
 public class ScanStatusService : IDisposable
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
+    // How often lists reload while a running scan is saving tracks.
+    private static readonly TimeSpan LiveReloadInterval = TimeSpan.FromSeconds(5);
 
     private readonly FossegrimApiClient _apiClient;
     private CancellationTokenSource? _polling;
+    private (Guid Job, int Saved) _announced;
+    private DateTime _lastAnnounced;
 
     public ScanStatusService(FossegrimApiClient apiClient)
     {
@@ -26,9 +30,10 @@ public class ScanStatusService : IDisposable
 
     public event Action? Changed;
 
-    // Raised once per scan that finishes while this page is watching, so
-    // lists can reload what the scan changed.
-    public event Action<ScanJobDto>? ScanFinished;
+    // Raised when a scan watched by this page has changed the library: every
+    // few seconds while it saves tracks, and once when it finishes, so lists
+    // can reload.
+    public event Action? LibraryChanged;
 
     public async Task<ScanJobDto> StartAsync(StartScanRequest request) => Watch(await _apiClient.StartScanAsync(request));
 
@@ -94,9 +99,18 @@ public class ScanStatusService : IDisposable
         Status = status;
         Changed?.Invoke();
 
-        foreach (var finished in status.Recent.Where(j => watched.Contains(j.Id)))
+        var now = DateTime.UtcNow;
+        if (status.Recent.Any(j => watched.Contains(j.Id)))
         {
-            ScanFinished?.Invoke(finished);
+            _lastAnnounced = now;
+            LibraryChanged?.Invoke();
+        }
+        else if (status.Current is { } current && current.Saved > 0
+            && _announced != (current.Id, current.Saved) && now - _lastAnnounced >= LiveReloadInterval)
+        {
+            _announced = (current.Id, current.Saved);
+            _lastAnnounced = now;
+            LibraryChanged?.Invoke();
         }
         return true;
     }

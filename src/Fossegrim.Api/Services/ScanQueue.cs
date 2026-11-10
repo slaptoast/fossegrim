@@ -56,7 +56,7 @@ public class ScanQueue
                 return duplicate.ToDto();
             }
 
-            var job = new ScanJob(Guid.NewGuid(), spec, _time.GetUtcNow().UtcDateTime);
+            var job = new ScanJob(Guid.NewGuid(), spec, _time);
             _queued.Add(job);
             _channel.Writer.TryWrite(job);
             return job.ToDto();
@@ -109,10 +109,24 @@ public class ScanQueue
     }
 }
 
-/// <summary>One scan's state. Progress is reported from the scanner's worker threads.</summary>
+/// <summary>
+/// One scan's state. Progress is reported from the scanner's worker threads.
+/// The time left is estimated from how fast files have been read so far,
+/// first 5 seconds into reading, again at 10, 30 and 60 seconds, then once a
+/// minute, each estimate based on more files than the last.
+/// </summary>
 public class ScanJob : IProgress<ScanProgress>
 {
+    private static readonly TimeSpan[] FirstEstimates =
+        [TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60)];
+    private static readonly TimeSpan EstimateInterval = TimeSpan.FromSeconds(60);
+
     private readonly object _lock = new();
+    private readonly TimeProvider _time;
+    private int _saved;
+    private DateTime? _readingStartedAt;
+    private int _estimates;
+    private DateTime? _estimatedFinish;
     private ScanJobState _state = ScanJobState.Queued;
     private ScanPhase _phase = ScanPhase.Waiting;
     private int _processed;
@@ -122,11 +136,12 @@ public class ScanJob : IProgress<ScanProgress>
     private ScanSummary? _summary;
     private string? _error;
 
-    public ScanJob(Guid id, ScanJobSpec spec, DateTime queuedAt)
+    public ScanJob(Guid id, ScanJobSpec spec, TimeProvider time)
     {
         Id = id;
         Spec = spec;
-        QueuedAt = queuedAt;
+        _time = time;
+        QueuedAt = time.GetUtcNow().UtcDateTime;
     }
 
     public Guid Id { get; }
@@ -140,13 +155,53 @@ public class ScanJob : IProgress<ScanProgress>
         lock (_lock)
         {
             // Reports from parallel readers can arrive out of order.
+            _saved = Math.Max(_saved, value.Saved);
             if (value.Phase == _phase && value.Processed < _processed)
             {
                 return;
             }
+            if (value.Phase == ScanPhase.Reading && _phase != ScanPhase.Reading)
+            {
+                _readingStartedAt = Now;
+            }
             (_phase, _processed, _total) = (value.Phase, value.Processed, value.Total);
+            UpdateEstimate();
         }
     }
+
+    private DateTime Now => _time.GetUtcNow().UtcDateTime;
+
+    // Called under _lock.
+    private void UpdateEstimate()
+    {
+        if (_phase != ScanPhase.Reading || _readingStartedAt is not { } start || _processed == 0)
+        {
+            return;
+        }
+
+        var elapsed = Now - start;
+        if (elapsed < EstimateDue(_estimates))
+        {
+            return;
+        }
+
+        _estimatedFinish = start + elapsed * ((double)_total / _processed);
+        // Skip any checkpoints already passed (e.g. nothing was reported for a while).
+        do
+        {
+            _estimates++;
+        }
+        while (elapsed >= EstimateDue(_estimates));
+    }
+
+    // How far into reading the nth estimate (from 0) is made.
+    private static TimeSpan EstimateDue(int n) => n < FirstEstimates.Length
+        ? FirstEstimates[n]
+        : FirstEstimates[^1] + EstimateInterval * (n - FirstEstimates.Length + 1);
+
+    private int? SecondsLeft => _phase == ScanPhase.Reading && _estimatedFinish is { } finish
+        ? Math.Max(0, (int)Math.Ceiling((finish - Now).TotalSeconds))
+        : null;
 
     internal void Start(DateTime at)
     {
@@ -169,8 +224,9 @@ public class ScanJob : IProgress<ScanProgress>
     {
         lock (_lock)
         {
+            UpdateEstimate();
             return new ScanJobDto(Id, Spec.Description, Spec.Full, Spec.Source, _state, _phase, _processed, _total,
-                QueuedAt, _startedAt, _finishedAt, _summary, _error);
+                QueuedAt, _startedAt, _finishedAt, _summary, _error, _saved, SecondsLeft);
         }
     }
 }

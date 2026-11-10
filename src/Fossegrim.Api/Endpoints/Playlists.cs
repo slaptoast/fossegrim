@@ -39,8 +39,7 @@ public static class Playlists
 
             return Results.Ok(playlists.Select(p => ToPlaylistDto(p, user.Id)));
         })
-        .WithName("GetAllPlaylists")
-        .WithOpenApi();
+        .WithName("GetAllPlaylists");
 
         playlistGroup.MapGet("/queue", async (
             ClaimsPrincipal principal,
@@ -56,8 +55,7 @@ public static class Playlists
             var queue = await GetOrCreateQueueAsync(db, user.Id);
             return Results.Ok(ToPlaylistDetailDto(queue, user.Id));
         })
-        .WithName("GetQueue")
-        .WithOpenApi();
+        .WithName("GetQueue");
 
         playlistGroup.MapPut("/queue", async (
             SetQueueRequest request,
@@ -117,8 +115,7 @@ public static class Playlists
             var updated = await GetOrCreateQueueAsync(db, user.Id);
             return Results.Ok(ToPlaylistDetailDto(updated, user.Id));
         })
-        .WithName("SetQueue")
-        .WithOpenApi();
+        .WithName("SetQueue");
 
         playlistGroup.MapPatch("/queue/current", async (
             SetQueueCurrentItemRequest request,
@@ -145,8 +142,7 @@ public static class Playlists
 
             return Results.NoContent();
         })
-        .WithName("SetQueueCurrentItem")
-        .WithOpenApi();
+        .WithName("SetQueueCurrentItem");
 
         playlistGroup.MapGet("/{id:guid}", async (
             Guid id,
@@ -168,8 +164,7 @@ public static class Playlists
 
             return Results.Ok(ToPlaylistDetailDto(playlist, user.Id));
         })
-        .WithName("GetPlaylistById")
-        .WithOpenApi();
+        .WithName("GetPlaylistById");
 
         playlistGroup.MapPost("/", async (
             CreatePlaylistRequest request,
@@ -204,8 +199,7 @@ public static class Playlists
             playlist.Owner = user;
             return Results.Created($"/api/playlists/{playlist.Id}", ToPlaylistDto(playlist, user.Id));
         })
-        .WithName("CreatePlaylist")
-        .WithOpenApi();
+        .WithName("CreatePlaylist");
 
         playlistGroup.MapPut("/{id:guid}", async (
             Guid id,
@@ -252,8 +246,7 @@ public static class Playlists
 
             return Results.Ok(ToPlaylistDto(playlist, user.Id));
         })
-        .WithName("UpdatePlaylist")
-        .WithOpenApi();
+        .WithName("UpdatePlaylist");
 
         playlistGroup.MapDelete("/{id:guid}", async (
             Guid id,
@@ -286,8 +279,7 @@ public static class Playlists
 
             return Results.NoContent();
         })
-        .WithName("DeletePlaylist")
-        .WithOpenApi();
+        .WithName("DeletePlaylist");
 
         playlistGroup.MapPost("/{id:guid}/items", async (
             Guid id,
@@ -355,8 +347,7 @@ public static class Playlists
             var updated = await LoadPlaylistAsync(db, id);
             return Results.Ok(ToPlaylistDetailDto(updated!, user.Id));
         })
-        .WithName("AddPlaylistItems")
-        .WithOpenApi();
+        .WithName("AddPlaylistItems");
 
         playlistGroup.MapDelete("/{id:guid}/items/{itemId:guid}", async (
             Guid id,
@@ -399,8 +390,7 @@ public static class Playlists
 
             return Results.NoContent();
         })
-        .WithName("RemovePlaylistItem")
-        .WithOpenApi();
+        .WithName("RemovePlaylistItem");
 
         playlistGroup.MapPut("/{id:guid}/items/{itemId:guid}/move", async (
             Guid id,
@@ -486,8 +476,7 @@ public static class Playlists
 
             return Results.Ok(ToPlaylistDetailDto(playlist, user.Id));
         })
-        .WithName("MovePlaylistItem")
-        .WithOpenApi();
+        .WithName("MovePlaylistItem");
 
         playlistGroup.MapPost("/{id:guid}/shares", async (
             Guid id,
@@ -554,8 +543,7 @@ public static class Playlists
 
             return Results.Ok(new PlaylistShareDto(targetUser.Id, targetUser.DisplayName, shareType.ToString()));
         })
-        .WithName("SharePlaylist")
-        .WithOpenApi();
+        .WithName("SharePlaylist");
 
         playlistGroup.MapDelete("/{id:guid}/shares/{userId}", async (
             Guid id,
@@ -591,8 +579,7 @@ public static class Playlists
 
             return Results.NoContent();
         })
-        .WithName("RevokePlaylistShare")
-        .WithOpenApi();
+        .WithName("RevokePlaylistShare");
 
         // Lets someone a playlist was shared with remove it from their own
         // list. Only their access goes; the playlist and other shares stay.
@@ -620,8 +607,7 @@ public static class Playlists
 
             return Results.NoContent();
         })
-        .WithName("LeavePlaylist")
-        .WithOpenApi();
+        .WithName("LeavePlaylist");
     }
 
     private const int MaxNameLength = 200;

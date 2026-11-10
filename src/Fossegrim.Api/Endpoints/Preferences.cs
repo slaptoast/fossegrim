@@ -38,8 +38,7 @@ public static class Preferences
             var stored = await db.UserPreferences.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == user.Id);
             return Results.Content(stored?.Json ?? "{}", "application/json");
         })
-        .WithName("GetPreferences")
-        .WithOpenApi();
+        .WithName("GetPreferences");
 
         // Replaces the whole document.
         group.MapPut("/", async (
@@ -94,7 +93,6 @@ public static class Preferences
             return Results.NoContent();
         })
         .Accepts<JsonElement>("application/json")
-        .WithName("SavePreferences")
-        .WithOpenApi();
+        .WithName("SavePreferences");
     }
 }

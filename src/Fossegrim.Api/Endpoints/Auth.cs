@@ -46,16 +46,14 @@ public static class Auth
             return Results.Ok(await sessions.SignInAsync(user, request.ClientName, UserAgentOf(http)));
         })
         .RequireRateLimiting(SignInLimits.Policy)
-        .WithName("Login")
-        .WithOpenApi();
+        .WithName("Login");
 
         // Swaps a refresh token for a new access token and refresh token.
         authGroup.MapPost("/refresh", async (RefreshRequest request, SessionService sessions) =>
             await sessions.RefreshAsync(request.RefreshToken) is { } response
                 ? Results.Ok(response)
                 : Results.Unauthorized())
-        .WithName("RefreshSession")
-        .WithOpenApi();
+        .WithName("RefreshSession");
 
         // Signs out the device making the request.
         authGroup.MapPost("/logout", async (ClaimsPrincipal principal, UserManager<ApplicationUser> userManager, SessionService sessions) =>
@@ -67,24 +65,21 @@ public static class Auth
             return Results.NoContent();
         })
         .RequireAuthorization()
-        .WithName("Logout")
-        .WithOpenApi();
+        .WithName("Logout");
 
         authGroup.MapGet("/sessions", async (ClaimsPrincipal principal, UserManager<ApplicationUser> userManager, SessionService sessions) =>
             userManager.GetUserId(principal) is { } userId
                 ? Results.Ok(await sessions.ListAsync(userId, SessionService.CurrentSessionId(principal)))
                 : Results.Unauthorized())
         .RequireAuthorization()
-        .WithName("GetSessions")
-        .WithOpenApi();
+        .WithName("GetSessions");
 
         authGroup.MapDelete("/sessions/{id:guid}", async (Guid id, ClaimsPrincipal principal, UserManager<ApplicationUser> userManager, SessionService sessions) =>
             userManager.GetUserId(principal) is { } userId
                 ? await sessions.RevokeAsync(userId, id) ? Results.NoContent() : Results.NotFound()
                 : Results.Unauthorized())
         .RequireAuthorization()
-        .WithName("RevokeSession")
-        .WithOpenApi();
+        .WithName("RevokeSession");
 
         // Signs out every other device.
         authGroup.MapDelete("/sessions", async (ClaimsPrincipal principal, UserManager<ApplicationUser> userManager, SessionService sessions) =>
@@ -97,8 +92,7 @@ public static class Auth
             return Results.NoContent();
         })
         .RequireAuthorization()
-        .WithName("RevokeOtherSessions")
-        .WithOpenApi();
+        .WithName("RevokeOtherSessions");
 
         authGroup.MapPost("/register", async (
             RegisterRequest request,
@@ -135,8 +129,7 @@ public static class Auth
             return Results.Ok(await sessions.SignInAsync(user, request.ClientName, UserAgentOf(http)));
         })
         .RequireRateLimiting(SignInLimits.Policy)
-        .WithName("Register")
-        .WithOpenApi();
+        .WithName("Register");
 
         // Also signs out the user's other devices.
         authGroup.MapPost("/change-password", async (
@@ -162,8 +155,7 @@ public static class Auth
         })
         .RequireAuthorization()
         .RequireRateLimiting(SignInLimits.Policy)
-        .WithName("ChangePassword")
-        .WithOpenApi();
+        .WithName("ChangePassword");
 
         authGroup.MapGet("/me", async (
             ClaimsPrincipal principal,
@@ -179,8 +171,7 @@ public static class Auth
             return Results.Ok(new ProfileDto(user.Id, user.UserName!, user.Email!, user.DisplayName, phoneNumber));
         })
         .RequireAuthorization()
-        .WithName("GetProfile")
-        .WithOpenApi();
+        .WithName("GetProfile");
 
         authGroup.MapPut("/me", async (
             UpdateProfileRequest request,
@@ -207,8 +198,7 @@ public static class Auth
             return Results.Ok(new ProfileDto(user.Id, user.UserName!, user.Email!, user.DisplayName, phoneNumber));
         })
         .RequireAuthorization()
-        .WithName("UpdateProfile")
-        .WithOpenApi();
+        .WithName("UpdateProfile");
     }
 
     private static IResult LockedOut(ApplicationUser user)

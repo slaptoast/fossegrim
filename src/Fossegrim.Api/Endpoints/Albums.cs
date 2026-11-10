@@ -19,8 +19,7 @@ public static class Albums
         // listened=true leaves out what the caller has never played; favorites=true keeps only their favourites.
         albumGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, bool? listened, bool? favorites, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
             Browse.ListAsync(q, sort, order, page, pageSize, listened ?? false, favorites ?? false, LibrarySorts.ForAlbums, principal, (request, userId) => browser.AlbumsAsync(request, userId, cancellationToken)))
-        .WithName("GetAlbums")
-        .WithOpenApi();
+        .WithName("GetAlbums");
 
         albumGroup.MapGet("/{id:guid}", async (Guid id, FossegrimDbContext db) =>
         {
@@ -41,8 +40,7 @@ public static class Albums
 
             return album is not null ? Results.Ok(album) : Results.NotFound();
         })
-        .WithName("GetAlbumById")
-        .WithOpenApi();
+        .WithName("GetAlbumById");
 
         // The album's tracks in play order: by disc, track number, then title.
         albumGroup.MapGet("/{id:guid}/tracks", async (Guid id, FossegrimDbContext db) =>
@@ -58,7 +56,6 @@ public static class Albums
                 .ToListAsync();
             return Results.Ok(tracks.InPlayOrder());
         })
-        .WithName("GetAlbumTracks")
-        .WithOpenApi();
+        .WithName("GetAlbumTracks");
     }
 }

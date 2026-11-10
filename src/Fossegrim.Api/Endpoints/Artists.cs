@@ -19,8 +19,7 @@ public static class Artists
         // listened=true leaves out what the caller has never played; favorites=true keeps only their favourites.
         artistGroup.MapGet("/", (string? q, string? sort, string? order, int? page, int? pageSize, bool? listened, bool? favorites, ClaimsPrincipal principal, LibraryBrowser browser, CancellationToken cancellationToken) =>
             Browse.ListAsync(q, sort, order, page, pageSize, listened ?? false, favorites ?? false, LibrarySorts.ForArtists, principal, (request, userId) => browser.ArtistsAsync(request, userId, cancellationToken)))
-        .WithName("GetArtists")
-        .WithOpenApi();
+        .WithName("GetArtists");
 
         // All the artist's tracks, album by album (oldest first), each in play order.
         artistGroup.MapGet("/{id:guid}/tracks", async (Guid id, FossegrimDbContext db) =>
@@ -40,8 +39,7 @@ public static class Artists
                 .ThenBy(g => g.Key?.Name, StringComparer.OrdinalIgnoreCase)
                 .SelectMany(g => g.InPlayOrder()));
         })
-        .WithName("GetArtistTracks")
-        .WithOpenApi();
+        .WithName("GetArtistTracks");
 
         artistGroup.MapGet("/{id:guid}", async (Guid id, FossegrimDbContext db) =>
         {
@@ -61,7 +59,6 @@ public static class Artists
 
             return artist is not null ? Results.Ok(artist) : Results.NotFound();
         })
-        .WithName("GetArtistById")
-        .WithOpenApi();
+        .WithName("GetArtistById");
     }
 }

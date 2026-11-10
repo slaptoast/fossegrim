@@ -52,8 +52,7 @@ public static class Users
 
             return Results.Ok(matches);
         })
-        .WithName("SearchUsers")
-        .WithOpenApi();
+        .WithName("SearchUsers");
     }
 
     private static string EscapeLike(string term) =>

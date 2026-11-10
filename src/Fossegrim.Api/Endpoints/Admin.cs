@@ -22,8 +22,7 @@ public static class Admin
 
             return Results.Ok(folders);
         })
-        .WithName("GetAllMediaFolders")
-        .WithOpenApi();
+        .WithName("GetAllMediaFolders");
 
         adminGroup.MapGet("/folders/{id:guid}", async (Guid id, FossegrimDbContext db) =>
         {
@@ -34,8 +33,7 @@ public static class Admin
 
             return folder is not null ? Results.Ok(folder) : Results.NotFound();
         })
-        .WithName("GetMediaFolderById")
-        .WithOpenApi();
+        .WithName("GetMediaFolderById");
 
         adminGroup.MapPost("/folders", async (AddMediaFolderRequest request, FossegrimDbContext db) =>
         {
@@ -60,8 +58,7 @@ public static class Admin
             var dto = new MediaFolderDto(folder.Id, folder.Name, folder.Location, folder.DateAdded, folder.DateLastScanned);
             return Results.Created($"/api/admin/folders/{folder.Id}", dto);
         })
-        .WithName("AddMediaFolder")
-        .WithOpenApi();
+        .WithName("AddMediaFolder");
 
         adminGroup.MapDelete("/folders/{id:guid}", async (Guid id, FossegrimDbContext db) =>
         {
@@ -76,7 +73,6 @@ public static class Admin
 
             return Results.NoContent();
         })
-        .WithName("DeleteMediaFolder")
-        .WithOpenApi();
+        .WithName("DeleteMediaFolder");
     }
 }

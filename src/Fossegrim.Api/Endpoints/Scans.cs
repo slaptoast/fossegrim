@@ -19,28 +19,23 @@ public static class Scans
             .RequireAuthorization(policy => policy.RequireRole("Admin"));
 
         adminGroup.MapGet("/", (ScanQueue queue) => Results.Ok(queue.GetStatus()))
-            .WithName("GetScanStatus")
-            .WithOpenApi();
+            .WithName("GetScanStatus");
 
         adminGroup.MapGet("/{id:guid}", (Guid id, ScanQueue queue) =>
                 queue.Find(id) is { } job ? Results.Ok(job) : Results.NotFound())
-            .WithName("GetScan")
-            .WithOpenApi();
+            .WithName("GetScan");
 
         adminGroup.MapPost("/", async (StartScanRequest request, ScanRequests requests, ScanQueue queue) =>
                 await StartAsync(request.FolderIds, request.Path, request.Full, "admin", requests, queue))
-            .WithName("StartScan")
-            .WithOpenApi();
+            .WithName("StartScan");
 
         adminGroup.MapPost("/albums/{id:guid}", async (Guid id, ScanRequests requests, ScanQueue queue) =>
                 await requests.ForAlbumAsync(id) is { } spec ? Accepted(queue.Enqueue(spec)) : Results.NotFound())
-            .WithName("RescanAlbum")
-            .WithOpenApi();
+            .WithName("RescanAlbum");
 
         adminGroup.MapPost("/artists/{id:guid}", async (Guid id, ScanRequests requests, ScanQueue queue) =>
                 await requests.ForArtistAsync(id) is { } spec ? Accepted(queue.Enqueue(spec)) : Results.NotFound())
-            .WithName("RescanArtist")
-            .WithOpenApi();
+            .WithName("RescanArtist");
 
         var externalGroup = app.MapGroup("/api/external/scan")
             .WithTags("External")
@@ -56,17 +51,14 @@ public static class Scans
                     : null;
                 return await StartAsync(null, body?.Path, body?.Full ?? false, $"api:{principal.Identity?.Name}", requests, queue);
             })
-            .WithName("ExternalStartScan")
-            .WithOpenApi();
+            .WithName("ExternalStartScan");
 
         externalGroup.MapGet("/", (ScanQueue queue) => Results.Ok(queue.GetStatus()))
-            .WithName("ExternalGetScanStatus")
-            .WithOpenApi();
+            .WithName("ExternalGetScanStatus");
 
         externalGroup.MapGet("/{id:guid}", (Guid id, ScanQueue queue) =>
                 queue.Find(id) is { } job ? Results.Ok(job) : Results.NotFound())
-            .WithName("ExternalGetScan")
-            .WithOpenApi();
+            .WithName("ExternalGetScan");
     }
 
     private static async Task<IResult> StartAsync(IReadOnlyList<Guid>? folderIds, string? path, bool full, string source, ScanRequests requests, ScanQueue queue)

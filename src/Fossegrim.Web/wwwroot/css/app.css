@@ -1116,8 +1116,11 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 .player-bar .favorite-button { color: var(--chrome-muted); }
 .player-bar .favorite-button.on,
 .player-bar .favorite-button:hover { color: var(--chrome-fg); }
+/* ♥ comes from a wider fallback font than ♡ in some browsers, so the button
+   has a fixed width and the cell leaves room for it rather than clipping. */
+.favorite-button { min-width: 1.75em; text-align: center; }
 td.favorite-cell,
-th.favorite-cell { width: 32px; text-align: center; }
+th.favorite-cell { width: 44px; padding: 0 var(--space-4); text-align: center; overflow: visible; }
 .browse-favorites { min-width: 28px; height: 28px; padding: 0 var(--space-6); }
 .browse-favorites.active { color: var(--brand-violet); border-color: var(--brand-violet); }
 

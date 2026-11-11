@@ -61,7 +61,7 @@ public static class DisplayNames
             for (var n = 2; !taken.Add(Normalize(name = $"{original} {n}")!); n++)
             {
             }
-            logger.LogWarning("Display name {Original} was already taken; renamed user {UserId} to {Renamed}", original, user.Id, name);
+            logger.LogWarning("Username {Original} was already taken; renamed user {UserId} to {Renamed}", original, user.Id, name);
             user.DisplayName = name;
         }
 

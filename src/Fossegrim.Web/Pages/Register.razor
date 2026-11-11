@@ -46,7 +46,7 @@
             </div>
 
             <div class="form-group">
-                <label for="displayName">Display Name</label>
+                <label for="displayName">Username</label>
                 <InputText id="displayName" @bind-Value="_input.DisplayName" />
                 <ValidationMessage For="() => _input.DisplayName" />
             </div>
@@ -115,6 +115,7 @@
         public string Email { get; set; } = string.Empty;
 
         [Required]
+        [Display(Name = "Username")]
         [StringLength(100, MinimumLength = 3)]
         public string DisplayName { get; set; } = string.Empty;
 

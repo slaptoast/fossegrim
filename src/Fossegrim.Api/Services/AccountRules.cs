@@ -27,12 +27,12 @@ public static class AccountRules
         }
         if (name.Length > MaxDisplayNameLength)
         {
-            return $"Display names can be at most {MaxDisplayNameLength} characters.";
+            return $"Usernames can be at most {MaxDisplayNameLength} characters.";
         }
 
         var normalized = DisplayNames.Normalize(name);
         var taken = await db.Users.AnyAsync(u => u.Id != userId && u.NormalizedDisplayName == normalized);
-        return taken ? "Someone else already uses that display name." : null;
+        return taken ? "Someone else already uses that username." : null;
     }
 
     public static string? CheckPhoneNumber(string? phoneNumber)

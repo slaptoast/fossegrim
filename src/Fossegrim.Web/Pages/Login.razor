@@ -35,7 +35,7 @@
             <DataAnnotationsValidator />
 
             <div class="form-group">
-                <label for="login">Email or display name</label>
+                <label for="login">Email or username</label>
                 <InputText id="login" @bind-Value="_input.Login" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" />
                 <ValidationMessage For="() => _input.Login" />
             </div>
@@ -148,7 +148,7 @@
     private class LoginInput
     {
         // An email or a display name.
-        [Required(ErrorMessage = "Enter your email or display name.")]
+        [Required(ErrorMessage = "Enter your email or username.")]
         public string Login { get; set; } = string.Empty;
 
         [Required]

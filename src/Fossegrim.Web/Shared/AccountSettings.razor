@@ -133,7 +133,7 @@
                 <ValidationMessage For="() => _input.Email" />
             </div>
             <div class="form-group">
-                <label for="newUserName">Display Name</label>
+                <label for="newUserName">Username</label>
                 <InputText id="newUserName" @bind-Value="_input.DisplayName" autocomplete="off" />
                 <ValidationMessage For="() => _input.DisplayName" />
             </div>
@@ -330,6 +330,7 @@
         public string Email { get; set; } = string.Empty;
 
         [Required]
+        [Display(Name = "Username")]
         [StringLength(100, MinimumLength = 3)]
         public string DisplayName { get; set; } = string.Empty;
 

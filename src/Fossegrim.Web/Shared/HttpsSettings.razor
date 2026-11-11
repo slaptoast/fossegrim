@@ -104,7 +104,7 @@ else
                 <label for="httpsDomains">Domain Names</label>
                 <InputText id="httpsDomains" @bind-Value="_input.Domains" placeholder="music.example.com" autocomplete="off" />
                 <ValidationMessage For="() => _input.Domains" />
-                <p class="backup-hint">
+                <p class="form-hint">
                     The name(s) people use to reach this server, separated by commas. Each one must point at this server,
                     and port 80 must be reachable from the internet (forward ports 80 and 443 on your router), so Let's Encrypt can check it.
                 </p>
@@ -114,7 +114,7 @@ else
                 <label for="httpsEmail">Email (optional)</label>
                 <InputText id="httpsEmail" type="email" @bind-Value="_input.Email" autocomplete="email" />
                 <ValidationMessage For="() => _input.Email" />
-                <p class="backup-hint">Let's Encrypt only uses it for important notices about your account. Fossegrim warns admins here if renewing fails.</p>
+                <p class="form-hint">Let's Encrypt only uses it for important notices about your account. Fossegrim warns admins here if renewing fails.</p>
             </div>
 
             <label class="checkbox-row">

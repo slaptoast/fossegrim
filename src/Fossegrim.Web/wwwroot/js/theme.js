@@ -94,6 +94,17 @@
         if (colors["--brand-indigo"] || colors["--brand-violet"]) {
             extra["--gradient-brand"] = "linear-gradient(135deg, var(--brand-indigo) 0%, var(--brand-violet) 100%)";
         }
+        // Form fields are wells one step off the panel they sit in, with an edge
+        // drawn from the muted text color, so they follow any custom palette.
+        if (colors["--surface"] || colors["--ink"] || colors["--text-muted"] || colors["--text-secondary"] || colors["--border"]) {
+            extra["--field"] = base === "dark"
+                ? "color-mix(in srgb, var(--surface) 80%, black)"
+                : "color-mix(in srgb, var(--surface) 94%, var(--ink))";
+            extra["--field-border"] = "color-mix(in srgb, var(--text-muted) 85%, var(--surface))";
+            extra["--field-border-hover"] = "var(--text-secondary)";
+            extra["--field-placeholder"] = "var(--text-muted)";
+            extra["--field-disabled"] = "var(--border)";
+        }
         if (colors["--danger"]) {
             extra["--danger-fg"] = base === "dark"
                 ? "color-mix(in srgb, " + colors["--danger"] + " 55%, white)"

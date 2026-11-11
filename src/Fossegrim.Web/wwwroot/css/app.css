@@ -917,7 +917,10 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
     font-weight: 600;
     font-size: 0.75rem;
     flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
 }
+.artist-item.playable { cursor: pointer; }
 .artist-details { flex: 1; min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-8); }
 .artist-name, .album-title { font-weight: 600; color: var(--ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .artist-track-count, .album-artist { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }

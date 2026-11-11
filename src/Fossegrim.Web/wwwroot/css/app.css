@@ -24,6 +24,11 @@
     --border-list: #f0f0f0;
     --border-compact: #dddddd;
     --divider-soft: #eeeeee;
+    --field: #f2f4f7;
+    --field-border: #868e96;
+    --field-border-hover: #495057;
+    --field-placeholder: #626a73;
+    --field-disabled: #e9ecef;
     --secondary: #6c757d;
     --secondary-hover: #5a6268;
     --danger: #dc3545;
@@ -71,11 +76,25 @@
     --radius-md: 4px;
     --radius-lg: 6px;
     --radius-round: 50%;
+    /* Size: every control in a row shares one height; fields take widths from this scale or a form-grid */
+    --control-sm: 24px;
+    --control-md: 28px;
+    --bar-height: 36px;
+    --label-line: 16px;
+    --textarea-min: 72px;
+    --check-size: 16px;
+    --field-w-xs: 64px;
+    --field-w-sm: 128px;
+    --field-w-md: 256px;
+    --field-w-lg: 384px;
+    --form-max: 640px;
+    --form-section-aside: 200px;
     /* Shadow */
     --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.12);
     --shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.2);
     --shadow-focus: 0 0 0 2px var(--brand-indigo);
     --shadow-drop-target: inset 0 2px 0 var(--brand-indigo);
+    --shadow-focus-danger: 0 0 0 2px var(--danger-fg);
 }
 
 /* Dark theme: color tokens only. Every text/background pair meets WCAG AA (4.5:1; 3:1 for
@@ -97,6 +116,11 @@
     --border-list: #2a2e34;
     --border-compact: #6c7480;
     --divider-soft: #2a2e34;
+    --field: #15181c;
+    --field-border: #737b87;
+    --field-border-hover: #9ea6af;
+    --field-placeholder: #9ea6af;
+    --field-disabled: #2a2e34;
     --secondary: #6c757d;
     --secondary-hover: #5a6268;
     --success-bg: #15301d;
@@ -401,7 +425,7 @@ body {
     min-width: 0;
 }
 .visualizer-header {
-    min-height: 36px;
+    min-height: var(--bar-height);
     padding: var(--space-4) var(--space-12);
     display: flex;
     align-items: center;
@@ -429,7 +453,7 @@ body {
 }
 .visualizer-message p { max-width: 36ch; }
 .visualizer-footer {
-    min-height: 36px;
+    min-height: var(--bar-height);
     padding: var(--space-4) var(--space-12);
     display: flex;
     align-items: center;
@@ -543,7 +567,7 @@ a.button, a.button-secondary { text-decoration: none; }
 .header,
 .artist-list-header,
 .album-list-header {
-    min-height: 36px;
+    min-height: var(--bar-height);
     padding: var(--space-4) var(--space-12);
     display: flex;
     align-items: center;
@@ -565,7 +589,7 @@ a.button, a.button-secondary { text-decoration: none; }
 /* Search, sort and direction above a library list (BrowseControls) */
 .browse-controls { flex: 1; display: flex; gap: var(--space-6); align-items: center; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
 .browse-controls .filter-group select { width: auto; max-width: 160px; }
-.browse-order { min-width: 28px; height: 28px; padding: 0 var(--space-6); }
+.browse-order { min-width: var(--control-md); height: var(--control-md); padding: 0 var(--space-6); }
 .track-list-component .controls h2 { font-size: 0.875rem; font-weight: 600; color: var(--ink); margin: 0; }
 
 /* Search results page: artists and albums side by side, tracks below */
@@ -588,15 +612,26 @@ a.button, a.button-secondary { text-decoration: none; }
 .login-shell .header h1 { font-size: 1.5rem; line-height: 1.2; font-weight: 700; }
 .login-shell .content { padding: 0 var(--space-16) var(--space-16); }
 
-/* ---- Forms ---- */
-.form-group { margin-bottom: var(--space-12); }
-.form-group label { display: block; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); margin-bottom: var(--space-4); }
+/* ---- Forms ----
+   Six layers, each with one job:
+   1. .field          the control itself (input, select, textarea): height, fill, border, states
+   2. .form-group     one label + one control + one hint/validation line
+   3. .form-grid      places groups on a 6-column grid; one gutter both ways (space-12)
+   4. .form-section   a titled set of related groups, padded space-16, hairline between sections
+   5. .form-actions   the 36px+ action bar that ends a form (same look as modal-actions)
+   6. .form-frame     optional chrome (surface, border, radius) for a form standing alone on canvas
+   Inside a module or modal, use .form without .form-frame: the host already supplies the chrome. */
+
+/* 1. Field: a well (field fill, field-border edge) set into the pane */
+.field,
 .form-group input[type="text"],
 .form-group input:not([type]),
 .form-group input[type="email"],
 .form-group input[type="password"],
 .form-group input[type="number"],
 .form-group input[type="tel"],
+.form-group input[type="url"],
+.form-group input[type="search"],
 .form-group input[type="time"],
 .form-group select,
 .form-group textarea,
@@ -607,26 +642,187 @@ a.button, a.button-secondary { text-decoration: none; }
 .share-add select,
 .tag-edit-table input,
 .album-art-search-form input {
+    display: block;
     width: 100%;
-    height: 28px;
+    height: var(--control-md);
     padding: 0 var(--space-8);
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--field-border);
     border-radius: var(--radius-md);
-    background: var(--surface);
+    background: var(--field);
     color: var(--ink);
     font: inherit;
+    line-height: 20px;
+    transition: background 0.1s;
 }
-.form-group textarea { height: auto; padding: var(--space-4) var(--space-8); }
+.field::placeholder,
+.form-group input::placeholder,
+.form-group textarea::placeholder,
+.search-box input::placeholder,
+.new-playlist-box input::placeholder,
+.share-add input::placeholder,
+.tag-edit-table input::placeholder,
+.album-art-search-form input::placeholder { color: var(--field-placeholder); opacity: 1; }
+
+.field:hover:not(:disabled):not(:focus),
+.form-group input:hover:not(:disabled):not(:focus),
+.form-group select:hover:not(:disabled):not(:focus),
+.form-group textarea:hover:not(:disabled):not(:focus),
+.search-box input:hover:not(:focus),
+.filter-group select:hover:not(:disabled):not(:focus),
+.new-playlist-box input:hover:not(:focus),
+.share-add input:hover:not(:focus),
+.share-add select:hover:not(:focus),
+.tag-edit-table input:hover:not(:focus),
+.album-art-search-form input:hover:not(:focus) { border-color: var(--field-border-hover); }
+
+.field:focus,
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus,
 .search-box input:focus,
 .filter-group select:focus,
-.new-playlist-box input[type="text"]:focus,
+.new-playlist-box input:focus,
 .share-add input:focus,
 .share-add select:focus,
 .tag-edit-table input:focus,
-.album-art-search-form input:focus { outline: none; border-color: var(--brand-indigo); box-shadow: var(--shadow-focus); }
+.album-art-search-form input:focus { outline: none; background-color: var(--surface); border-color: var(--brand-indigo); box-shadow: var(--shadow-focus); }
+
+.field:disabled,
+.form-group input:disabled,
+.form-group select:disabled,
+.form-group textarea:disabled,
+.filter-group select:disabled { background-color: var(--field-disabled); border-color: var(--border-strong); color: var(--text-muted); cursor: not-allowed; }
+
+textarea.field,
+.form-group textarea { height: auto; min-height: var(--textarea-min); padding: var(--space-4) var(--space-8); resize: vertical; }
+
+/* Selects draw their own chevron in text-secondary, so it follows the theme. */
+select.field,
+.form-group select,
+.filter-group select,
+.share-add select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: var(--space-24);
+    cursor: pointer;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%),
+        linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+    background-position: right 13px center, right 9px center;
+    background-size: 4px 4px, 4px 4px;
+    background-repeat: no-repeat;
+}
+
+/* A field is always one step off its ground: on surface-muted bars it takes surface. */
+:is(.controls, .playlist-toolbar, .header, .artist-list-header, .album-list-header, .album-art-header,
+    .tag-edit-apply-row, .theme-editor, .form-actions)
+    :is(.field, input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), select, textarea) { background-color: var(--surface); }
+
+/* Fixed widths for fields outside a grid */
+.field-w-xs { width: var(--field-w-xs); }
+.field-w-sm { width: var(--field-w-sm); }
+.field-w-md { width: var(--field-w-md); }
+.field-w-lg { width: var(--field-w-lg); }
+.form-group .field-w-xs, .form-group .field-w-sm, .form-group .field-w-md, .form-group .field-w-lg { max-width: 100%; }
+
+/* Invalid: Blazor marks the control itself with .invalid; .form-group.invalid and aria-invalid work too */
+.form-group.invalid :is(.field, input, select, textarea),
+.form-group :is(input, select, textarea).invalid,
+.field[aria-invalid="true"] { border-color: var(--danger-fg); }
+.form-group.invalid :is(.field, input, select, textarea):focus,
+.form-group :is(input, select, textarea).invalid:focus,
+.field[aria-invalid="true"]:focus { border-color: var(--danger-fg); box-shadow: var(--shadow-focus-danger); }
+
+/* 2. Group: label (16px, one line) → space-4 → control (28px) → space-4 → hint or validation (16px) */
+.form-group { display: flex; flex-direction: column; min-width: 0; margin-bottom: var(--space-12); }
+.form-group > label,
+.form-label {
+    display: block;
+    font-size: 0.8125rem;
+    line-height: var(--label-line);
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-4);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.form-group > label .optional,
+.form-label .optional { font-weight: 400; color: var(--text-muted); margin-left: var(--space-4); }
+.form-hint { display: block; font-size: 0.75rem; line-height: var(--label-line); color: var(--text-muted); margin-top: var(--space-4); }
+.form-group .validation-message,
+.form-group .text-danger { line-height: var(--label-line); margin-top: var(--space-4); }
+.form-group.invalid .form-hint,
+.form-group:has(.validation-message) .form-hint { display: none; }
+
+/* Checks: one 28px row each, so they line up with fields beside them */
+.form-check { display: flex; align-items: center; gap: var(--space-8); min-height: var(--control-md); color: var(--ink); cursor: pointer; }
+.form-check input[type="checkbox"],
+.form-check input[type="radio"] { width: var(--check-size); height: var(--check-size); margin: 0; flex: none; accent-color: var(--brand-violet); cursor: pointer; }
+.form-checks { display: flex; flex-direction: column; }
+.form-checks.inline { flex-direction: row; flex-wrap: wrap; column-gap: var(--space-16); }
+/* A check in a grid row without a label still sits on the field line */
+.form-group.check-only { padding-top: calc(var(--label-line) + var(--space-4)); }
+
+/* 3. Grid: 6 columns, one gutter (space-12) across and down; collapses to one column under 480px */
+.form { max-width: var(--form-max); container-type: inline-size; }
+.form-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-12); align-items: start; }
+.form-grid > .form-group { grid-column: span 6; margin-bottom: 0; }
+.form-grid > .span-1 { grid-column: span 1; }
+.form-grid > .span-2 { grid-column: span 2; }
+.form-grid > .span-3 { grid-column: span 3; }
+.form-grid > .span-4 { grid-column: span 4; }
+.form-grid > .span-5 { grid-column: span 5; }
+@container (max-width: 480px) {
+    .form-grid > .form-group[class*="span-"] { grid-column: span 6; }
+}
+
+/* Horizontal variant: labels in a field-w-sm column, centred on the 28px field line */
+.form-grid.horizontal > .form-group { display: grid; grid-template-columns: var(--field-w-sm) minmax(0, 1fr); column-gap: var(--space-12); align-items: start; }
+.form-grid.horizontal > .form-group > label { grid-column: 1; margin: 0; line-height: var(--control-md); }
+.form-grid.horizontal > .form-group > :not(label) { grid-column: 2; }
+@container (max-width: 480px) {
+    .form-grid.horizontal > .form-group { display: flex; }
+    .form-grid.horizontal > .form-group > label { line-height: var(--label-line); margin-bottom: var(--space-4); }
+}
+
+/* 4. Sections */
+.form-section { border: 0; margin: 0; min-width: 0; padding: var(--space-16); }
+.form-section + .form-section { border-top: 1px solid var(--border); }
+.form-section-header { margin-bottom: var(--space-12); }
+.form-section-title,
+.form-section > legend { float: left; width: 100%; padding: 0; font-size: 0.6875rem; line-height: var(--label-line); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+.form-section > legend { margin-bottom: var(--space-12); }
+.form-section > legend + * { clear: both; }
+.form-section-desc { font-size: 0.8125rem; line-height: 18px; color: var(--text-muted); margin-top: var(--space-2); }
+/* Split: header in a left column beside its fields, on wide forms */
+.form-section.split { display: grid; grid-template-columns: var(--form-section-aside) minmax(0, 1fr); column-gap: var(--space-24); }
+.form-section.split .form-section-header { margin-bottom: 0; }
+@container (max-width: 560px) {
+    .form-section.split { display: block; }
+    .form-section.split .form-section-header { margin-bottom: var(--space-12); }
+}
+
+/* 5. Actions: the closing bar, Cancel left of the primary action, both right-aligned */
+.form-actions,
+.modal-actions,
+.tag-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--space-8);
+    min-height: var(--bar-height);
+    padding: var(--space-8) var(--space-16);
+    background: var(--surface-muted);
+    border-top: 1px solid var(--border);
+}
+.form-actions .form-actions-note { margin-right: auto; font-size: 0.8125rem; color: var(--text-muted); }
+
+/* 6. Frame: chrome for a form standing alone on canvas */
+.form-frame { max-width: var(--form-max); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); overflow: hidden; container-type: inline-size; }
+.form-frame-header { display: flex; align-items: center; gap: var(--space-8); min-height: var(--bar-height); padding: var(--space-8) var(--space-16); background: var(--surface-muted); border-bottom: 1px solid var(--border); }
+.form-frame-header h2 { font-size: 0.875rem; font-weight: 600; color: var(--ink); }
+.form-frame > .validation-summary { margin: var(--space-16) var(--space-16) 0; }
 
 /* ---- Playlist sharing and picker ---- */
 .share-add { display: flex; gap: var(--space-6); margin-top: var(--space-8); }
@@ -678,7 +874,7 @@ a.button, a.button-secondary { text-decoration: none; }
 .button,
 .button-secondary,
 .button-danger {
-    height: 28px;
+    height: var(--control-md);
     padding: 0 var(--space-12);
     border-radius: var(--radius-md);
     font: inherit;
@@ -781,7 +977,7 @@ a.button, a.button-secondary { text-decoration: none; }
 /* ---- Toolbar (search + sort) ---- */
 .controls,
 .playlist-toolbar {
-    min-height: 36px;
+    min-height: var(--bar-height);
     padding: var(--space-4) var(--space-12);
     background: var(--surface-muted);
     border-bottom: 1px solid var(--border);
@@ -965,7 +1161,7 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-8);
-    min-height: 36px;
+    min-height: var(--bar-height);
     padding: var(--space-4) var(--space-12);
     border-top: 1px solid var(--border);
     background: var(--surface);
@@ -974,11 +1170,12 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 
 /* ---- Playlists ---- */
 .new-playlist-box { display: flex; gap: var(--space-6); align-items: center; }
-.new-playlist-box input[type="text"] { width: 200px; }
+.new-playlist-box input[type="text"] { width: var(--field-w-md); }
 .playlist-detail { padding: 0; }
 .playlist-detail-header { display: flex; align-items: center; gap: var(--space-8); flex-wrap: wrap; padding: var(--space-6) var(--space-12); border-bottom: 1px solid var(--border); }
-.playlist-name-input { font: inherit; font-size: 1rem; font-weight: 600; height: 28px; padding: 0 var(--space-6); border: 1px solid transparent; border-radius: var(--radius-md); flex: 1; min-width: 160px; background: none; color: var(--ink); }
-.playlist-name-input:hover:not(:disabled), .playlist-name-input:focus { border-color: var(--border-strong); outline: none; }
+.playlist-name-input { font: inherit; font-size: 1rem; font-weight: 600; height: var(--control-md); padding: 0 var(--space-6); border: 1px solid transparent; border-radius: var(--radius-md); flex: 1; min-width: 160px; background: none; color: var(--ink); }
+.playlist-name-input:hover:not(:disabled) { border-color: var(--field-border); }
+.playlist-name-input:focus { outline: none; background: var(--surface); border-color: var(--brand-indigo); box-shadow: var(--shadow-focus); }
 .playlist-editor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--space-8); padding: var(--space-8); align-items: start; }
 .playlist-editor-column h3 { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: var(--space-6); }
 .playlist-editor-column .button { margin-top: var(--space-8); }
@@ -989,7 +1186,7 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 .playlist-share-section select { width: auto; }
 .playlist-track-table .drag-handle-cell { width: 24px; padding: 0; text-align: center; color: var(--text-faint); cursor: grab; }
 .playlist-track-table .remove-cell { width: 32px; padding: 0; text-align: center; }
-.track-remove-button { background: none; border: none; color: var(--text-muted); cursor: pointer; width: 24px; height: 24px; border-radius: var(--radius-md); }
+.track-remove-button { background: none; border: none; color: var(--text-muted); cursor: pointer; width: var(--control-sm); height: var(--control-sm); border-radius: var(--radius-md); }
 .track-remove-button:hover { color: var(--danger-fg); background: var(--error-bg); }
 .playlist-track-table tbody tr.dragging { opacity: 0.4; }
 .playlist-track-table tbody tr.drag-over { box-shadow: var(--shadow-drop-target); }
@@ -1002,12 +1199,11 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 .modal-header { padding: var(--space-12) var(--space-16) 0; }
 .modal-header h3 { color: var(--ink); font-size: 1rem; font-weight: 600; }
 .modal-body { padding: var(--space-6) var(--space-16) var(--space-16); color: var(--text-secondary); }
-.modal-actions { display: flex; justify-content: flex-end; gap: var(--space-8); padding: var(--space-8) var(--space-16); background: var(--surface-muted); border-top: 1px solid var(--border); }
 
 /* ---- Context menu ---- */
 .context-menu-overlay { position: fixed; inset: 0; z-index: 1000; }
 .context-menu { position: fixed; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-menu); min-width: 180px; padding: var(--space-4); }
-.context-menu-item { display: block; width: 100%; text-align: left; height: 28px; padding: 0 var(--space-8); background: none; border: none; border-radius: var(--radius-md); font: inherit; color: var(--text-secondary); cursor: pointer; }
+.context-menu-item { display: block; width: 100%; text-align: left; height: var(--control-md); padding: 0 var(--space-8); background: none; border: none; border-radius: var(--radius-md); font: inherit; color: var(--text-secondary); cursor: pointer; }
 .context-menu-item:hover { background: var(--surface-muted); color: var(--ink); }
 .context-menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -1020,7 +1216,7 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 /* ---- Tag editing ---- */
 .tag-edit-modal { max-width: 480px; }
 .tag-fields .form-group:last-child { margin-bottom: 0; }
-.tag-fields-row { display: flex; gap: var(--space-8); }
+.tag-fields-row { display: flex; gap: var(--space-12); }
 .tag-fields-row .form-group { flex: 1; }
 .tag-edit-table-wrapper { overflow-x: auto; }
 .tag-edit-table td { padding: var(--space-2) var(--space-4); max-width: none; }
@@ -1032,7 +1228,6 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 .tag-edit-table td.tag-edit-file > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tag-edit-apply-row { background: var(--surface-muted); border-bottom: 1px solid var(--border-strong); }
 .tag-edit-apply-row button { white-space: nowrap; }
-.tag-edit-actions { display: flex; justify-content: flex-end; gap: var(--space-8); padding: var(--space-8) var(--space-12); border-top: 1px solid var(--border); }
 
 /* ---- Page-specific pieces ---- */
 .playlist-track-list-component { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); overflow: hidden; min-width: 0; }
@@ -1057,7 +1252,7 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 .actions-cell > * + * { margin-left: var(--space-4); }
 .playlist-editor-grid { background: var(--canvas); border-top: 1px solid var(--border); }
 .tag-edit-table td { overflow: visible; }
-.actions-cell .button-secondary, .actions-cell .button-danger { height: 24px; padding: 0 var(--space-8); font-size: 0.8125rem; }
+.actions-cell .button-secondary, .actions-cell .button-danger { height: var(--control-sm); padding: 0 var(--space-8); font-size: 0.8125rem; }
 
 /* ---- Boot and Blazor framework UI ---- */
 .initial-loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--text-muted); }
@@ -1088,7 +1283,7 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 }
 .layout-module > .album-art-editor { height: 100%; }
 .album-art-header {
-    min-height: 36px;
+    min-height: var(--bar-height);
     padding: var(--space-4) var(--space-12);
     display: flex;
     align-items: center;
@@ -1164,7 +1359,7 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 .favorite-button { min-width: 1.75em; text-align: center; }
 td.favorite-cell,
 th.favorite-cell { width: 44px; padding: 0 var(--space-4); text-align: center; overflow: visible; }
-.browse-favorites { min-width: 28px; height: 28px; padding: 0 var(--space-6); }
+.browse-favorites { min-width: var(--control-md); height: var(--control-md); padding: 0 var(--space-6); }
 .browse-favorites.active { color: var(--brand-violet); border-color: var(--brand-violet); }
 
 .favorites-module { display: flex; flex-direction: column; height: 100%; min-height: 0; }

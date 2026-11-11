@@ -81,7 +81,7 @@ else
                 <label for="publicUrl">Fossegrim's Address</label>
                 <InputText id="publicUrl" @bind-Value="_input.PublicUrl" autocomplete="off" />
                 <ValidationMessage For="() => _input.PublicUrl" />
-                <p class="backup-hint">Where people open Fossegrim. Emailed links start with this, so use an address that works for everyone, not just on this computer.</p>
+                <p class="form-hint">Where people open Fossegrim. Emailed links start with this, so use an address that works for everyone, not just on this computer.</p>
             </div>
 
             <button type="submit" class="button-secondary" disabled="@_busy">Save</button>

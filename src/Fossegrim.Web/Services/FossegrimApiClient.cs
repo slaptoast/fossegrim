@@ -477,10 +477,11 @@ public class FossegrimApiClient
         return await ReadProblemDetailAsync(copy);
     }
 
-    public async Task<AuthResult> LoginAsync(string email, string password)
+    // login is an email or a display name.
+    public async Task<AuthResult> LoginAsync(string login, string password)
     {
-        var response = await _httpClient.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password, ClientName));
-        return await ReadAuthResultAsync(response, unauthorizedMessage: "Invalid login attempt.");
+        var response = await _httpClient.PostAsJsonAsync("/api/auth/login", new LoginRequest(login, password, ClientName));
+        return await ReadAuthResultAsync(response, unauthorizedMessage: "Wrong email, display name or password.");
     }
 
     public async Task<AuthResult> RegisterAsync(string email, string displayName, string password)

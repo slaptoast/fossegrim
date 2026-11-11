@@ -44,7 +44,7 @@
                         {
                             <td class="drag-handle-cell" title="Drag to reorder">⠿</td>
                         }
-                        <td class="cover-cell"><CoverArt AlbumId="item.MediaItem.AlbumId" /></td>
+                        <td class="cover-cell"><CoverArt AlbumId="item.MediaItem.AlbumId" Playable="true" /></td>
                         <td class="title-cell">@(item.MediaItem.Title ?? "Unknown")</td>
                         <td class="artist-cell">@(item.MediaItem.ArtistName ?? "Unknown Artist")</td>
                         <td class="album-cell">@(item.MediaItem.Album ?? "Unknown Album")</td>
@@ -123,7 +123,7 @@
 
     private string RowClass(Guid itemId)
     {
-        var classes = new List<string>();
+        var classes = new List<string> { "playable" };
         if (itemId == _draggedItemId)
         {
             classes.Add("dragging");

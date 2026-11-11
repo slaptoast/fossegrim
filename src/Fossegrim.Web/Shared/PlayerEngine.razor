@@ -3,6 +3,7 @@
 @inject PlayerHost Host
 @inject AppearanceService Appearance
 @inject IJSRuntime JS
+@inject FossegrimApiClient ApiClient
 
 @* The playback engine, rendered once in the app layout so it outlives page
    changes and wherever the player is shown (PlayerBar or a PlayerPanel).
@@ -22,6 +23,7 @@
     // What the JS player was last told, so a render only sends what changed.
     private int? _loadedVersion;
     private string? _nextSent;
+    private Guid? _metadataFor;
 
     // Renders can arrive while a sync is awaiting JS; they ask for another pass.
     private bool _syncing;
@@ -101,6 +103,7 @@
                 await _player.InvokeVoidAsync("stop");
                 _loadedVersion = null;
                 _nextSent = null;
+                _metadataFor = null;
             }
             return;
         }
@@ -124,7 +127,32 @@
             _nextSent = null;
         }
 
+        await SyncMetadataAsync(track);
         await SyncNextAsync(track);
+    }
+
+    // The title and cover for the OS media controls, once per track (a
+    // crossfade moves to the next track without a new load).
+    private async Task SyncMetadataAsync(MediaItemDto track)
+    {
+        if (_metadataFor == track.Id)
+        {
+            return;
+        }
+        _metadataFor = track.Id;
+        string? cover = null;
+        if (track.CoverAlbumId() is { } albumId)
+        {
+            try
+            {
+                cover = await ApiClient.GetAlbumCoverUrl(albumId, 512);
+            }
+            catch (InvalidOperationException)
+            {
+                // Signed out: no cover.
+            }
+        }
+        await _player!.InvokeVoidAsync("setMetadata", track.Title ?? "Unknown", track.ArtistName ?? "Unknown Artist", track.Album ?? "", cover);
     }
 
     private async Task SyncNextAsync(MediaItemDto track)
@@ -170,6 +198,16 @@
     // Called by player.js when the active deck starts or resumes.
     [JSInvokable]
     public Task OnPlaying(string trackId) => PlayerState.ReportNowPlayingAsync(Guid.Parse(trackId));
+
+    // Called by hardware.js for the next/previous media keys (keyboard,
+    // headset, lock screen). Play and pause it handles itself.
+    [JSInvokable]
+    public Task OnMediaKey(string key) => key switch
+    {
+        "next" when PlayerState.HasNext => PlayerState.PlayNextAsync(),
+        "previous" => PreviousAsync(),
+        _ => Task.CompletedTask,
+    };
 
     // Called by player.js when the active track ended with nothing ready to take over.
     [JSInvokable]

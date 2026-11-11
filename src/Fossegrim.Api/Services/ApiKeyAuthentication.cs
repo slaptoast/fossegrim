@@ -28,7 +28,7 @@ public class ApiKeyService
         _time = time;
     }
 
-    public Task<List<ApiKey>> ListAsync() => _db.ApiKeys.AsNoTracking().OrderBy(k => k.Name).ToListAsync();
+    public Task<List<ApiKey>> ListAsync() => _db.ApiKeys.AsNoTracking().OrderBy(k => EF.Functions.Collate(k.Name, "NOCASE")).ToListAsync();
 
     public async Task<(ApiKey Key, string Secret)> CreateAsync(string name)
     {

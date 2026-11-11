@@ -137,6 +137,28 @@ public sealed class BrowseTests : IClassFixture<FossegrimApiFactory>, IDisposabl
     }
 
     [Fact]
+    public async Task TextSorts_PutUntaggedTracksLast_EitherWay()
+    {
+        var artist = Artist($"Tagless {_tag}");
+        var album = Album($"Mixed {_tag}", artist);
+        Track($"Bravo {_tag}", album, artist);
+        Track(null, album, artist).ArtistName = null;
+        Track($"10 Alpha {_tag}", album, artist);
+        Track("", album, artist);
+        await SaveAsync(artist);
+        var user = await _factory.CreateUserClientAsync();
+
+        // A missing title shows as "".
+        async Task<string[]> Titles(string query) =>
+            (await user.GetFromJsonAsync<PagedResult<MediaItemDto>>($"/api/mediaitems?q={_tag}&{query}"))!.Items.Select(t => t.Title?.Split(' ')[0] ?? "").ToArray();
+
+        // Numbers come before letters; no title (or no artist) sorts last, not first.
+        Assert.Equal(["10", "Bravo", "", ""], await Titles("sort=title"));
+        Assert.Equal(["Bravo", "10", "", ""], await Titles("sort=title&order=desc"));
+        Assert.Equal("", (await Titles("sort=artist"))[^1]);
+    }
+
+    [Fact]
     public async Task PlaySorts_UseOnlyTheCallersListens()
     {
         var artist = Artist($"Player {_tag}");
@@ -317,7 +339,7 @@ public sealed class BrowseTests : IClassFixture<FossegrimApiFactory>, IDisposabl
         return album;
     }
 
-    private static MediaItem Track(string title, Album album, Artist artist, int? track = null)
+    private static MediaItem Track(string? title, Album album, Artist artist, int? track = null)
     {
         var item = new MediaItem
         {

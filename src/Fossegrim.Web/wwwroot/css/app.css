@@ -941,6 +941,8 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 .player-cover { width: 40px; height: 40px; }
 .album-play-overlay { position: absolute; inset: 0; z-index: 2; display: none; align-items: center; justify-content: center; background: var(--overlay); color: var(--on-brand); font-size: 0.75rem; cursor: pointer; }
 .album-art:hover .album-play-overlay { display: flex; }
+/* A row that plays when clicked shows the ▶ on its cover while hovered. */
+.playable:hover .album-play-overlay { display: flex; }
 
 /* ---- Listens ---- */
 .listens-count { color: var(--text-muted); font-size: 0.8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; }

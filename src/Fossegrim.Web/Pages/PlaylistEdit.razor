@@ -25,7 +25,7 @@
                 <label for="playlistSelect">Playlist:</label>
                 <select id="playlistSelect" value="@(_selectedPlaylistId?.ToString() ?? "")" @onchange="OnPlaylistSelectedAsync">
                     <option value="">-- Select a playlist --</option>
-                    @foreach (var p in _playlists.Where(p => p.Type == "Standard").OrderBy(p => p.Name))
+                    @foreach (var p in _playlists.Where(p => p.Type == "Standard").OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
                     {
                         <option value="@p.Id">@p.Name</option>
                     }

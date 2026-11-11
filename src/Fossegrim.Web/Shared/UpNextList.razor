@@ -15,9 +15,9 @@ else
             var entry = PlayerState.Queue[i];
             var isCurrent = i == PlayerState.CurrentIndex;
             <li class="@(isCurrent ? "current" : i < PlayerState.CurrentIndex ? "played" : "")" @key="entry.ItemId">
-                <button type="button" class="up-next-track" disabled="@isCurrent" @onclick="() => PlayerState.JumpToAsync(entry.ItemId)"
+                <button type="button" class="up-next-track @(isCurrent ? null : "playable")" disabled="@isCurrent" @onclick="() => PlayerState.JumpToAsync(entry.ItemId)"
                         title="@(isCurrent ? "Now playing" : "Play this")">
-                    <CoverArt AlbumId="entry.Track.CoverAlbumId()" />
+                    <CoverArt AlbumId="entry.Track.CoverAlbumId()" Playable="!isCurrent" />
                     <span class="up-next-text">
                         <span class="up-next-title">@(entry.Track.Title ?? "Unknown")</span>
                         <span class="up-next-artist">@(entry.Track.ArtistName ?? "Unknown Artist")</span>

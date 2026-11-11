@@ -35,9 +35,9 @@
             <DataAnnotationsValidator />
 
             <div class="form-group">
-                <label for="email">Email</label>
-                <InputText id="email" @bind-Value="_input.Email" type="email" autocomplete="username" />
-                <ValidationMessage For="() => _input.Email" />
+                <label for="login">Email or display name</label>
+                <InputText id="login" @bind-Value="_input.Login" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" />
+                <ValidationMessage For="() => _input.Login" />
             </div>
 
             <div class="form-group">
@@ -104,7 +104,7 @@
         if (HostEnvironment.Environment == "Development")
         {
             // dev convenience: prefill the account seeded in Development
-            _input.Email = "admin@fossegrim.local";
+            _input.Login = "admin@fossegrim.local";
             _input.Password = "Admin123!";
         }
 
@@ -130,7 +130,7 @@
         _isSubmitting = true;
         _errors = [];
 
-        var result = await ApiClient.LoginAsync(_input.Email, _input.Password);
+        var result = await ApiClient.LoginAsync(_input.Login, _input.Password);
         if (result.Success)
         {
             await TokenStore.SetSessionAsync(result.Response!);
@@ -147,9 +147,9 @@
 
     private class LoginInput
     {
-        [Required]
-        [EmailAddress]
-        public string Email { get; set; } = string.Empty;
+        // An email or a display name.
+        [Required(ErrorMessage = "Enter your email or display name.")]
+        public string Login { get; set; } = string.Empty;
 
         [Required]
         public string Password { get; set; } = string.Empty;

@@ -2,7 +2,7 @@
 @inject PlayerState PlayerState
 @inject ToastService Toasts
 
-@* The user's favourite tracks, albums and artists, newest first, one tab
+@* The user's favourite tracks, albums and artists, A to Z, one tab
    each. Play all plays every favourite track in that order. *@
 <div class="favorites-module">
     <div class="favorites-tabs" role="tablist" aria-label="Favourites">
@@ -52,7 +52,7 @@
             var tracks = new List<MediaItemDto>();
             for (var page = 1; ; page++)
             {
-                var result = await ApiClient.GetTracksAsync(new BrowseQuery(Sort: LibrarySorts.Favorited, Page: page, PageSize: BrowseQuery.MaxPageSize, Favorites: true));
+                var result = await ApiClient.GetTracksAsync(new BrowseQuery(Sort: LibrarySorts.Title, Page: page, PageSize: BrowseQuery.MaxPageSize, Favorites: true));
                 tracks.AddRange(result.Items);
                 if (page >= result.TotalPages)
                 {

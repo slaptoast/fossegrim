@@ -2,6 +2,7 @@ namespace Fossegrim.Contracts.Dtos;
 
 // ClientName is how the app is listed under the user's signed-in devices,
 // e.g. "Fossegrim for iOS". Without one, the list describes the user agent.
+// Email also takes a display name (both are unique, ignoring case).
 public record LoginRequest(string Email, string Password, string? ClientName = null);
 
 // Token is the access token (a JWT, valid until ExpiresAt), for the

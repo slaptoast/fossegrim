@@ -5,6 +5,8 @@
 @* An album's cover as a small square, for every list of tracks or albums
    (a track shows its album's). Without an album, or until the cover loads,
    it shows a placeholder. With OnPlay it gets a ▶ overlay and plays on click.
+   With Playable the ▶ shows while the .playable row around it is hovered,
+   and the row does the playing.
    It reloads when the album art editor saves a new cover. *@
 <div class="album-art @Class" title="@(OnPlay.HasDelegate ? PlayTitle : null)" @onclick="ClickAsync">
     <span class="album-art-placeholder" aria-hidden="true">💿</span>
@@ -14,7 +16,7 @@
     {
         <img src="@_url" alt="" loading="lazy" @onerror="() => _failedUrl = _url" />
     }
-    @if (OnPlay.HasDelegate)
+    @if (OnPlay.HasDelegate || Playable)
     {
         <div class="album-play-overlay">▶</div>
     }
@@ -36,6 +38,9 @@
 
     [Parameter]
     public EventCallback OnPlay { get; set; }
+
+    [Parameter]
+    public bool Playable { get; set; }
 
     [Parameter]
     public string PlayTitle { get; set; } = "Play album";

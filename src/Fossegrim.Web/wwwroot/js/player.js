@@ -19,6 +19,7 @@ import * as graph from "./audioGraph.js";
 import { attach as attachListenTracker } from "./listenTracker.js";
 import { registerAudio } from "./visualizer.js";
 import { mountControls } from "./playerControls.js";
+import { attachHardware } from "./hardware.js";
 
 // How long before its start the next track begins loading.
 const PRELOAD_LEAD_SECONDS = 30;
@@ -55,6 +56,7 @@ class Player {
         this.canFade = false;   // the graph is running, so prepared can overlap
         this.fade = null;       // { outgoing, timer } while the old deck plays out
         this.armTimer = 0;
+        this.hardware = attachHardware(this, dotnet);
     }
 
     get idle() {
@@ -157,6 +159,12 @@ class Player {
     stop() {
         this.reset();
         this.clearDeck(this.active);
+        this.hardware.clearMetadata();
+    }
+
+    /** What the OS media controls (lock screen, media keys) show. */
+    setMetadata(title, artist, album, artwork) {
+        this.hardware.setMetadata(title, artist, album, artwork);
     }
 
     position() {
@@ -172,6 +180,7 @@ class Player {
 
     dispose() {
         this.stop();
+        this.hardware.dispose();
         for (const { audio } of this.decks) {
             audio.remove();
         }

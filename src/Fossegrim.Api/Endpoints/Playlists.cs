@@ -37,7 +37,7 @@ public static class Playlists
                 .Where(p => p.Type != PlaylistType.Queue)
                 .ToListAsync();
 
-            return Results.Ok(playlists.Select(p => ToPlaylistDto(p, user.Id)));
+            return Results.Ok(playlists.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).Select(p => ToPlaylistDto(p, user.Id)));
         })
         .WithName("GetAllPlaylists");
 

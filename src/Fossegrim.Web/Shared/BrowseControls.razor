@@ -68,11 +68,11 @@
     // Best match needs a search, and the Api can't rank within favourites.
     private bool RelevanceAvailable => Searching && !Favorites && Sorts.Any(s => s.Value == LibrarySorts.Relevance);
 
-    // What the Api will sort by: the chosen sort, or its default.
+    // What the Api will sort by: the chosen sort, or its default (A to Z,
+    // favourites too; best match while searching).
     private string SelectedSort => _sort is { } sort && (sort != LibrarySorts.Relevance || RelevanceAvailable)
         ? sort
         : RelevanceAvailable ? LibrarySorts.Relevance
-        : Favorites && Sorts.Any(s => s.Value == LibrarySorts.Favorited) ? LibrarySorts.Favorited
         : Sorts[0].Value;
 
     private bool Descending => (_order ?? LibrarySorts.DefaultOrder(SelectedSort)) == LibrarySorts.Descending;

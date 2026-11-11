@@ -5,6 +5,7 @@ using Fossegrim.Lib.Data;
 using Fossegrim.Lib.Models;
 using Fossegrim.Lib.Services;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace Fossegrim.Api.Endpoints;
 
@@ -24,7 +25,7 @@ public static class Auth
             IPasswordHasher<ApplicationUser> passwordHasher,
             SessionService sessions) =>
         {
-            var user = string.IsNullOrWhiteSpace(request.Email) ? null : await userManager.FindByEmailAsync(request.Email);
+            var user = await FindForSignInAsync(userManager, request.Email);
             // A deleted account answers exactly like an unknown address.
             if (user is null or { DeletedAt: not null })
             {
@@ -200,6 +201,23 @@ public static class Auth
         })
         .RequireAuthorization()
         .WithName("UpdateProfile");
+    }
+
+    // Sign-in takes an email or a display name in the same box. Display
+    // names are unique ignoring case, like emails; an email wins if a name
+    // happens to look like someone's address.
+    internal static async Task<ApplicationUser?> FindForSignInAsync(UserManager<ApplicationUser> userManager, string? login)
+    {
+        if (string.IsNullOrWhiteSpace(login))
+        {
+            return null;
+        }
+        if (await userManager.FindByEmailAsync(login.Trim()) is { } byEmail)
+        {
+            return byEmail;
+        }
+        var name = DisplayNames.Normalize(login);
+        return await userManager.Users.FirstOrDefaultAsync(u => u.NormalizedDisplayName == name);
     }
 
     private static IResult LockedOut(ApplicationUser user)

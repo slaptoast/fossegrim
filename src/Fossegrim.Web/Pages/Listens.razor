@@ -55,9 +55,9 @@
                 <tbody>
                     @foreach (var play in _history.Items)
                     {
-                        <tr @onclick="() => PlayAsync(play.MediaItem)" title="Play this track">
+                        <tr class="playable" @onclick="() => PlayAsync(play.MediaItem)" title="Play this track">
                             <td class="played-cell">@FormatPlayedAt(play.PlayedAt)</td>
-                            <td class="cover-cell"><CoverArt AlbumId="play.MediaItem.AlbumId" /></td>
+                            <td class="cover-cell"><CoverArt AlbumId="play.MediaItem.AlbumId" Playable="true" /></td>
                             <td class="title-cell">@(play.MediaItem.Title ?? "Unknown")</td>
                             <td class="artist-cell">@(play.MediaItem.ArtistName ?? "Unknown Artist")</td>
                             <td class="album-cell">@play.MediaItem.Album</td>

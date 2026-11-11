@@ -16,7 +16,7 @@ public static class Admin
         adminGroup.MapGet("/folders", async (FossegrimDbContext db) =>
         {
             var folders = await db.MediaFolders
-                .OrderBy(f => f.Name)
+                .OrderBy(f => EF.Functions.Collate(f.Name, "NOCASE"))
                 .Select(f => new MediaFolderDto(f.Id, f.Name, f.Location, f.DateAdded, f.DateLastScanned))
                 .ToListAsync();
 

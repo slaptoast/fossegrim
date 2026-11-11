@@ -917,7 +917,10 @@ td { height: 32px; padding: 0 var(--space-12); white-space: nowrap; overflow: hi
     font-weight: 600;
     font-size: 0.75rem;
     flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
 }
+.artist-item.playable { cursor: pointer; }
 .artist-details { flex: 1; min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-8); }
 .artist-name, .album-title { font-weight: 600; color: var(--ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .artist-track-count, .album-artist { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }
@@ -941,6 +944,8 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 .player-cover { width: 40px; height: 40px; }
 .album-play-overlay { position: absolute; inset: 0; z-index: 2; display: none; align-items: center; justify-content: center; background: var(--overlay); color: var(--on-brand); font-size: 0.75rem; cursor: pointer; }
 .album-art:hover .album-play-overlay { display: flex; }
+/* A row that plays when clicked shows the ▶ on its cover while hovered. */
+.playable:hover .album-play-overlay { display: flex; }
 
 /* ---- Listens ---- */
 .listens-count { color: var(--text-muted); font-size: 0.8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; }

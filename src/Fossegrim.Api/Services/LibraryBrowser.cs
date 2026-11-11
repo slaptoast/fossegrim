@@ -104,13 +104,13 @@ public class LibraryBrowser
         var sorted = request.Sort switch
         {
             // By the first artist A to Z. The collation must wrap the subquery: one inside it doesn't reach the ORDER BY.
-            LibrarySorts.Artist => albums.Sort(al => EF.Functions.Collate(al.Artists.OrderBy(a => EF.Functions.Collate(a.Name, "NOCASE")).Select(a => a.Name).FirstOrDefault(), "NOCASE"), request.Descending),
+            LibrarySorts.Artist => albums.SortText(al => EF.Functions.Collate(al.Artists.OrderBy(a => EF.Functions.Collate(a.Name, "NOCASE")).Select(a => a.Name).FirstOrDefault(), "NOCASE"), request.Descending),
             LibrarySorts.Year => albums.Sort(al => al.Year, request.Descending),
             LibrarySorts.Added => albums.Sort(al => al.DateAdded, request.Descending),
             LibrarySorts.Played => albums.Sort(al => plays.Count(pe => pe.MediaItem!.Albums.Any(x => x.Id == al.Id)), request.Descending),
             LibrarySorts.Recent => albums.Sort(al => plays.Where(pe => pe.MediaItem!.Albums.Any(x => x.Id == al.Id)).Max(pe => (DateTime?)pe.PlayedAt), request.Descending),
             LibrarySorts.Favorited => albums.Sort(al => favorites.Where(f => f.AlbumId == al.Id).Select(f => (DateTime?)f.CreatedAt).FirstOrDefault(), request.Descending),
-            _ => albums.Sort(al => EF.Functions.Collate(al.Name, "NOCASE"), request.Descending),
+            _ => albums.SortText(al => EF.Functions.Collate(al.Name, "NOCASE"), request.Descending),
         };
 
         var count = await albums.CountAsync(cancellationToken);
@@ -154,7 +154,7 @@ public class LibraryBrowser
             LibrarySorts.Played => artists.Sort(a => plays.Count(pe => pe.MediaItem!.Artists.Any(x => x.Id == a.Id)), request.Descending),
             LibrarySorts.Recent => artists.Sort(a => plays.Where(pe => pe.MediaItem!.Artists.Any(x => x.Id == a.Id)).Max(pe => (DateTime?)pe.PlayedAt), request.Descending),
             LibrarySorts.Favorited => artists.Sort(a => favorites.Where(f => f.ArtistId == a.Id).Select(f => (DateTime?)f.CreatedAt).FirstOrDefault(), request.Descending),
-            _ => artists.Sort(a => EF.Functions.Collate(a.Name, "NOCASE"), request.Descending),
+            _ => artists.SortText(a => EF.Functions.Collate(a.Name, "NOCASE"), request.Descending),
         };
 
         var count = await artists.CountAsync(cancellationToken);
@@ -194,14 +194,14 @@ public class LibraryBrowser
         }
         var sorted = request.Sort switch
         {
-            LibrarySorts.Artist => tracks.Sort(m => EF.Functions.Collate(m.ArtistName, "NOCASE"), request.Descending),
-            LibrarySorts.Album => tracks.Sort(m => EF.Functions.Collate(m.Album, "NOCASE"), request.Descending),
+            LibrarySorts.Artist => tracks.SortText(m => EF.Functions.Collate(m.ArtistName, "NOCASE"), request.Descending),
+            LibrarySorts.Album => tracks.SortText(m => EF.Functions.Collate(m.Album, "NOCASE"), request.Descending),
             LibrarySorts.Year => tracks.Sort(m => m.Year, request.Descending),
             LibrarySorts.Added => tracks.Sort(m => m.DateAdded, request.Descending),
             LibrarySorts.Played => tracks.Sort(m => plays.Count(pe => pe.MediaItemId == m.Id), request.Descending),
             LibrarySorts.Recent => tracks.Sort(m => plays.Where(pe => pe.MediaItemId == m.Id).Max(pe => (DateTime?)pe.PlayedAt), request.Descending),
             LibrarySorts.Favorited => tracks.Sort(m => favorites.Where(f => f.MediaItemId == m.Id).Select(f => (DateTime?)f.CreatedAt).FirstOrDefault(), request.Descending),
-            _ => tracks.Sort(m => EF.Functions.Collate(m.Title, "NOCASE"), request.Descending),
+            _ => tracks.SortText(m => EF.Functions.Collate(m.Title, "NOCASE"), request.Descending),
         };
 
         // Within an album or artist, keep the album's own order.
@@ -285,4 +285,19 @@ internal static class SortExtensions
 {
     public static IOrderedQueryable<T> Sort<T, TKey>(this IQueryable<T> source, Expression<Func<T, TKey>> key, bool descending) =>
         descending ? source.OrderByDescending(key) : source.OrderBy(key);
+
+    // A text sort with blanks (no tag: "Unknown") last either way, so they
+    // don't fill the first page. SQLite puts NULL first ascending.
+    public static IOrderedQueryable<T> SortText<T>(this IQueryable<T> source, Expression<Func<T, string?>> key, bool descending)
+    {
+        var blank = Expression.Lambda<Func<T, bool>>(
+            Expression.OrElse(
+                Expression.Equal(key.Body, Expression.Constant(null, typeof(string))),
+                Expression.Equal(key.Body, Expression.Constant("", typeof(string)))),
+            key.Parameters);
+        return source.OrderBy(blank).ThenSort(key, descending);
+    }
+
+    private static IOrderedQueryable<T> ThenSort<T, TKey>(this IOrderedQueryable<T> source, Expression<Func<T, TKey>> key, bool descending) =>
+        descending ? source.ThenByDescending(key) : source.ThenBy(key);
 }

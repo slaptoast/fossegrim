@@ -23,9 +23,13 @@
             <ul class="artist-list">
                 @foreach (var artist in _result.Items)
                 {
-                    <li class="artist-item" @oncontextmenu="e => ShowContextMenu(e, artist)" @oncontextmenu:preventDefault="true">
+                    <li class="artist-item playable" title="Play all by @artist.Name" @onclick="() => PlayArtistAsync(artist)"
+                        @oncontextmenu="e => ShowContextMenu(e, artist)" @oncontextmenu:preventDefault="true">
                         <div class="artist-info">
-                            <div class="artist-avatar">@artist.Name.Substring(0, 1).ToUpperInvariant()</div>
+                            <div class="artist-avatar">
+                                @artist.Name.Substring(0, 1).ToUpperInvariant()
+                                <div class="album-play-overlay" aria-hidden="true">▶</div>
+                            </div>
                             <div class="artist-details">
                                 <div class="artist-name">@artist.Name</div>
                                 <div class="artist-track-count">@artist.TrackCount track@(artist.TrackCount != 1 ? "s" : "")</div>
@@ -158,6 +162,7 @@
 
         var actions = new List<ContextMenuAction>
         {
+            new("Play", () => PlayArtistAsync(artist)),
             new("Add to next in queue", async () => await PlayerState.AddToQueueNextAsync(await TrackIdsAsync(artist))),
             new("Add to end of queue", async () => await PlayerState.AddToQueueEndAsync(await TrackIdsAsync(artist))),
             FavoriteAction(FavoriteKinds.Artists, artist.Id),
@@ -174,6 +179,25 @@
 
         _contextMenuActions = actions;
         _contextMenuOpen = true;
+    }
+
+    // Everything by the artist, oldest album first, each album in track order.
+    private async Task PlayArtistAsync(ArtistListItemDto artist)
+    {
+        try
+        {
+            var tracks = await ApiClient.GetArtistTracksAsync(artist.Id);
+            if (tracks.Count == 0)
+            {
+                Toasts.Show($"{artist.Name} has no tracks to play.");
+                return;
+            }
+            await PlayerState.PlayQueueAsync(tracks);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show($"Couldn't play {artist.Name}: {ex.Message}");
+        }
     }
 
     private async Task<IReadOnlyList<Guid>> TrackIdsAsync(ArtistListItemDto artist) =>

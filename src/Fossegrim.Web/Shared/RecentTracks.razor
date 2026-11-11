@@ -27,9 +27,9 @@
                 {
                     var index = i;
                     var track = _tracks[i];
-                    <li class="album-item random-track" @key="track.Id" title="Play" @onclick="() => PlayFromAsync(index)"
+                    <li class="album-item random-track playable" @key="track.Id" title="Play" @onclick="() => PlayFromAsync(index)"
                         @oncontextmenu="e => ShowContextMenu(e, index)" @oncontextmenu:preventDefault="true">
-                        <CoverArt AlbumId="track.CoverAlbumId()" />
+                        <CoverArt AlbumId="track.CoverAlbumId()" Playable="true" />
                         <div class="album-title">@(track.Title ?? "Unknown")</div>
                         <div class="album-artist">@(track.ArtistName ?? "Unknown Artist")</div>
                         @if (track.LastPlayedAt is { } playedAt)

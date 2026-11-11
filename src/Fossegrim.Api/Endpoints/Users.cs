@@ -45,7 +45,7 @@ public static class Users
             var matches = await db.Users
                 .Where(u => u.Id != user.Id && u.DeletedAt == null)
                 .Where(u => EF.Functions.Like(u.DisplayName, pattern, LikeEscape) || u.NormalizedEmail == normalizedEmail)
-                .OrderBy(u => u.DisplayName)
+                .OrderBy(u => EF.Functions.Collate(u.DisplayName, "NOCASE"))
                 .Take(MaxResults)
                 .Select(u => new UserSummaryDto(u.Id, u.DisplayName ?? "Unnamed user"))
                 .ToListAsync();

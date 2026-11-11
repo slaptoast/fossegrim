@@ -297,6 +297,20 @@ public class SecurityTests : IClassFixture<FossegrimApiFactory>
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task SignIn_TakesTheDisplayName_IgnoringCaseAndSpaces()
+    {
+        var user = await _factory.CreateUserAsync();
+        var displayName = "";
+        await _factory.WithDbAsync(async db => displayName = await db.Users.Where(u => u.Id == user.UserId).Select(u => u.DisplayName!).SingleAsync());
+
+        var byName = await LoginAsync(_factory.CreateClient(), $"  {displayName.ToUpperInvariant()} ", user.Password);
+        var wrongPassword = await LoginAsync(_factory.CreateClient(), displayName, "not-the-password");
+
+        Assert.Equal(HttpStatusCode.OK, byName.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, wrongPassword.StatusCode);
+    }
+
     private static Task<HttpResponseMessage> LoginAsync(HttpClient client, string email, string password) =>
         client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
 

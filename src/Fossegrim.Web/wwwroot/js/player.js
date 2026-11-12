@@ -71,12 +71,20 @@ class Player {
         // dev); without it the graph would see a tainted source and output silence.
         audio.crossOrigin = "anonymous";
         host.appendChild(audio);
+        graph.addDeck(audio);
 
         const deck = { audio, trackId: null };
         attachListenTracker(audio, this.dotnet, () => deck.trackId);
 
         audio.addEventListener("play", () => {
             if (deck === this.active) {
+                // Joining inside "play" lets the context start. Without any
+                // gesture yet it couldn't, and a routed deck would be silent.
+                if (graph.equalizerEnabled() && navigator.userActivation?.hasBeenActive !== false) {
+                    for (const { audio: each } of this.decks) {
+                        graph.route(each);
+                    }
+                }
                 graph.resume();
                 this.dotnet.invokeMethodAsync("OnPlaying", deck.trackId).catch(() => { });
             }

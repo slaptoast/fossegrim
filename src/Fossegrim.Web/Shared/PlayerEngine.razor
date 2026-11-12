@@ -4,6 +4,7 @@
 @inject AppearanceService Appearance
 @inject IJSRuntime JS
 @inject FossegrimApiClient ApiClient
+@inject EqualizerService Equalizer
 
 @* The playback engine, rendered once in the app layout so it outlives page
    changes and wherever the player is shown (PlayerBar or a PlayerPanel).
@@ -69,6 +70,8 @@
                 }
                 _player = player;
                 Host.EngineStarted(_player, PreviousAsync);
+                // This device's equalizer, before anything plays.
+                await Equalizer.InitializeAsync();
             }
 
             do

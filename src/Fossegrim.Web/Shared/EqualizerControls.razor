@@ -1,0 +1,71 @@
+@implements IDisposable
+@inject EqualizerService Equalizer
+
+@* The equalizer's on switch and preset menu, plus (unless Compact) its ten
+   sliders. Used by the Library's Equalizer module and, compact, on the
+   Profile page. Settings are kept on this device (EqualizerService). *@
+<div class="equalizer @(Compact ? "equalizer-compact" : null)">
+    <div class="equalizer-bar">
+        <label class="checkbox-row">
+            <input type="checkbox" checked="@Settings.Enabled" @onchange="e => Equalizer.SetEnabledAsync(e.Value is true)" />
+            Equalizer
+        </label>
+        <select aria-label="Equalizer preset" value="@Settings.Preset" @onchange="e => Equalizer.SelectPresetAsync(e.Value?.ToString() ?? EqualizerPresets.Flat)">
+            @foreach (var preset in EqualizerPresets.All)
+            {
+                <option value="@preset.Id">@preset.Label</option>
+            }
+            <option value="@EqualizerPresets.Custom">Custom</option>
+        </select>
+        @if (!Compact)
+        {
+            <button type="button" class="button-secondary" title="Set every band to 0 dB" disabled="@(Settings.Gains.All(g => g == 0))"
+                    @onclick="() => Equalizer.SelectPresetAsync(EqualizerPresets.Flat)">Reset</button>
+        }
+    </div>
+
+    @if (!Compact)
+    {
+        <div class="equalizer-bands @(Settings.Enabled ? null : "is-off")">
+            @for (var i = 0; i < EqualizerPresets.Bands.Count; i++)
+            {
+                var band = i;
+                var gain = Settings.Gains[band];
+                var label = EqualizerPresets.Label(EqualizerPresets.Bands[band]);
+                <div class="equalizer-band">
+                    <output>@Format(gain)</output>
+                    <input type="range" min="@(-EqualizerPresets.MaxGain)" max="@EqualizerPresets.MaxGain" step="0.5" value="@gain.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                           aria-label="@label Hz" aria-valuetext="@Format(gain) dB"
+                           @oninput="e => SetBandAsync(band, e)" @ondblclick="() => Equalizer.SetBandAsync(band, 0)" />
+                    <span class="equalizer-band-label">@label</span>
+                </div>
+            }
+        </div>
+        <p class="equalizer-hint">Saved on this device. Double-click a slider to set it back to 0 dB.</p>
+    }
+</div>
+
+@code {
+    // Just the switch and preset menu (the Profile page).
+    [Parameter]
+    public bool Compact { get; set; }
+
+    private EqualizerSettings Settings => Equalizer.Current;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Equalizer.Changed += OnChanged;
+        await Equalizer.InitializeAsync();
+    }
+
+    private Task SetBandAsync(int band, ChangeEventArgs e) =>
+        double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var gain)
+            ? Equalizer.SetBandAsync(band, gain)
+            : Task.CompletedTask;
+
+    private static string Format(double gain) => gain > 0 ? $"+{gain:0.#}" : $"{gain:0.#}";
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Equalizer.Changed -= OnChanged;
+}

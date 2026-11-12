@@ -35,6 +35,7 @@ builder.Services.AddScoped<IPlaybackSettings>(sp => sp.GetRequiredService<Appear
 builder.Services.AddScoped<AlbumArtEditorState>();
 builder.Services.AddScoped<FavoritesService>();
 builder.Services.AddScoped<ScanStatusService>();
+builder.Services.AddScoped<EqualizerService>();
 
 builder.Services.AddTransient<AuthorizedHttpMessageHandler>();
 builder.Services.AddHttpClient<FossegrimApiClient>(client =>

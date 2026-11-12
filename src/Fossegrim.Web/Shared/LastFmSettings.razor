@@ -10,44 +10,49 @@
 }
 else if (_lastFm.SetByEnvironment)
 {
-    <p>Last.fm is configured by the <code>LASTFM_API_KEY</code> and <code>LASTFM_API_SECRET</code> environment variables. Unset them to manage it here.</p>
+    <div class="form-section">
+        <p>Last.fm is configured by the <code>LASTFM_API_KEY</code> and <code>LASTFM_API_SECRET</code> environment variables. Unset them to manage it here.</p>
+    </div>
 }
 else
 {
-    <p>
-        Lets each user link their own Last.fm account from their Profile.
-        Create an API application at
-        <a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener">last.fm/api/account/create</a>
-        (the callback URL can be left blank) and enter its key and shared secret.
-        Changing to a different application unlinks everyone's accounts.
-    </p>
-
-    @if (_lastFmMessage is not null)
-    {
-        <div class="@(_lastFmSuccess ? "success-message" : "error-message")">@_lastFmMessage</div>
-    }
-
     <EditForm Model="_lastFmInput" OnValidSubmit="SaveLastFmAsync">
         <DataAnnotationsValidator />
 
-        <div class="folder-item">
-            <div class="form-group">
-                <label for="lastFmApiKey">API Key</label>
-                <InputText id="lastFmApiKey" @bind-Value="_lastFmInput.ApiKey" autocomplete="off" />
-                <ValidationMessage For="() => _lastFmInput.ApiKey" />
-            </div>
+        <div class="form-section">
+            <p>
+                Lets each user link their own Last.fm account from their Profile.
+                Create an API application at
+                <a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener">last.fm/api/account/create</a>
+                (the callback URL can be left blank) and enter its key and shared secret.
+                Changing to a different application unlinks everyone's accounts.
+            </p>
 
-            <div class="form-group">
-                <label for="lastFmApiSecret">Shared Secret</label>
-                <InputText id="lastFmApiSecret" type="password" @bind-Value="_lastFmInput.ApiSecret" autocomplete="new-password"
-                           placeholder="@(_lastFm.HasSecret ? "Saved; leave blank to keep it" : "")" />
-            </div>
+            @if (_lastFmMessage is not null)
+            {
+                <div class="@(_lastFmSuccess ? "success-message" : "error-message")">@_lastFmMessage</div>
+            }
 
-            <button type="submit" class="button-secondary" disabled="@_lastFmBusy">Save</button>
+            <div class="form-grid">
+                <div class="form-group span-3">
+                    <label for="lastFmApiKey">API key</label>
+                    <InputText id="lastFmApiKey" @bind-Value="_lastFmInput.ApiKey" autocomplete="off" />
+                    <ValidationMessage For="() => _lastFmInput.ApiKey" />
+                </div>
+                <div class="form-group span-3">
+                    <label for="lastFmApiSecret">Shared secret</label>
+                    <InputText id="lastFmApiSecret" type="password" @bind-Value="_lastFmInput.ApiSecret" autocomplete="new-password"
+                               placeholder="@(_lastFm.HasSecret ? "Saved; leave blank to keep it" : "")" />
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
             @if (_lastFm.Configured)
             {
                 <button type="button" class="button-danger" disabled="@_lastFmBusy" @onclick="ClearLastFmAsync">Turn Off Last.fm</button>
             }
+            <button type="submit" class="button" disabled="@_lastFmBusy">Save</button>
         </div>
     </EditForm>
 }

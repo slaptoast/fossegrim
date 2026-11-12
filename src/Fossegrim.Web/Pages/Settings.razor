@@ -1,35 +1,36 @@
 @page "/settings"
 @attribute [Authorize(Roles = "Admin")]
 
-<div class="container">
-    <div class="header">
-        <h1>⚙️ Settings</h1>
-        <p>Configure your Fossegrim application</p>
-    </div>
-
-    <div class="content">
-        <h2 class="section-header">Configured Folders</h2>
+<div class="form-stack">
+    <FormFrame Glyph="♫" Title="Media Folders" Description="Where Fossegrim reads your music from.">
         <MediaFolderSettings />
+    </FormFrame>
 
-        <h2 class="section-header">File Naming</h2>
+    <FormFrame Glyph="✎" Title="File Naming" Description="How Rename files names and files your music.">
         <FileNamingSettings />
+    </FormFrame>
 
-        <h2 class="section-header">Last.fm</h2>
+    <FormFrame Glyph="♪" Title="Last.fm" Description="Lets people report what they play to their Last.fm account.">
         <LastFmSettings />
+    </FormFrame>
 
-        <h2 class="section-header">Accounts</h2>
+    <FormFrame Glyph="☺︎" Title="Accounts" Description="Who can sign in, and adding people by hand.">
         <AccountSettings />
+    </FormFrame>
 
-        <h2 class="section-header">Email</h2>
+    <FormFrame Glyph="✉︎" Title="Email" Description="Lets people reset a forgotten password themselves.">
         <EmailSettings />
+    </FormFrame>
 
-        <h2 class="section-header" id="https">HTTPS</h2>
+    <FormFrame Glyph="✓" Title="HTTPS" Id="https" Description="Free certificates from Let's Encrypt, renewed automatically.">
         <HttpsSettings />
+    </FormFrame>
 
-        <h2 class="section-header">API Keys</h2>
+    <FormFrame Glyph="⇄" Title="API Keys" Description="Let other applications start library scans.">
         <ApiKeySettings />
+    </FormFrame>
 
-        <h2 class="section-header">Backups</h2>
+    <FormFrame Glyph="↺" Title="Backups" Description="The database and its keys, zipped on a schedule.">
         <BackupSettings />
-    </div>
+    </FormFrame>
 </div>

@@ -9,7 +9,7 @@
 {
     @if (_message is not null)
     {
-        <div class="error-message">@_message</div>
+        <div class="form-section"><div class="error-message">@_message</div></div>
     }
     else
     {
@@ -18,29 +18,36 @@
 }
 else if (!_status.Available)
 {
-    <p>
-        This server isn't running with the bundled proxy, so HTTPS is handled elsewhere (or not at all).
-        To have Fossegrim get free certificates from Let's Encrypt itself, run it with the proxy from the
-        Docker Compose file. See DOCKER.md.
-    </p>
+    <div class="form-section">
+        <p>
+            This server isn't running with the bundled proxy, so HTTPS is handled elsewhere (or not at all).
+            To have Fossegrim get free certificates from Let's Encrypt itself, run it with the proxy from the
+            Docker Compose file. See DOCKER.md.
+        </p>
+    </div>
 }
 else
 {
-    <p>
-        Optional. If another reverse proxy already handles HTTPS for this server, leave this off: plain HTTP keeps working.
-        If this server faces the internet on its own (a Raspberry Pi on your home connection, say), Fossegrim can get a free
-        certificate from <a href="https://letsencrypt.org/" target="_blank" rel="noopener">Let's Encrypt</a> and renew it automatically.
-    </p>
+    <div class="form-section">
+        <p>
+            Optional. If another reverse proxy already handles HTTPS for this server, leave this off: plain HTTP keeps working.
+            If this server faces the internet on its own (a Raspberry Pi on your home connection, say), Fossegrim can get a free
+            certificate from <a href="https://letsencrypt.org/" target="_blank" rel="noopener">Let's Encrypt</a> and renew it automatically.
+        </p>
 
-    @if (_message is not null)
-    {
-        <div class="@(_success ? "success-message" : "error-message")">@_message</div>
-    }
+        @if (_message is not null)
+        {
+            <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+        }
+    </div>
 
-    <div class="folder-item">
+    <div class="form-section">
+        <div class="form-section-header">
+            <div class="form-section-title">Certificate</div>
+        </div>
         @if (_status.Certificate is { } certificate)
         {
-            <p><strong>Certificate:</strong> @string.Join(", ", certificate.Domains)</p>
+            <p><strong>Domains:</strong> @string.Join(", ", certificate.Domains)</p>
             <p>
                 <strong>Issued by:</strong> @certificate.Issuer
                 @if (certificate.Staging)
@@ -58,7 +65,7 @@ else
         }
         else
         {
-            <p><strong>Certificate:</strong> none. The server is reached over plain HTTP only.</p>
+            <p>None. The server is reached over plain HTTP only.</p>
         }
 
         @if (_status.Running)
@@ -77,68 +84,80 @@ else
         }
         else if (_status.LetsEncrypt is not null && _status.NextAttemptAt is { } next && _status.Certificate is not null)
         {
-            <p class="backup-hint">Renews automatically around @next.ToLocalTime().ToString("g").</p>
+            <p class="form-section-desc">Renews automatically around @next.ToLocalTime().ToString("g").</p>
         }
 
         @if (_status.Certificate is not null)
         {
-            <label class="checkbox-row">
-                <input type="checkbox" checked="@_status.RedirectHttp" disabled="@_busy" @onchange="SetRedirectAsync" />
-                Redirect plain HTTP to HTTPS
-            </label>
-            <p class="backup-hint">Turn this off if another proxy talks to this server over plain HTTP.</p>
+            <div class="form-checks">
+                <label class="form-check">
+                    <input type="checkbox" checked="@_status.RedirectHttp" disabled="@_busy" @onchange="SetRedirectAsync" />
+                    Redirect plain HTTP to HTTPS
+                </label>
+            </div>
+            <p class="form-section-desc">Turn this off if another proxy talks to this server over plain HTTP.</p>
         }
     </div>
 
     <EditForm Model="_input" OnValidSubmit="SaveAsync">
         <DataAnnotationsValidator />
-        <div class="folder-item">
-            <h3 class="setup-title">Let's Encrypt</h3>
+        <div class="form-section">
+            <div class="form-section-header">
+                <div class="form-section-title">Let's Encrypt</div>
+            </div>
 
             @if (_status.LetsEncrypt is null && _status.Certificate is not null)
             {
                 <div class="info-text">The current certificate was put in the certificate folder by hand. Getting one from Let's Encrypt replaces it.</div>
             }
 
-            <div class="form-group">
-                <label for="httpsDomains">Domain Names</label>
-                <InputText id="httpsDomains" @bind-Value="_input.Domains" placeholder="music.example.com" autocomplete="off" />
-                <ValidationMessage For="() => _input.Domains" />
-                <p class="form-hint">
-                    The name(s) people use to reach this server, separated by commas. Each one must point at this server,
-                    and port 80 must be reachable from the internet (forward ports 80 and 443 on your router), so Let's Encrypt can check it.
-                </p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="httpsDomains">Domain names</label>
+                    <InputText id="httpsDomains" @bind-Value="_input.Domains" placeholder="music.example.com" autocomplete="off" />
+                    <ValidationMessage For="() => _input.Domains" />
+                    <p class="form-hint">
+                        The name(s) people use to reach this server, separated by commas. Each one must point at this server,
+                        and port 80 must be reachable from the internet (forward ports 80 and 443 on your router), so Let's Encrypt can check it.
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <label for="httpsEmail">Email <span class="optional">Optional</span></label>
+                    <InputText id="httpsEmail" type="email" @bind-Value="_input.Email" autocomplete="email" />
+                    <ValidationMessage For="() => _input.Email" />
+                    <p class="form-hint">Let's Encrypt only uses it for important notices about your account. Fossegrim warns admins here if renewing fails.</p>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="httpsEmail">Email (optional)</label>
-                <InputText id="httpsEmail" type="email" @bind-Value="_input.Email" autocomplete="email" />
-                <ValidationMessage For="() => _input.Email" />
-                <p class="form-hint">Let's Encrypt only uses it for important notices about your account. Fossegrim warns admins here if renewing fails.</p>
+            <div class="form-checks">
+                <label class="form-check">
+                    <InputCheckbox @bind-Value="_input.Staging" />
+                    Test mode (Let's Encrypt's staging service)
+                </label>
             </div>
-
-            <label class="checkbox-row">
-                <InputCheckbox @bind-Value="_input.Staging" />
-                Test mode (Let's Encrypt's staging service)
-            </label>
-            <p class="backup-hint">
+            <p class="form-section-desc">
                 Gets an untrusted test certificate, which is useful while you get the port forwarding right: failed attempts
                 there don't count towards Let's Encrypt's limits. Turn it off for a real certificate.
             </p>
 
-            <label class="checkbox-row">
-                <InputCheckbox @bind-Value="_input.AgreeToTerms" />
-                <span>I agree to the <a href="https://letsencrypt.org/repository/" target="_blank" rel="noopener">Let's Encrypt Subscriber Agreement</a></span>
-            </label>
+            <div class="form-checks">
+                <label class="form-check">
+                    <InputCheckbox @bind-Value="_input.AgreeToTerms" />
+                    <span>I agree to the <a href="https://letsencrypt.org/repository/" target="_blank" rel="noopener">Let's Encrypt Subscriber Agreement</a></span>
+                </label>
+            </div>
+        </div>
 
-            <button type="submit" class="button-secondary" disabled="@(_busy || _status.Running || !_input.AgreeToTerms)">
-                @(_status.LetsEncrypt is null ? "Get Certificate" : "Save and Get Certificate")
-            </button>
+        <div class="form-actions">
             @if (_status.LetsEncrypt is not null)
             {
-                <button type="button" class="button-secondary" disabled="@(_busy || _status.Running)" @onclick="RenewAsync">Renew Now</button>
                 <button type="button" class="button-danger" disabled="@(_busy || _status.Running)" @onclick="() => _confirmTurnOff = true">Turn Off</button>
+                <button type="button" class="button-secondary" disabled="@(_busy || _status.Running)" @onclick="RenewAsync">Renew Now</button>
             }
+            <button type="submit" class="button" disabled="@(_busy || _status.Running || !_input.AgreeToTerms)">
+                @(_status.LetsEncrypt is null ? "Get Certificate" : "Save and Get Certificate")
+            </button>
         </div>
     </EditForm>
 }

@@ -34,7 +34,9 @@ else if (_folders.Count > 0)
             }
         </tbody>
     </table>
-    <ScanProgress />
+    <div class="form-section scan-progress-section">
+        <ScanProgress />
+    </div>
 }
 else
 {
@@ -43,30 +45,35 @@ else
     </div>
 }
 
-@if (_statusMessage is not null)
-{
-    <div class="@(_isSuccess ? "success-message" : "error-message")">@_statusMessage</div>
-}
-
-<h2 class="section-header">Add Media Folder</h2>
-
 <EditForm Model="_newFolder" OnValidSubmit="AddFolderAsync">
     <DataAnnotationsValidator />
 
-    <div class="folder-item">
-        <div class="form-group">
-            <label for="location">Folder Location</label>
-            <InputText id="location" @bind-Value="_newFolder.Location" placeholder="/Users/username/Music" />
-            <ValidationMessage For="() => _newFolder.Location" />
+    <div class="form-section">
+        <div class="form-section-header">
+            <div class="form-section-title">Add a folder</div>
         </div>
 
-        <div class="form-group">
-            <label for="name">Folder Name</label>
-            <InputText id="name" @bind-Value="_newFolder.Name" placeholder="My Music Collection" />
-            <ValidationMessage For="() => _newFolder.Name" />
-        </div>
+        @if (_statusMessage is not null)
+        {
+            <div class="@(_isSuccess ? "success-message" : "error-message")">@_statusMessage</div>
+        }
 
-        <button type="submit" class="button-secondary">+ Add Folder</button>
+        <div class="form-grid">
+            <div class="form-group span-4">
+                <label for="location">Folder location</label>
+                <InputText id="location" @bind-Value="_newFolder.Location" placeholder="/Users/username/Music" />
+                <ValidationMessage For="() => _newFolder.Location" />
+            </div>
+            <div class="form-group span-2">
+                <label for="name">Folder name</label>
+                <InputText id="name" @bind-Value="_newFolder.Name" placeholder="My Music Collection" />
+                <ValidationMessage For="() => _newFolder.Name" />
+            </div>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="button">+ Add Folder</button>
     </div>
 </EditForm>
 

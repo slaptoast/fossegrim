@@ -16,45 +16,45 @@
 }
 else
 {
-    <div class="tag-fields">
-        @if (!string.IsNullOrEmpty(Model.FileName))
-        {
-            <div class="form-group">
-                <label>File</label>
-                <div class="tag-edit-file" title="@FullPath">
-                    @if (Model.Folder is not null)
-                    {
-                        <span class="tag-edit-folder">@Model.Folder/</span>
-                    }
-                    @Model.FileName
+    <div class="form tag-fields">
+        <div class="form-grid">
+            @if (!string.IsNullOrEmpty(Model.FileName))
+            {
+                <div class="form-group">
+                    <span class="form-label">File</span>
+                    <div class="tag-edit-file" title="@FullPath">
+                        @if (Model.Folder is not null)
+                        {
+                            <span class="tag-edit-folder">@Model.Folder/</span>
+                        }
+                        @Model.FileName
+                    </div>
                 </div>
-            </div>
-        }
-        <div class="form-group">
-            <label>Title</label>
-            <input type="text" @bind="Model.Title" @bind:event="oninput" />
-        </div>
-        <div class="form-group">
-            <label>Artist</label>
-            <input type="text" @bind="Model.ArtistName" @bind:event="oninput" />
-        </div>
-        <div class="form-group">
-            <label>Album</label>
-            <input type="text" @bind="Model.Album" @bind:event="oninput" />
-        </div>
-        <div class="tag-fields-row">
+            }
             <div class="form-group">
-                <label>Track #</label>
-                <input type="number" @bind="Model.Track" @bind:event="oninput" />
+                <label for="@(_id)-title">Title</label>
+                <input id="@(_id)-title" type="text" @bind="Model.Title" @bind:event="oninput" />
             </div>
-            <div class="form-group">
-                <label>Year</label>
-                <input type="number" @bind="Model.Year" @bind:event="oninput" />
+            <div class="form-group span-3">
+                <label for="@(_id)-artist">Artist</label>
+                <input id="@(_id)-artist" type="text" @bind="Model.ArtistName" @bind:event="oninput" />
             </div>
-        </div>
-        <div class="form-group">
-            <label>Genre</label>
-            <input type="text" @bind="Model.Genre" @bind:event="oninput" />
+            <div class="form-group span-3">
+                <label for="@(_id)-album">Album</label>
+                <input id="@(_id)-album" type="text" @bind="Model.Album" @bind:event="oninput" />
+            </div>
+            <div class="form-group span-1">
+                <label for="@(_id)-track">Track</label>
+                <input id="@(_id)-track" type="number" @bind="Model.Track" @bind:event="oninput" />
+            </div>
+            <div class="form-group span-1">
+                <label for="@(_id)-year">Year</label>
+                <input id="@(_id)-year" type="number" @bind="Model.Year" @bind:event="oninput" />
+            </div>
+            <div class="form-group span-4">
+                <label for="@(_id)-genre">Genre</label>
+                <input id="@(_id)-genre" type="text" @bind="Model.Genre" @bind:event="oninput" />
+            </div>
         </div>
     </div>
 }
@@ -68,6 +68,9 @@ else
     // form (the single-track edit modal).
     [Parameter]
     public bool Compact { get; set; }
+
+    // Ties each label to its field; unique per instance.
+    private readonly string _id = "tag-" + Guid.NewGuid().ToString("N")[..8];
 
     // Hover text: the whole path inside the media folder, in case it's cut off.
     private string? FullPath => Model.Folder is null ? Model.FileName : $"{Model.Folder}/{Model.FileName}";

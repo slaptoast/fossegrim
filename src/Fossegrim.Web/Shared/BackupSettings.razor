@@ -5,32 +5,42 @@
 @* Backup schedule, retention, run-now and the list of backups. Used on the
    Settings page and in the setup wizard. *@
 
-@if (_message is not null)
-{
-    <div class="@(_success ? "success-message" : "error-message")">@_message</div>
-}
-
 @if (_status is null)
 {
+    @if (_message is not null)
+    {
+        <div class="form-section"><div class="@(_success ? "success-message" : "error-message")">@_message</div></div>
+    }
     <div class="loading"><h2>Loading backups</h2></div>
 }
 else
 {
-    <p>
-        Each backup is a zip of the database plus the keys needed to use it (the sign-in key and the keys that decrypt saved secrets).
-        They're written to <code>@_status.Directory</code>, which in Docker is the folder you mapped with <code>BACKUP_PATH</code>.
-        Backups contain secrets, so keep them somewhere private.
-    </p>
-
     <EditForm Model="_input" OnValidSubmit="SaveScheduleAsync">
-        <div class="folder-item backup-schedule">
-            <label class="checkbox-row">
-                <InputCheckbox @bind-Value="_input.Enabled" />
-                Back up automatically
-            </label>
+        <div class="form-section">
+            <p>
+                Each backup is a zip of the database plus the keys needed to use it (the sign-in key and the keys that decrypt saved secrets).
+                They're written to <code>@_status.Directory</code>, which in Docker is the folder you mapped with <code>BACKUP_PATH</code>.
+                Backups contain secrets, so keep them somewhere private.
+            </p>
+            @if (_message is not null)
+            {
+                <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+            }
+        </div>
 
-            <div class="backup-grid">
-                <div class="form-group">
+        <div class="form-section">
+            <div class="form-section-header">
+                <div class="form-section-title">Schedule</div>
+            </div>
+            <div class="form-checks">
+                <label class="form-check">
+                    <InputCheckbox @bind-Value="_input.Enabled" />
+                    Back up automatically
+                </label>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group span-2">
                     <label for="backupFrequency">Repeat</label>
                     <InputSelect id="backupFrequency" @bind-Value="_input.Frequency" disabled="@(!_input.Enabled)">
                         <option value="@BackupFrequency.Interval">Every few hours</option>
@@ -42,7 +52,7 @@ else
 
                 @if (_input.Frequency == BackupFrequency.Interval)
                 {
-                    <div class="form-group">
+                    <div class="form-group span-2">
                         <label for="backupInterval">Every (hours)</label>
                         <InputNumber id="backupInterval" @bind-Value="_input.IntervalHours" min="1" max="720" disabled="@(!_input.Enabled)" />
                     </div>
@@ -51,18 +61,18 @@ else
                 {
                     @if (_input.Frequency == BackupFrequency.Monthly)
                     {
-                        <div class="form-group">
-                            <label for="backupDayOfMonth">Day of month</label>
+                        <div class="form-group span-1">
+                            <label for="backupDayOfMonth">Day</label>
                             <InputNumber id="backupDayOfMonth" @bind-Value="_input.DayOfMonth" min="1" max="31" disabled="@(!_input.Enabled)" />
                         </div>
                     }
 
-                    <div class="form-group">
+                    <div class="form-group @(_input.Frequency == BackupFrequency.Monthly ? "span-1" : "span-2")">
                         <label for="backupTime">At</label>
                         <input id="backupTime" type="time" @bind="_input.TimeOfDay" disabled="@(!_input.Enabled)" />
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group span-2">
                         <label for="backupTimeZone">Time zone</label>
                         <InputSelect id="backupTimeZone" @bind-Value="_input.TimeZone" disabled="@(!_input.Enabled)">
                             <option value="">UTC</option>
@@ -77,10 +87,10 @@ else
 
             @if (_input.Frequency == BackupFrequency.Weekly)
             {
-                <div class="backup-days" role="group" aria-label="Days of the week">
+                <div class="form-checks inline" role="group" aria-label="Days of the week">
                     @foreach (var day in WeekDays)
                     {
-                        <label class="checkbox-row">
+                        <label class="form-check">
                             <input type="checkbox" checked="@_input.DaysOfWeek.Contains(day)" disabled="@(!_input.Enabled)"
                                    @onchange="e => ToggleDay(day, e)" />
                             @day.ToString()[..3]
@@ -91,26 +101,36 @@ else
 
             @if (_input.Frequency == BackupFrequency.Monthly && _input.DayOfMonth > 28)
             {
-                <p class="backup-hint">In months without day @_input.DayOfMonth, the backup runs on the last day of the month.</p>
+                <p class="form-section-desc">In months without day @_input.DayOfMonth, the backup runs on the last day of the month.</p>
             }
+        </div>
 
-            <div class="backup-grid">
-                <div class="form-group">
+        <div class="form-section">
+            <div class="form-section-header">
+                <div class="form-section-title">Clean-up</div>
+                <p class="form-section-desc">Old backups are cleaned up after each successful backup, manual ones included. The newest backup is always kept.</p>
+            </div>
+            <div class="form-grid">
+                <div class="form-group span-3">
                     <label for="backupKeepLast">Keep the newest</label>
                     <InputNumber id="backupKeepLast" @bind-Value="_input.KeepLast" min="1" placeholder="No limit" />
                 </div>
-                <div class="form-group">
-                    <label for="backupMaxAge">Delete backups older than (days)</label>
+                <div class="form-group span-3">
+                    <label for="backupMaxAge">Delete after (days)</label>
                     <InputNumber id="backupMaxAge" @bind-Value="_input.MaxAgeDays" min="1" placeholder="Never" />
                 </div>
             </div>
-            <p class="backup-hint">Old backups are cleaned up after each successful backup, manual ones included. The newest backup is always kept.</p>
+        </div>
 
-            <button type="submit" class="button-secondary" disabled="@_busy">Save Schedule</button>
+        <div class="form-actions">
+            <button type="submit" class="button" disabled="@_busy">Save Schedule</button>
         </div>
     </EditForm>
 
-    <div class="backup-status">
+    <div class="form-section">
+        <div class="form-section-header">
+            <div class="form-section-title">Backups</div>
+        </div>
         <p>
             <strong>Next backup:</strong>
             @(_status.NextRunAt is { } next ? FormatTime(next) : "not scheduled")
@@ -130,7 +150,7 @@ else
                 }
             </p>
         }
-        <button type="button" class="button" disabled="@(_busy || _status.Running)" @onclick="RunNowAsync">
+        <button type="button" class="button-secondary" disabled="@(_busy || _status.Running)" @onclick="RunNowAsync">
             @(_status.Running || _running ? "Backing up..." : "Back Up Now")
         </button>
     </div>

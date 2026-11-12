@@ -8,7 +8,7 @@
 {
     @if (_message is not null)
     {
-        <div class="error-message">@_message</div>
+        <div class="form-section"><div class="error-message">@_message</div></div>
     }
     else
     {
@@ -17,33 +17,38 @@
 }
 else
 {
-    <p>
-        Optional. With a mail server set up, "Forgot password?" on the sign-in page emails people a reset link.
-        Without one, an admin makes the link for them under Accounts.
-        Any SMTP server works: your email provider's (often with an app password), or a service like Mailgun or Postmark.
-    </p>
-
-    @if (_message is not null)
-    {
-        <div class="@(_success ? "success-message" : "error-message")">@_message</div>
-    }
-
     <EditForm Model="_input" OnValidSubmit="SaveAsync">
         <DataAnnotationsValidator />
 
-        <div class="folder-item">
-            <div class="backup-grid">
-                <div class="form-group">
-                    <label for="smtpHost">SMTP Server</label>
+        <div class="form-section">
+            <p>
+                Optional. With a mail server set up, "Forgot password?" on the sign-in page emails people a reset link.
+                Without one, an admin makes the link for them under Accounts.
+                Any SMTP server works: your email provider's (often with an app password), or a service like Mailgun or Postmark.
+            </p>
+
+            @if (_message is not null)
+            {
+                <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+            }
+        </div>
+
+        <div class="form-section">
+            <div class="form-section-header">
+                <div class="form-section-title">Server</div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group span-3">
+                    <label for="smtpHost">SMTP server</label>
                     <InputText id="smtpHost" @bind-Value="_input.Host" placeholder="smtp.example.com" autocomplete="off" />
                     <ValidationMessage For="() => _input.Host" />
                 </div>
-                <div class="form-group">
+                <div class="form-group span-1">
                     <label for="smtpPort">Port</label>
                     <InputNumber id="smtpPort" @bind-Value="_input.Port" />
                     <ValidationMessage For="() => _input.Port" />
                 </div>
-                <div class="form-group">
+                <div class="form-group span-2">
                     <label for="smtpSecurity">Security</label>
                     <InputSelect id="smtpSecurity" @bind-Value="_input.Security">
                         <option value="@SmtpSecurity.StartTls">STARTTLS (usually 587)</option>
@@ -51,55 +56,60 @@ else
                         <option value="@SmtpSecurity.None">None (local relays only)</option>
                     </InputSelect>
                 </div>
-            </div>
-
-            <div class="backup-grid">
-                <div class="form-group">
-                    <label for="smtpUser">Username</label>
+                <div class="form-group span-3">
+                    <label for="smtpUser">Username <span class="optional">Optional</span></label>
                     <InputText id="smtpUser" @bind-Value="_input.UserName" placeholder="Blank if none" autocomplete="off" />
                 </div>
-                <div class="form-group">
-                    <label for="smtpPassword">Password</label>
+                <div class="form-group span-3">
+                    <label for="smtpPassword">Password <span class="optional">Optional</span></label>
                     <InputText id="smtpPassword" type="password" @bind-Value="_input.Password" autocomplete="new-password"
                                placeholder="@(_settings.HasPassword ? "Saved; leave blank to keep it" : "")" />
                 </div>
             </div>
+        </div>
 
-            <div class="backup-grid">
-                <div class="form-group">
-                    <label for="smtpFrom">From Address</label>
+        <div class="form-section">
+            <div class="form-section-header">
+                <div class="form-section-title">Messages</div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group span-3">
+                    <label for="smtpFrom">From address</label>
                     <InputText id="smtpFrom" type="email" @bind-Value="_input.FromAddress" placeholder="fossegrim@example.com" autocomplete="off" />
                     <ValidationMessage For="() => _input.FromAddress" />
                 </div>
-                <div class="form-group">
-                    <label for="smtpFromName">From Name</label>
+                <div class="form-group span-3">
+                    <label for="smtpFromName">From name</label>
                     <InputText id="smtpFromName" @bind-Value="_input.FromName" placeholder="Fossegrim" autocomplete="off" />
                 </div>
+                <div class="form-group">
+                    <label for="publicUrl">Fossegrim's address</label>
+                    <InputText id="publicUrl" @bind-Value="_input.PublicUrl" autocomplete="off" />
+                    <ValidationMessage For="() => _input.PublicUrl" />
+                    <span class="form-hint">Where people open Fossegrim. Emailed links start with this, so use an address that works for everyone, not just on this computer.</span>
+                </div>
             </div>
+        </div>
 
-            <div class="form-group">
-                <label for="publicUrl">Fossegrim's Address</label>
-                <InputText id="publicUrl" @bind-Value="_input.PublicUrl" autocomplete="off" />
-                <ValidationMessage For="() => _input.PublicUrl" />
-                <p class="form-hint">Where people open Fossegrim. Emailed links start with this, so use an address that works for everyone, not just on this computer.</p>
-            </div>
-
-            <button type="submit" class="button-secondary" disabled="@_busy">Save</button>
+        <div class="form-actions">
             @if (_settings.Configured)
             {
                 <button type="button" class="button-danger" disabled="@_busy" @onclick="ClearAsync">Turn Off Email</button>
             }
+            <button type="submit" class="button" disabled="@_busy">Save</button>
         </div>
     </EditForm>
 
     @if (_settings.Configured)
     {
-        <div class="folder-item">
-            <div class="form-group">
-                <label for="testTo">Send a Test Email To</label>
-                <div class="reset-link">
-                    <input id="testTo" type="email" @bind="_testTo" autocomplete="email" />
-                    <button type="button" class="button-secondary" disabled="@(_busy || string.IsNullOrWhiteSpace(_testTo))" @onclick="SendTestAsync">@(_busy ? "Sending..." : "Send")</button>
+        <div class="form-section">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="testTo">Send a test email to</label>
+                    <div class="reset-link">
+                        <input id="testTo" type="email" @bind="_testTo" autocomplete="email" />
+                        <button type="button" class="button-secondary" disabled="@(_busy || string.IsNullOrWhiteSpace(_testTo))" @onclick="SendTestAsync">@(_busy ? "Sending..." : "Send")</button>
+                    </div>
                 </div>
             </div>
         </div>

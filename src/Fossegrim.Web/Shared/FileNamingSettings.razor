@@ -3,28 +3,38 @@
 @* The server's file-name template, used by "Rename files" and the
    Library health file-name report. *@
 
-@if (_message is not null)
-{
-    <div class="@(_success ? "success-message" : "error-message")">@_message</div>
-}
-
 @if (_template is not null)
 {
-    <div class="folder-item">
-        <div class="form-group">
-            <label for="renameTemplate">Template</label>
-            <input id="renameTemplate" type="text" @bind="_input" @bind:event="oninput" spellcheck="false" />
+    <div class="form-section">
+        @if (_message is not null)
+        {
+            <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+        }
+
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="renameTemplate">Template</label>
+                <input id="renameTemplate" type="text" @bind="_input" @bind:event="oninput" spellcheck="false" />
+                <span class="form-hint">Saved example: <code>@_template.Example</code></span>
+            </div>
         </div>
-        <p class="backup-hint">
+        <p class="form-section-desc">
             Relative to each media folder; <code>/</code> starts a new folder and the file's extension is kept.
             Tokens: <code>{artist}</code> <code>{album}</code> <code>{title}</code> <code>{track}</code> <code>{track:00}</code>
             <code>{year}</code> <code>{genre}</code>. Characters that aren't allowed in file names become <code>_</code>,
             and missing tags become "Unknown Artist" and the like.
         </p>
-        <p class="backup-hint">Saved example: <code>@_template.Example</code></p>
+    </div>
 
-        <button type="button" class="button-secondary" disabled="@(_busy || _input == _template.Template)" @onclick="SaveAsync">Save Template</button>
+    <div class="form-actions">
         <a class="button-secondary" href="/files/rename?all=true">Preview Renaming the Whole Library</a>
+        <button type="button" class="button" disabled="@(_busy || _input == _template.Template)" @onclick="SaveAsync">Save Template</button>
+    </div>
+}
+else if (_message is not null)
+{
+    <div class="form-section">
+        <div class="@(_success ? "success-message" : "error-message")">@_message</div>
     </div>
 }
 

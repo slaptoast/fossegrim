@@ -91,6 +91,10 @@
         if (colors["--accent-fg"]) {
             extra["--accent-fg-hover"] = "color-mix(in srgb, " + colors["--accent-fg"] + " 80%, " + shade + ")";
         }
+        if (colors["--brand-violet"] || colors["--surface"]) {
+            // The framed-form header band: a wash of the accent over the panel color.
+            extra["--brand-violet-tint"] = "color-mix(in srgb, var(--brand-violet) " + (base === "dark" ? "16%" : "8%") + ", var(--surface))";
+        }
         if (colors["--brand-indigo"] || colors["--brand-violet"]) {
             extra["--gradient-brand"] = "linear-gradient(135deg, var(--brand-indigo) 0%, var(--brand-violet) 100%)";
         }

@@ -9,6 +9,7 @@
     --brand-indigo: #667eea;
     --brand-violet: #764ba2;
     --brand-violet-hover: #643f8b;
+    --brand-violet-tint: #f6f2fa;
     --on-brand: #ffffff;
     --ink: #212529;
     --ink-soft: #333333;
@@ -80,6 +81,7 @@
     --control-sm: 24px;
     --control-md: 28px;
     --bar-height: 36px;
+    --bubble-size: 36px;
     --label-line: 16px;
     --textarea-min: 72px;
     --check-size: 16px;
@@ -116,6 +118,7 @@
     --border-list: #2a2e34;
     --border-compact: #6c7480;
     --divider-soft: #2a2e34;
+    --brand-violet-tint: #2a2537;
     --field: #15181c;
     --field-border: #737b87;
     --field-border-hover: #9ea6af;
@@ -790,8 +793,9 @@ select.field,
 .form-section { border: 0; margin: 0; min-width: 0; padding: var(--space-16); }
 .form-section + .form-section { border-top: 1px solid var(--border); }
 .form-section-header { margin-bottom: var(--space-12); }
+.form-section > legend { float: left; width: 100%; }
 .form-section-title,
-.form-section > legend { float: left; width: 100%; padding: 0; font-size: 0.6875rem; line-height: var(--label-line); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+.form-section > legend { padding: 0; font-size: 0.6875rem; line-height: var(--label-line); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
 .form-section > legend { margin-bottom: var(--space-12); }
 .form-section > legend + * { clear: both; }
 .form-section-desc { font-size: 0.8125rem; line-height: 18px; color: var(--text-muted); margin-top: var(--space-2); }
@@ -820,9 +824,60 @@ select.field,
 
 /* 6. Frame: chrome for a form standing alone on canvas */
 .form-frame { max-width: var(--form-max); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); overflow: hidden; container-type: inline-size; }
-.form-frame-header { display: flex; align-items: center; gap: var(--space-8); min-height: var(--bar-height); padding: var(--space-8) var(--space-16); background: var(--surface-muted); border-bottom: 1px solid var(--border); }
-.form-frame-header h2 { font-size: 0.875rem; font-weight: 600; color: var(--ink); }
+/* The header: a tinted band led by a coloured bubble, so a form announces itself */
+.form-frame-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    padding: var(--space-12) var(--space-16);
+    background: var(--brand-violet-tint);
+    border-bottom: 1px solid var(--border-strong);
+}
+.form-bubble {
+    flex: none;
+    width: var(--bubble-size);
+    height: var(--bubble-size);
+    border-radius: var(--radius-round);
+    background: var(--brand-violet);
+    color: var(--on-brand);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+    font-weight: 600;
+    user-select: none;
+}
+.form-frame-header.danger { background: var(--surface); }
+.form-frame-header.danger .form-bubble { background: var(--danger); }
+.form-frame-heading { min-width: 0; flex: 1; }
+.form-frame-header h2 { font-size: 1rem; line-height: 20px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.form-frame-header .form-frame-desc { font-size: 0.8125rem; line-height: 18px; color: var(--text-secondary); margin-top: var(--space-2); }
+.form-frame-header > .button, .form-frame-header > .button-secondary { flex: none; }
 .form-frame > .validation-summary { margin: var(--space-16) var(--space-16) 0; }
+
+/* What sits in a frame besides fields: prose, notes, tables, lists */
+:where(.form-section) p { margin: 0 0 var(--space-8); color: var(--text-secondary); }
+:where(.form-section) p:last-child { margin-bottom: 0; }
+.form-section > :is(.success-message, .error-message, .error, .info-text, .validation-summary):last-child { margin-bottom: 0; }
+.form-section > .form-grid + *, .form-section > .form-checks + * { margin-top: var(--space-12); }
+.form-frame > table { border-top: 1px solid var(--border); }
+.form-frame > .no-results, .form-frame > .loading { border-top: 1px solid var(--border); }
+.form-frame > .form-section + table, .form-frame > table + .form-section { border-top: 1px solid var(--border); }
+.form-frame form + .form-section, .form-frame .form-actions + .form-section,
+.form-frame .form-actions + form > .form-section:first-child { border-top: 1px solid var(--border); }
+.form-actions .button-danger:first-child { margin-right: auto; }
+.form-group > .reset-link { margin: 0; }
+
+/* Pages that are a stack of framed forms (Settings, Profile) */
+.form-stack { display: flex; flex-direction: column; gap: var(--space-8); width: 100%; max-width: var(--form-max); margin: 0 auto; }
+.form-stack > .form-frame { max-width: none; }
+
+/* The setup wizard shows the same settings inside its own card: no second frame, flat action rows */
+.setup-wizard .form-section { padding: var(--space-8) 0; }
+.setup-wizard .form-section + .form-section { border-top: 0; }
+.setup-wizard .form-actions { background: none; border-top: 0; padding: var(--space-4) 0 var(--space-8); min-height: 0; justify-content: flex-start; }
+.setup-wizard .form-actions .button-danger:first-child { margin-right: 0; }
 
 /* ---- Playlist sharing and picker ---- */
 .share-add { display: flex; gap: var(--space-6); margin-top: var(--space-8); }
@@ -1214,10 +1269,7 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 .modal-body > .error { margin-bottom: var(--space-6); }
 
 /* ---- Tag editing ---- */
-.tag-edit-modal { max-width: 480px; }
-.tag-fields .form-group:last-child { margin-bottom: 0; }
-.tag-fields-row { display: flex; gap: var(--space-12); }
-.tag-fields-row .form-group { flex: 1; }
+.tag-edit-modal { max-width: 560px; }
 .tag-edit-table-wrapper { overflow-x: auto; }
 .tag-edit-table td { padding: var(--space-2) var(--space-4); max-width: none; }
 .tag-edit-table input { min-width: 90px; }

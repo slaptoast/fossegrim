@@ -1,0 +1,36 @@
+@* A form standing on its own on the canvas (design system: Form). The header is a
+   brand-violet-tint band led by a round bubble holding one white glyph that names
+   the task; the content is form-sections, tables and form-actions bars. Forms
+   inside a module or modal don't use this: their host supplies the chrome. *@
+
+<section class="form-frame @Class" id="@Id" aria-labelledby="@_headingId">
+    <div class="form-frame-header @(Danger ? "danger" : null)">
+        <span class="form-bubble" aria-hidden="true">@Glyph</span>
+        <div class="form-frame-heading">
+            <h2 id="@_headingId">@Title</h2>
+            @if (Description is not null)
+            {
+                <p class="form-frame-desc">@Description</p>
+            }
+        </div>
+        @HeaderActions
+    </div>
+    @ChildContent
+</section>
+
+@code {
+    private readonly string _headingId = "form-" + Guid.NewGuid().ToString("N")[..8];
+
+    /// <summary>One Unicode glyph: ✎ edit, ✱ password, ♪ playback, ⚙︎ settings, and so on.</summary>
+    [Parameter, EditorRequired] public string Glyph { get; set; } = "";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    /// <summary>One line naming what's being edited or why.</summary>
+    [Parameter] public string? Description { get; set; }
+    /// <summary>A destructive form: the band turns surface and the bubble danger.</summary>
+    [Parameter] public bool Danger { get; set; }
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? Class { get; set; }
+    /// <summary>At most one button at the right end of the header.</summary>
+    [Parameter] public RenderFragment? HeaderActions { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

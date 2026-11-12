@@ -3,26 +3,28 @@
 
 @* API keys other applications use to start library scans. *@
 
-<p>
-    Let other applications (Lidarr, a script after a download finishes…) start a library scan.
-    Send the key in an <code>X-Api-Key</code> header to <code>POST @(BaseUrl)api/external/scan</code>,
-    optionally with <code>{"path": "/music/Artist/Album"}</code> to scan just that folder.
-    A key can only start scans and check on them.
-</p>
+<div class="form-section">
+    <p>
+        Let other applications (Lidarr, a script after a download finishes…) start a library scan.
+        Send the key in an <code>X-Api-Key</code> header to <code>POST @(BaseUrl)api/external/scan</code>,
+        optionally with <code>{"path": "/music/Artist/Album"}</code> to scan just that folder.
+        A key can only start scans and check on them.
+    </p>
 
-@if (_message is not null)
-{
-    <div class="@(_success ? "success-message" : "error-message")">@_message</div>
-}
+    @if (_message is not null)
+    {
+        <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+    }
 
-@if (_created is not null)
-{
-    <div class="info-text api-key-secret">
-        <strong>Copy the key for “@_created.Key.Name” now. It won't be shown again.</strong>
-        <code>@_created.Secret</code>
-        <pre>curl -X POST -H "X-Api-Key: @_created.Secret" @(BaseUrl)api/external/scan</pre>
-    </div>
-}
+    @if (_created is not null)
+    {
+        <div class="info-text api-key-secret">
+            <strong>Copy the key for “@_created.Key.Name” now. It won't be shown again.</strong>
+            <code>@_created.Secret</code>
+            <pre>curl -X POST -H "X-Api-Key: @_created.Secret" @(BaseUrl)api/external/scan</pre>
+        </div>
+    }
+</div>
 
 @if (_keys.Count > 0)
 {
@@ -53,12 +55,16 @@
     </table>
 }
 
-<div class="folder-item api-key-new">
-    <div class="form-group">
-        <label for="apiKeyName">New key name</label>
-        <input id="apiKeyName" type="text" @bind="_name" @bind:event="oninput" placeholder="Lidarr" maxlength="100" />
+<div class="form-section">
+    <div class="form-grid">
+        <div class="form-group span-4">
+            <label for="apiKeyName">New key name</label>
+            <input id="apiKeyName" type="text" @bind="_name" @bind:event="oninput" placeholder="Lidarr" maxlength="100" />
+        </div>
     </div>
-    <button type="button" class="button-secondary" disabled="@(_busy || string.IsNullOrWhiteSpace(_name))" @onclick="CreateAsync">+ Create Key</button>
+</div>
+<div class="form-actions">
+    <button type="button" class="button" disabled="@(_busy || string.IsNullOrWhiteSpace(_name))" @onclick="CreateAsync">+ Create Key</button>
 </div>
 
 @code {

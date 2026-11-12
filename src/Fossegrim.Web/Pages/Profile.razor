@@ -46,6 +46,11 @@
         </div>
 
         <div class="form-section">
+            <EqualizerControls Compact="true" />
+            <p class="form-section-desc">Saved on this device only, as headphones and speakers usually want different settings. Adjust the bands in the Equalizer module on the Library page.</p>
+        </div>
+
+        <div class="form-section">
             <div class="form-checks">
                 <label class="form-check">
                     <input type="checkbox" checked="@Appearance.Current.Player.AutoFill" @onchange="SetAutoFillAsync" />

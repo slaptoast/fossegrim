@@ -32,14 +32,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -47,14 +47,14 @@ jobs:
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Derive image metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/fossegrim
@@ -71,10 +71,10 @@ jobs:
       # For 64-bit ARM (e.g. a Raspberry Pi), the runtime stage runs under
       # QEMU; the .NET build itself doesn't (see the Dockerfile).
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -90,7 +90,7 @@ jobs:
       # The nginx proxy in front of the app (proxy/), tagged the same way.
       - name: Derive proxy image metadata
         id: proxy-meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/fossegrim-proxy
@@ -105,7 +105,7 @@ jobs:
             latest=auto
 
       - name: Build and push proxy
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: proxy
           platforms: linux/amd64,linux/arm64
@@ -121,7 +121,7 @@ jobs:
       # point back at GitHub.
       - name: Sync README to Docker Hub
         if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
-        uses: peter-evans/dockerhub-description@v4
+        uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -132,7 +132,7 @@ jobs:
 
       - name: Sync proxy README to Docker Hub
         if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
-        uses: peter-evans/dockerhub-description@v4
+        uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}

@@ -329,6 +329,35 @@ public sealed class BrowseTests : IClassFixture<FossegrimApiFactory>, IDisposabl
         Assert.Equal(1, (await user.GetFromJsonAsync<PagedResult<ArtistListItemDto>>($"/api/artists?q={_tag}"))!.TotalCount);
     }
 
+    [Fact]
+    public async Task AlbumPlays_CountOnlyListensToEveryTrack()
+    {
+        var artist = Artist($"Whole {_tag}");
+        var whole = Album($"Whole {_tag}", artist);
+        var partly = Album($"Partly {_tag}", artist);
+        var first = Track($"First {_tag}", whole, artist);
+        var second = Track($"Second {_tag}", whole, artist);
+        // Too short to ever count as a listen, so it isn't needed for a full play.
+        var intro = Track($"Intro {_tag}", whole, artist);
+        intro.Duration = TimeSpan.FromSeconds(20);
+        var partlyFirst = Track($"Opener {_tag}", partly, artist);
+        Track($"Closer {_tag}", partly, artist);
+        await SaveAsync(artist);
+        var me = await _factory.CreateUserAsync();
+        await PlaysAsync(me, first, new DateTime(2026, 1, 1), new DateTime(2026, 2, 1), new DateTime(2026, 3, 1));
+        await PlaysAsync(me, second, new DateTime(2026, 1, 1), new DateTime(2026, 2, 1));
+        // Three plays of one track: more track plays than "Whole", but no full listen.
+        await PlaysAsync(me, partlyFirst, new DateTime(2026, 4, 1), new DateTime(2026, 4, 2), new DateTime(2026, 4, 3));
+
+        var albums = (await me.Client.GetFromJsonAsync<PagedResult<AlbumListItemDto>>($"/api/albums?q={_tag}&sort=played"))!.Items;
+        Assert.Equal(["Whole", "Partly"], albums.Select(a => a.Name.Split(' ')[0]));
+        Assert.Equal([2, 0], albums.Select(a => a.Plays));
+        Assert.Equal(new DateTime(2026, 4, 3), albums[1].LastPlayedAt);
+
+        var info = await me.Client.GetFromJsonAsync<AlbumInfoDto>($"/api/albums/{whole.Id}/info");
+        Assert.Equal(2, info!.Plays);
+    }
+
     private static Artist Artist(string name) => new() { Id = Guid.NewGuid(), Name = name, DateAdded = DateTime.UtcNow };
 
     private static Album Album(string name, Artist artist, int? year = null, DateTime? added = null)

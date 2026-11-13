@@ -15,7 +15,7 @@
             <div class="hover-card-title">@album.Name</div>
             <div class="hover-card-sub">@AlbumByline(album)</div>
             <div class="hover-card-facts">@AlbumFacts(album)</div>
-            <div class="hover-card-plays">@Plays(album.Plays, album.LastPlayedAt)</div>
+            <div class="hover-card-plays">@AlbumPlays(album.Plays, album.LastPlayedAt)</div>
             @SummaryBlock(album.Summary, album.InfoUrl, shown.LookingUp)
         }
         else if (shown.Artist is { } artist)
@@ -205,6 +205,15 @@
     private static string Plays(int plays, DateTime? lastPlayedAt) => plays == 0
         ? "You haven't played it yet"
         : $"You've played it {Count(plays, "time")}" + (lastPlayedAt is { } at ? $" · last played {RelativeTime.Format(at, DateTime.UtcNow)}" : "");
+
+    // An album's plays only count listens to every track, so tracks played on their own show as "last played" alone.
+    private static string AlbumPlays(int plays, DateTime? lastPlayedAt) =>
+        (plays, lastPlayedAt) switch
+        {
+            (0, null) => "You haven't played it yet",
+            (0, { } at) => $"Not played all the way through yet · last played {RelativeTime.Format(at, DateTime.UtcNow)}",
+            _ => $"You've played it all the way through {Count(plays, "time")}" + (lastPlayedAt is { } at ? $" · last played {RelativeTime.Format(at, DateTime.UtcNow)}" : ""),
+        };
 
     private static string Count(int count, string noun) => $"{count} {noun}{(count == 1 ? "" : "s")}";
 

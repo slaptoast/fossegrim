@@ -82,7 +82,7 @@ public class FossegrimTools
         McpPage<McpTrack>.From(await _browser.TracksAsync(Parse(query, sort, order, page, pageSize, LibrarySorts.ForTracks, playedOnly, favoritesOnly), _userId, cancellationToken), McpTrack.From);
 
     [McpServerTool(Name = "list_albums", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("List albums a page at a time, optionally filtered and sorted. Sorts: name, artist, year, added, played (play count), recent (last played), favorited, relevance.")]
+    [Description("List albums a page at a time, optionally filtered and sorted. Sorts: name, artist, year, added, played (times played all the way through), recent (last played), favorited, relevance. Plays counts only full listens: every track heard.")]
     public async Task<McpPage<McpAlbum>> ListAlbums(
         [Description("Only albums matching these words.")] string? query = null,
         [Description("Sort: name, artist, year, added, played, recent, favorited or relevance.")] string? sort = null,
@@ -108,7 +108,7 @@ public class FossegrimTools
         McpPage<McpArtist>.From(await _browser.ArtistsAsync(Parse(query, sort, order, page, pageSize, LibrarySorts.ForArtists, playedOnly, favoritesOnly), _userId, cancellationToken), McpArtist.From);
 
     [McpServerTool(Name = "get_album", ReadOnly = true, OpenWorld = true)]
-    [Description("An album's details, its tracks in play order, the user's plays of it, and a Wikipedia summary when one is known.")]
+    [Description("An album's details, its tracks in play order, how many times the user has played it all the way through, and a Wikipedia summary when one is known.")]
     public async Task<AlbumDetails> GetAlbum(Guid albumId, CancellationToken cancellationToken = default)
     {
         var info = await _info.AlbumAsync(albumId, _userId, lookup: true, cancellationToken)
@@ -363,9 +363,10 @@ public record McpTrack(Guid Id, string? Title, string? Artist, string? Album, Gu
         FossegrimTools.Duration(m.Duration), m.Genre, m.LastPlayedAt);
 }
 
-public record McpAlbum(Guid Id, string Name, IReadOnlyList<string> Artists, int? Year, string? Genre, int TrackCount, DateTime? LastPlayedAt)
+// Plays: times the user has heard every track on it. LastPlayedAt: their latest play of any of its tracks.
+public record McpAlbum(Guid Id, string Name, IReadOnlyList<string> Artists, int? Year, string? Genre, int TrackCount, int Plays, DateTime? LastPlayedAt)
 {
-    public static McpAlbum From(AlbumListItemDto a) => new(a.Id, a.Name, a.Artists.Select(x => x.Name).ToList(), a.Year, a.Genre, a.TrackCount, a.LastPlayedAt);
+    public static McpAlbum From(AlbumListItemDto a) => new(a.Id, a.Name, a.Artists.Select(x => x.Name).ToList(), a.Year, a.Genre, a.TrackCount, a.Plays, a.LastPlayedAt);
 }
 
 public record McpArtist(Guid Id, string Name, int AlbumCount, int TrackCount, DateTime? LastPlayedAt)

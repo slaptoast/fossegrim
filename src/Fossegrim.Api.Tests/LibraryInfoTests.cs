@@ -63,11 +63,14 @@ public sealed class LibraryInfoTests : IClassFixture<FossegrimApiFactory>
         var other = await _factory.CreateUserAsync();
         await _factory.WithDbAsync(async db =>
         {
-            var track = await db.MediaItems.FirstAsync(m => m.Albums.Any(al => al.Id == album.Id));
+            // Album plays count listens to every track: the caller heard the
+            // first track twice and the second once, so one full play.
+            var tracks = await db.MediaItems.Where(m => m.Albums.Any(al => al.Id == album.Id)).ToListAsync();
             db.PlayEvents.AddRange(
-                new PlayEvent { Id = Guid.NewGuid(), UserId = user.UserId, MediaItemId = track.Id, PlayedAt = DateTime.UtcNow.AddDays(-2), RecordedAt = DateTime.UtcNow },
-                new PlayEvent { Id = Guid.NewGuid(), UserId = user.UserId, MediaItemId = track.Id, PlayedAt = DateTime.UtcNow.AddDays(-1), RecordedAt = DateTime.UtcNow },
-                new PlayEvent { Id = Guid.NewGuid(), UserId = other.UserId, MediaItemId = track.Id, PlayedAt = DateTime.UtcNow, RecordedAt = DateTime.UtcNow });
+                new PlayEvent { Id = Guid.NewGuid(), UserId = user.UserId, MediaItemId = tracks[0].Id, PlayedAt = DateTime.UtcNow.AddDays(-2), RecordedAt = DateTime.UtcNow },
+                new PlayEvent { Id = Guid.NewGuid(), UserId = user.UserId, MediaItemId = tracks[0].Id, PlayedAt = DateTime.UtcNow.AddDays(-1), RecordedAt = DateTime.UtcNow },
+                new PlayEvent { Id = Guid.NewGuid(), UserId = user.UserId, MediaItemId = tracks[1].Id, PlayedAt = DateTime.UtcNow.AddDays(-1), RecordedAt = DateTime.UtcNow },
+                new PlayEvent { Id = Guid.NewGuid(), UserId = other.UserId, MediaItemId = tracks[1].Id, PlayedAt = DateTime.UtcNow, RecordedAt = DateTime.UtcNow });
             await db.SaveChangesAsync();
         });
 
@@ -75,7 +78,7 @@ public sealed class LibraryInfoTests : IClassFixture<FossegrimApiFactory>
 
         Assert.Equal("Mezzanine is the third album by Massive Attack.", info!.Summary);
         Assert.Equal("https://en.wikipedia.org/wiki/Mezzanine_(album)", info.InfoUrl);
-        Assert.Equal((2, 1998, 2), (info.TrackCount, info.Year, info.Plays));
+        Assert.Equal((2, 1998, 1), (info.TrackCount, info.Year, info.Plays));
         Assert.Equal(TimeSpan.FromMinutes(9), info.Length);
         Assert.Equal([$"Massive Attack {_tag}"], info.Artists);
     }

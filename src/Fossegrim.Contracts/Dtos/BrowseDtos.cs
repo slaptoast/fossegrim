@@ -8,6 +8,7 @@ public record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int Page, i
 
 // An album in a list: its tracks come from /api/albums/{id}/tracks.
 // LastPlayedAt is when the caller last played any of its tracks (null if never).
+// Plays is how many times the caller has heard every track on it (sort=played orders by this).
 public record AlbumListItemDto(
     Guid Id,
     string Name,
@@ -16,7 +17,8 @@ public record AlbumListItemDto(
     DateTime? DateAdded,
     int TrackCount,
     IEnumerable<ArtistSummaryDto> Artists,
-    DateTime? LastPlayedAt = null);
+    DateTime? LastPlayedAt = null,
+    int Plays = 0);
 
 // An artist in a list: its tracks come from /api/artists/{id}/tracks.
 // LastPlayedAt is when the caller last played any of its tracks (null if never).

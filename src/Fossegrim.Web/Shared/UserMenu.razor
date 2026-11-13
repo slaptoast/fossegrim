@@ -7,7 +7,7 @@
 
 <div class="user-menu">
     @* On phones only the icon shows; the name stays readable to screen readers. *@
-    <button type="button" class="user-menu-toggle" @onclick="ToggleOpen" title="@_displayName"><span class="user-menu-icon" aria-hidden="true">👤</span><span class="user-menu-name">@_displayName</span> ▾</button>
+    <button type="button" class="user-menu-toggle" @onclick="ToggleOpen" title="@_userName"><span class="user-menu-icon" aria-hidden="true">👤</span><span class="user-menu-name">@_userName</span> ▾</button>
 
     @if (_isOpen)
     {
@@ -46,7 +46,7 @@
 @code {
     private bool _isOpen;
     private bool _isAdmin;
-    private string _displayName = "Account";
+    private string _userName = "Account";
     private static readonly (string Choice, string Label)[] BuiltInThemes =
     [
         (ThemeChoices.System, "System"),
@@ -74,7 +74,7 @@
         var state = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = state.User;
         _isAdmin = user.IsInRole("Admin");
-        _displayName = user.Identity?.Name ?? "Account";
+        _userName = user.Identity?.Name ?? "Account";
     }
 
     private void ToggleOpen() => _isOpen = !_isOpen;

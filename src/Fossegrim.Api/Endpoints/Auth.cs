@@ -109,16 +109,15 @@ public static class Auth
                 return Results.Problem("Registration is closed. Ask an admin for an account.", statusCode: StatusCodes.Status403Forbidden);
             }
 
-            if (await AccountRules.CheckDisplayNameAsync(db, request.DisplayName) is { } nameError)
+            if (await AccountRules.CheckUserNameAsync(db, request.UserName) is { } nameError)
             {
                 return Results.BadRequest(new IdentityErrorsResponse([nameError]));
             }
 
             var user = new ApplicationUser
             {
-                UserName = request.Email,
+                UserName = AccountRules.Clean(request.UserName),
                 Email = request.Email,
-                DisplayName = AccountRules.Clean(request.DisplayName),
                 DateJoined = DateTime.UtcNow
             };
 
@@ -170,7 +169,7 @@ public static class Auth
             }
 
             var phoneNumber = await userManager.GetPhoneNumberAsync(user);
-            return Results.Ok(new ProfileDto(user.Id, user.UserName!, user.Email!, user.DisplayName, phoneNumber));
+            return Results.Ok(new ProfileDto(user.Id, user.UserName!, user.Email!, phoneNumber));
         })
         .RequireAuthorization()
         .WithName("GetProfile");
@@ -187,24 +186,26 @@ public static class Auth
                 return Results.Unauthorized();
             }
 
-            if ((await AccountRules.CheckDisplayNameAsync(db, request.DisplayName, user.Id) ?? AccountRules.CheckPhoneNumber(request.PhoneNumber)) is { } error)
+            // A blank username keeps the current one.
+            var userName = AccountRules.Clean(request.UserName) ?? user.UserName;
+            if ((await AccountRules.CheckUserNameAsync(db, userName, user.Id) ?? AccountRules.CheckPhoneNumber(request.PhoneNumber)) is { } error)
             {
                 return Results.BadRequest(new ApiErrorResponse(error));
             }
 
             await userManager.SetPhoneNumberAsync(user, string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim());
-            user.DisplayName = AccountRules.Clean(request.DisplayName);
+            user.UserName = userName;
             await userManager.UpdateAsync(user);
 
             var phoneNumber = await userManager.GetPhoneNumberAsync(user);
-            return Results.Ok(new ProfileDto(user.Id, user.UserName!, user.Email!, user.DisplayName, phoneNumber));
+            return Results.Ok(new ProfileDto(user.Id, user.UserName!, user.Email!, phoneNumber));
         })
         .RequireAuthorization()
         .WithName("UpdateProfile");
     }
 
-    // Sign-in takes an email or a display name in the same box. Display
-    // names are unique ignoring case, like emails; an email wins if a name
+    // Sign-in takes an email or a username in the same box. Usernames are
+    // unique ignoring case, like emails; an email wins if a name
     // happens to look like someone's address.
     internal static async Task<ApplicationUser?> FindForSignInAsync(UserManager<ApplicationUser> userManager, string? login)
     {
@@ -216,8 +217,8 @@ public static class Auth
         {
             return byEmail;
         }
-        var name = DisplayNames.Normalize(login);
-        return await userManager.Users.FirstOrDefaultAsync(u => u.NormalizedDisplayName == name);
+        var name = UserNames.Normalize(login);
+        return await userManager.Users.FirstOrDefaultAsync(u => u.NormalizedUserName == name);
     }
 
     private static IResult LockedOut(ApplicationUser user)

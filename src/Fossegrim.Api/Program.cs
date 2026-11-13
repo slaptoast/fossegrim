@@ -47,6 +47,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
         options.Lockout.MaxFailedAccessAttempts = SignInLimits.MaxFailedAttempts;
         options.Lockout.DefaultLockoutTimeSpan = SignInLimits.LockoutDuration;
         options.Lockout.AllowedForNewUsers = true;
+        // Usernames are what people see (spaces, accents, anything): only
+        // AccountRules limits them. Identity still checks they're unique.
+        options.User.AllowedUserNameCharacters = "";
     })
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<FossegrimDbContext>()
@@ -258,8 +261,6 @@ using (var scope = app.Services.CreateScope())
 {
     var startupDb = scope.ServiceProvider.GetRequiredService<FossegrimDbContext>();
     await startupDb.Database.MigrateAsync();
-    // Renames any accounts sharing a display name from before names were unique.
-    await DisplayNames.EnsureUniqueAsync(startupDb, app.Logger);
     // Fills the search indexes on first run, and if they've got out of step.
     await scope.ServiceProvider.GetRequiredService<SearchIndex>().EnsureBuiltAsync();
     await RoleSeeder.SeedRolesAndAdminAsync(scope.ServiceProvider, seedDefaultAdmin: app.Environment.IsDevelopment());

@@ -31,25 +31,25 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
-        NormalizeDisplayNames();
+        NormalizeUserNames();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
-        NormalizeDisplayNames();
+        NormalizeUserNames();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
     // However a user is saved (Identity, the endpoints, the seeder), the
     // name the unique index checks matches the one people see.
-    private void NormalizeDisplayNames()
+    private void NormalizeUserNames()
     {
         foreach (var entry in ChangeTracker.Entries<ApplicationUser>())
         {
             if (entry.State is EntityState.Added or EntityState.Modified)
             {
-                entry.Entity.NormalizedDisplayName = DisplayNames.Normalize(entry.Entity.DisplayName);
+                entry.Entity.NormalizedUserName = UserNames.Normalize(entry.Entity.UserName);
             }
         }
     }
@@ -59,11 +59,6 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
         base.OnModelCreating(modelBuilder);
 
         // Unique display names; null (no name) doesn't count as a clash.
-        modelBuilder.Entity<ApplicationUser>(entity =>
-        {
-            entity.HasIndex(u => u.NormalizedDisplayName).IsUnique();
-        });
-
         modelBuilder.Entity<ApiKey>(entity =>
         {
             // Every API request looks its key up by hash.

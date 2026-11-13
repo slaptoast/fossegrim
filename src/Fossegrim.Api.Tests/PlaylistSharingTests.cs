@@ -20,7 +20,7 @@ public class PlaylistSharingTests : IClassFixture<FossegrimApiFactory>
     }
 
     [Fact]
-    public async Task Search_FindsDisplayNames_WithoutReturningEmails()
+    public async Task Search_FindsUserNames_WithoutReturningEmails()
     {
         var owner = await _factory.CreateUserAsync();
         var friend = await CreateNamedUserAsync($"Kari {_tag}");
@@ -31,7 +31,7 @@ public class PlaylistSharingTests : IClassFixture<FossegrimApiFactory>
 
         var match = Assert.Single(results!);
         Assert.Equal(friend.UserId, match.UserId);
-        Assert.Equal($"Kari {_tag}", match.DisplayName);
+        Assert.Equal($"Kari {_tag}", match.UserName);
         Assert.DoesNotContain("@", body);
     }
 

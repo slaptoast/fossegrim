@@ -6,32 +6,32 @@ namespace Fossegrim.Api.Services;
 
 /// <summary>
 /// Checks on what users can call themselves, with messages for the caller.
-/// Display names are unique (see <see cref="DisplayNames"/>); the database
+/// Usernames are unique (see <see cref="UserNames"/>); the database
 /// enforces that too, but checking first gives a readable error.
 /// </summary>
 public static class AccountRules
 {
-    public const int MaxDisplayNameLength = 100;
+    public const int MaxUserNameLength = 100;
     public const int MaxPhoneNumberLength = 30;
 
-    /// <summary>The display name trimmed, or null when there isn't one.</summary>
-    public static string? Clean(string? displayName) =>
-        string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim();
+    /// <summary>The username trimmed, or null when there isn't one.</summary>
+    public static string? Clean(string? userName) =>
+        string.IsNullOrWhiteSpace(userName) ? null : userName.Trim();
 
-    /// <summary>Why <paramref name="displayName"/> can't be used, or null when it's fine.</summary>
-    public static async Task<string?> CheckDisplayNameAsync(FossegrimDbContext db, string? displayName, string? userId = null)
+    /// <summary>Why <paramref name="userName"/> can't be used, or null when it's fine.</summary>
+    public static async Task<string?> CheckUserNameAsync(FossegrimDbContext db, string? userName, string? userId = null)
     {
-        if (Clean(displayName) is not { } name)
+        if (Clean(userName) is not { } name)
         {
-            return null;
+            return "Choose a username.";
         }
-        if (name.Length > MaxDisplayNameLength)
+        if (name.Length > MaxUserNameLength)
         {
-            return $"Usernames can be at most {MaxDisplayNameLength} characters.";
+            return $"Usernames can be at most {MaxUserNameLength} characters.";
         }
 
-        var normalized = DisplayNames.Normalize(name);
-        var taken = await db.Users.AnyAsync(u => u.Id != userId && u.NormalizedDisplayName == normalized);
+        var normalized = UserNames.Normalize(name);
+        var taken = await db.Users.AnyAsync(u => u.Id != userId && u.NormalizedUserName == normalized);
         return taken ? "Someone else already uses that username." : null;
     }
 

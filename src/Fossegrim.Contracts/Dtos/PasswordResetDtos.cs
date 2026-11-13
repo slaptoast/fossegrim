@@ -14,7 +14,7 @@ public record ResetPasswordRequest(string UserId, string Token, string NewPasswo
 public record PasswordResetLinkDto(string Path, DateTime ExpiresAt);
 
 // DeletedAt is only set in the list of deleted accounts (?deleted=true).
-public record AdminUserDto(string UserId, string Email, string DisplayName, bool IsAdmin, bool LockedOut, DateTime? DeletedAt = null);
+public record AdminUserDto(string UserId, string Email, string UserName, bool IsAdmin, bool LockedOut, DateTime? DeletedAt = null);
 
 // The outgoing mail server. Security is one of SmtpSecurity. The password is
 // never sent back out; HasPassword says whether one is saved. PublicUrl is

@@ -34,7 +34,7 @@ public static class ResetPasswordCommand
         var link = await scope.ServiceProvider.GetRequiredService<PasswordResets>().CreateLinkAsync(user);
         var publicUrl = (await scope.ServiceProvider.GetRequiredService<EmailSettingsStore>().GetAsync())?.PublicUrl;
 
-        await output.WriteLineAsync($"Reset link for {user.DisplayName} ({user.Email}), valid once for {PasswordResets.LinkLifetime.TotalHours:0} hours:");
+        await output.WriteLineAsync($"Reset link for {user.UserName} ({user.Email}), valid once for {PasswordResets.LinkLifetime.TotalHours:0} hours:");
         await output.WriteLineAsync();
         await output.WriteLineAsync(publicUrl is null ? $"  <your Fossegrim address>{link.Path}" : $"  {publicUrl}{link.Path}");
         if (publicUrl is null)

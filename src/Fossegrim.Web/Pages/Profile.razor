@@ -21,9 +21,9 @@
 
                 <div class="form-grid">
                     <div class="form-group span-3">
-                        <label for="displayName">Username</label>
-                        <InputText id="displayName" @bind-Value="_input.DisplayName" />
-                        <ValidationMessage For="() => _input.DisplayName" />
+                        <label for="userName">Username</label>
+                        <InputText id="userName" @bind-Value="_input.UserName" />
+                        <ValidationMessage For="() => _input.UserName" />
                     </div>
                     <div class="form-group span-3">
                         <label for="phoneNumber">Phone number <span class="optional">Optional</span></label>
@@ -155,7 +155,6 @@
 </div>
 
 @code {
-    private string _username = "";
     private string _email = "";
     private readonly ProfileInput _input = new();
     private string? _statusMessage;
@@ -273,7 +272,7 @@
         _statusMessage = null;
         try
         {
-            var updated = await ApiClient.UpdateProfileAsync(_input.DisplayName, _input.PhoneNumber);
+            var updated = await ApiClient.UpdateProfileAsync(_input.UserName, _input.PhoneNumber);
             LoadFrom(updated);
             _profileError = null;
             _statusMessage = "Your profile has been updated";
@@ -286,9 +285,8 @@
 
     private void LoadFrom(ProfileDto profile)
     {
-        _username = profile.UserName;
         _email = profile.Email;
-        _input.DisplayName = profile.DisplayName;
+        _input.UserName = profile.UserName;
         _input.PhoneNumber = profile.PhoneNumber;
     }
 
@@ -296,7 +294,7 @@
     {
         [Display(Name = "Username")]
         [StringLength(100, MinimumLength = 3)]
-        public string? DisplayName { get; set; }
+        public string? UserName { get; set; }
 
         [Phone]
         public string? PhoneNumber { get; set; }

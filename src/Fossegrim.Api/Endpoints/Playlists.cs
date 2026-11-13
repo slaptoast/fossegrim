@@ -541,7 +541,7 @@ public static class Playlists
 
             await db.SaveChangesAsync();
 
-            return Results.Ok(new PlaylistShareDto(targetUser.Id, targetUser.DisplayName, shareType.ToString()));
+            return Results.Ok(new PlaylistShareDto(targetUser.Id, targetUser.UserName, shareType.ToString()));
         })
         .WithName("SharePlaylist");
 
@@ -711,7 +711,7 @@ public static class Playlists
         p.Name,
         p.Type.ToString(),
         p.OwnerId,
-        p.Owner?.DisplayName,
+        p.Owner?.UserName,
         GetAccess(p, currentUserId).ToString(),
         p.DateAdded,
         p.LastModified,
@@ -722,7 +722,7 @@ public static class Playlists
         p.Name,
         p.Type.ToString(),
         p.OwnerId,
-        p.Owner?.DisplayName,
+        p.Owner?.UserName,
         GetAccess(p, currentUserId).ToString(),
         p.DateAdded,
         p.LastModified,
@@ -734,7 +734,7 @@ public static class Playlists
                 i.Position,
                 i.DateAdded,
                 ToPlaylistTrackDto(i.MediaItem!))),
-        p.Shares.Select(s => new PlaylistShareDto(s.UserId, s.User?.DisplayName, s.ShareType.ToString())));
+        p.Shares.Select(s => new PlaylistShareDto(s.UserId, s.User?.UserName, s.ShareType.ToString())));
 
     // Needs the item's Albums loaded (LoadPlaylistAsync and QueueQuery include them).
     private static PlaylistTrackDto ToPlaylistTrackDto(MediaItem m) => new(

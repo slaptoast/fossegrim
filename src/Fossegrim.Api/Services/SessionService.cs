@@ -166,7 +166,7 @@ public class SessionService
             jwt.GetValue("MediaExpiryMinutes", DefaultMediaExpiryMinutes),
             sessionId);
 
-        return new LoginResponse(token, expiresAt, user.Id, user.UserName!, user.Email!, user.DisplayName, roles.ToList(), refreshToken, sessionId, mediaToken, mediaExpiresAt);
+        return new LoginResponse(token, expiresAt, user.Id, user.UserName!, user.Email!, roles.ToList(), refreshToken, sessionId, mediaToken, mediaExpiresAt);
     }
 
     private static string NewRefreshToken() =>

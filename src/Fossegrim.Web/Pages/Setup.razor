@@ -54,9 +54,9 @@
                             <ValidationMessage For="() => _account.Email" />
                         </div>
                         <div class="form-group">
-                            <label for="displayName">Username</label>
-                            <InputText id="displayName" @bind-Value="_account.DisplayName" />
-                            <ValidationMessage For="() => _account.DisplayName" />
+                            <label for="userName">Username</label>
+                            <InputText id="userName" @bind-Value="_account.UserName" />
+                            <ValidationMessage For="() => _account.UserName" />
                         </div>
                         <div class="info-text">Password must be at least 6 characters and include uppercase, lowercase, a digit and a symbol.</div>
                         <div class="form-group">
@@ -208,7 +208,7 @@
         _errors = [];
         try
         {
-            var result = await ApiClient.CreateFirstAdminAsync(_account.Email, _account.DisplayName, _account.Password);
+            var result = await ApiClient.CreateFirstAdminAsync(_account.Email, _account.UserName, _account.Password);
             if (!result.Success)
             {
                 _errors = result.Errors.ToList();
@@ -328,7 +328,7 @@
         [Required]
         [Display(Name = "Username")]
         [StringLength(100, MinimumLength = 3)]
-        public string DisplayName { get; set; } = string.Empty;
+        public string UserName { get; set; } = string.Empty;
 
         [Required]
         [StringLength(100, MinimumLength = 6)]

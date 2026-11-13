@@ -113,9 +113,9 @@ public class FossegrimApiClient
             ?? throw new ApiException("Setup status returned no result.");
     }
 
-    public async Task<AuthResult> CreateFirstAdminAsync(string email, string displayName, string password)
+    public async Task<AuthResult> CreateFirstAdminAsync(string email, string userName, string password)
     {
-        var response = await _httpClient.PostAsJsonAsync("/api/setup/admin", new CreateFirstAdminRequest(email, displayName, password, ClientName));
+        var response = await _httpClient.PostAsJsonAsync("/api/setup/admin", new CreateFirstAdminRequest(email, userName, password, ClientName));
         if (response.StatusCode == HttpStatusCode.Forbidden)
         {
             return new AuthResult(false, null, [await ReadProblemDetailAsync(response) ?? "Setup has already been done."]);
@@ -139,9 +139,9 @@ public class FossegrimApiClient
             ?? throw new ApiException("Saving registration settings returned no result.");
     }
 
-    public async Task<IReadOnlyList<string>> CreateUserAsync(string email, string displayName, string password, bool isAdmin)
+    public async Task<IReadOnlyList<string>> CreateUserAsync(string email, string userName, string password, bool isAdmin)
     {
-        var response = await _httpClient.PostAsJsonAsync("/api/admin/users", new CreateUserRequest(email, displayName, password, isAdmin));
+        var response = await _httpClient.PostAsJsonAsync("/api/admin/users", new CreateUserRequest(email, userName, password, isAdmin));
         if (response.IsSuccessStatusCode)
         {
             return [];
@@ -491,9 +491,9 @@ public class FossegrimApiClient
         return await ReadAuthResultAsync(response, unauthorizedMessage: "Wrong email, username or password.");
     }
 
-    public async Task<AuthResult> RegisterAsync(string email, string displayName, string password)
+    public async Task<AuthResult> RegisterAsync(string email, string userName, string password)
     {
-        var response = await _httpClient.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, displayName, password, ClientName));
+        var response = await _httpClient.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, userName, password, ClientName));
         if (response.StatusCode == HttpStatusCode.Forbidden)
         {
             return new AuthResult(false, null, [await ReadProblemDetailAsync(response) ?? "Registration is closed."]);
@@ -653,9 +653,9 @@ public class FossegrimApiClient
         return await response.Content.ReadFromJsonAsync<ProfileDto>();
     }
 
-    public async Task<ProfileDto> UpdateProfileAsync(string? displayName, string? phoneNumber)
+    public async Task<ProfileDto> UpdateProfileAsync(string? userName, string? phoneNumber)
     {
-        var response = await _httpClient.PutAsJsonAsync("/api/auth/me", new UpdateProfileRequest(displayName, phoneNumber));
+        var response = await _httpClient.PutAsJsonAsync("/api/auth/me", new UpdateProfileRequest(userName, phoneNumber));
         if (!response.IsSuccessStatusCode)
         {
             throw new ApiException(await ReadErrorAsync(response) ?? $"Updating your profile failed ({(int)response.StatusCode}).");

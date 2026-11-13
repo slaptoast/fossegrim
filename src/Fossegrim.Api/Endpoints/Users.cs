@@ -44,10 +44,10 @@ public static class Users
             var normalizedEmail = userManager.NormalizeEmail(query);
             var matches = await db.Users
                 .Where(u => u.Id != user.Id && u.DeletedAt == null)
-                .Where(u => EF.Functions.Like(u.DisplayName, pattern, LikeEscape) || u.NormalizedEmail == normalizedEmail)
-                .OrderBy(u => EF.Functions.Collate(u.DisplayName, "NOCASE"))
+                .Where(u => EF.Functions.Like(u.UserName, pattern, LikeEscape) || u.NormalizedEmail == normalizedEmail)
+                .OrderBy(u => EF.Functions.Collate(u.UserName, "NOCASE"))
                 .Take(MaxResults)
-                .Select(u => new UserSummaryDto(u.Id, u.DisplayName ?? "Unnamed user"))
+                .Select(u => new UserSummaryDto(u.Id, u.UserName ?? "Unnamed user"))
                 .ToListAsync();
 
             return Results.Ok(matches);

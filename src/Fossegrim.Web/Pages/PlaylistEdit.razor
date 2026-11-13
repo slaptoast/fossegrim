@@ -46,7 +46,7 @@
                     <span class="playlist-access-badge">@_selectedPlaylist.AccessLevel</span>
                     @if (_selectedPlaylist.AccessLevel != "Owner")
                     {
-                        <span class="playlist-owner">Shared by @(_selectedPlaylist.OwnerDisplayName ?? "another user")</span>
+                        <span class="playlist-owner">Shared by @(_selectedPlaylist.OwnerUserName ?? "another user")</span>
                         <button type="button" class="button-secondary" disabled="@_isSaving" @onclick="() => _showLeaveConfirm = true"
                                 title="Remove this playlist from your list. It isn't deleted for anyone else.">Leave Playlist</button>
                     }
@@ -80,10 +80,10 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var share in _selectedPlaylist.Shares.OrderBy(s => s.DisplayName ?? s.UserId, StringComparer.OrdinalIgnoreCase))
+                                    @foreach (var share in _selectedPlaylist.Shares.OrderBy(s => s.UserName ?? s.UserId, StringComparer.OrdinalIgnoreCase))
                                     {
                                         <tr>
-                                            <td class="title-cell">@(share.DisplayName ?? share.UserId)</td>
+                                            <td class="title-cell">@(share.UserName ?? share.UserId)</td>
                                             <td>
                                                 <select value="@share.ShareType" disabled="@_isSaving" @onchange="e => ChangeShareTypeAsync(share, e)">
                                                     <option value="Editor">Editor</option>
@@ -114,7 +114,7 @@
                                 {
                                     <li>
                                         <button type="button" class="context-menu-item" disabled="@_isSaving" @onclick="() => ShareWithAsync(candidate)">
-                                            @candidate.DisplayName
+                                            @candidate.UserName
                                             <span class="share-results-action">Share</span>
                                         </button>
                                     </li>
@@ -159,7 +159,7 @@
 
 <ConfirmDialog IsOpen="_showLeaveConfirm"
                Title="Leave Playlist"
-               Message="@($"Remove \"{_selectedPlaylist?.Name}\" from your playlists? You'll need {_selectedPlaylist?.OwnerDisplayName ?? "the owner"} to share it again to get it back.")"
+               Message="@($"Remove \"{_selectedPlaylist?.Name}\" from your playlists? You'll need {_selectedPlaylist?.OwnerUserName ?? "the owner"} to share it again to get it back.")"
                ConfirmText="Leave"
                OnConfirm="LeavePlaylistAsync"
                OnCancel="() => _showLeaveConfirm = false" />
@@ -417,7 +417,7 @@
         try
         {
             await ApiClient.SharePlaylistAsync(_selectedPlaylist.Id, person.UserId, _newShareType);
-            Toasts.Show($"Shared \"{_selectedPlaylist.Name}\" with {person.DisplayName}");
+            Toasts.Show($"Shared \"{_selectedPlaylist.Name}\" with {person.UserName}");
             _shareQuery = "";
             _shareResults = [];
             _shareSearched = false;

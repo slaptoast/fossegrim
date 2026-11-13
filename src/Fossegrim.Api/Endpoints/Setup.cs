@@ -32,7 +32,7 @@ public static class Setup
                 return Results.Problem("Setup has already been done; sign in as an admin to change settings.", statusCode: StatusCodes.Status403Forbidden);
             }
 
-            if (await AccountRules.CheckDisplayNameAsync(db, request.DisplayName) is { } nameError)
+            if (await AccountRules.CheckUserNameAsync(db, request.UserName) is { } nameError)
             {
                 return Results.BadRequest(new IdentityErrorsResponse([nameError]));
             }
@@ -75,18 +75,18 @@ public static class Setup
                 return Results.BadRequest(new IdentityErrorsResponse(["That email belongs to a deleted account. Restore it under Deleted accounts instead."]));
             }
 
-            if (await AccountRules.CheckDisplayNameAsync(db, request.DisplayName) is { } nameError)
+            if (await AccountRules.CheckUserNameAsync(db, request.UserName) is { } nameError)
             {
                 return Results.BadRequest(new IdentityErrorsResponse([nameError]));
             }
 
-            var (user, result) = await setup.CreateUserAsync(request.Email, request.DisplayName, request.Password, request.IsAdmin);
+            var (user, result) = await setup.CreateUserAsync(request.Email, request.UserName, request.Password, request.IsAdmin);
             if (user is null || !result.Succeeded)
             {
                 return Results.BadRequest(new IdentityErrorsResponse(result.Errors.Select(e => e.Description).ToList()));
             }
 
-            return Results.Created($"/api/users/{user.Id}", new CreatedUserDto(user.Id, user.Email!, user.DisplayName ?? "", request.IsAdmin));
+            return Results.Created($"/api/users/{user.Id}", new CreatedUserDto(user.Id, user.Email!, user.UserName ?? "", request.IsAdmin));
         })
         .WithName("CreateUser");
     }

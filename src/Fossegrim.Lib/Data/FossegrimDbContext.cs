@@ -20,6 +20,7 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<AppSetting> AppSettings { get; set; }
     public DbSet<UserPreferences> UserPreferences { get; set; }
     public DbSet<UserSession> UserSessions { get; set; }
+    public DbSet<AccessToken> AccessTokens { get; set; }
     public DbSet<FavoriteTrack> FavoriteTracks { get; set; }
     public DbSet<FavoriteAlbum> FavoriteAlbums { get; set; }
     public DbSet<FavoriteArtist> FavoriteArtists { get; set; }
@@ -271,6 +272,18 @@ public class FossegrimDbContext : IdentityDbContext<ApplicationUser>
         });
 
         // Signed-in devices; deleted along with the user
+        // Personal access tokens for /mcp; every MCP request looks its token up by hash.
+        modelBuilder.Entity<AccessToken>(entity =>
+        {
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.Hash).IsUnique();
+
+            entity.HasOne(t => t.User)
+                  .WithMany()
+                  .HasForeignKey(t => t.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<UserSession>(entity =>
         {
             entity.HasIndex(e => e.UserId);

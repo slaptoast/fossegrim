@@ -310,39 +310,10 @@ public static class Playlists
                 return Results.Forbid();
             }
 
-            var mediaItemIds = request.MediaItemIds.ToList();
-            if (mediaItemIds.Count == 0)
+            if (await AddItemsAsync(db, playlist, request.MediaItemIds.ToList()) is { } error)
             {
-                return Results.BadRequest(new ApiErrorResponse("At least one media item id is required."));
+                return Results.BadRequest(new ApiErrorResponse(error));
             }
-
-            var existingMediaItemIds = await db.MediaItems
-                .Where(m => mediaItemIds.Contains(m.Id))
-                .Select(m => m.Id)
-                .ToListAsync();
-
-            var missingIds = mediaItemIds.Except(existingMediaItemIds).ToList();
-            if (missingIds.Count > 0)
-            {
-                return Results.BadRequest(new ApiErrorResponse($"Unknown media item id(s): {string.Join(", ", missingIds)}"));
-            }
-
-            var nextPosition = playlist.Items.Count == 0 ? 0 : playlist.Items.Max(i => i.Position) + PositionGap;
-            foreach (var mediaItemId in mediaItemIds)
-            {
-                db.PlaylistItems.Add(new PlaylistItem
-                {
-                    Id = Guid.NewGuid(),
-                    PlaylistId = playlist.Id,
-                    MediaItemId = mediaItemId,
-                    Position = nextPosition,
-                    DateAdded = DateTime.UtcNow
-                });
-                nextPosition += PositionGap;
-            }
-
-            playlist.LastModified = DateTime.UtcNow;
-            await db.SaveChangesAsync();
 
             var updated = await LoadPlaylistAsync(db, id);
             return Results.Ok(ToPlaylistDetailDto(updated!, user.Id));
@@ -610,9 +581,51 @@ public static class Playlists
         .WithName("LeavePlaylist");
     }
 
+    /// <summary>
+    /// Appends tracks to the end of a playlist and saves. Null when done,
+    /// otherwise what's wrong (no ids, or ids that aren't tracks); nothing is
+    /// added then. The playlist's Items must be loaded.
+    /// </summary>
+    internal static async Task<string?> AddItemsAsync(FossegrimDbContext db, Playlist playlist, IReadOnlyList<Guid> mediaItemIds)
+    {
+        if (mediaItemIds.Count == 0)
+        {
+            return "At least one media item id is required.";
+        }
+
+        var existingMediaItemIds = await db.MediaItems
+            .Where(m => mediaItemIds.Contains(m.Id))
+            .Select(m => m.Id)
+            .ToListAsync();
+
+        var missingIds = mediaItemIds.Except(existingMediaItemIds).ToList();
+        if (missingIds.Count > 0)
+        {
+            return $"Unknown media item id(s): {string.Join(", ", missingIds)}";
+        }
+
+        var nextPosition = playlist.Items.Count == 0 ? 0 : playlist.Items.Max(i => i.Position) + PositionGap;
+        foreach (var mediaItemId in mediaItemIds)
+        {
+            db.PlaylistItems.Add(new PlaylistItem
+            {
+                Id = Guid.NewGuid(),
+                PlaylistId = playlist.Id,
+                MediaItemId = mediaItemId,
+                Position = nextPosition,
+                DateAdded = DateTime.UtcNow
+            });
+            nextPosition += PositionGap;
+        }
+
+        playlist.LastModified = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return null;
+    }
+
     private const int MaxNameLength = 200;
 
-    private static string? NameError(string? name) =>
+    internal static string? NameError(string? name) =>
         string.IsNullOrWhiteSpace(name) ? "Name is required."
         : name.Trim().Length > MaxNameLength ? $"Playlist names can be at most {MaxNameLength} characters."
         : null;
@@ -635,7 +648,7 @@ public static class Playlists
         };
     }
 
-    private static Task<Playlist?> LoadPlaylistAsync(FossegrimDbContext db, Guid id) =>
+    internal static Task<Playlist?> LoadPlaylistAsync(FossegrimDbContext db, Guid id) =>
         db.Playlists
             .Include(p => p.Owner)
             .Include(p => p.Shares).ThenInclude(s => s.User)
@@ -682,7 +695,7 @@ public static class Playlists
         }
     }
 
-    private enum PlaylistAccess
+    internal enum PlaylistAccess
     {
         None,
         ReadOnly,
@@ -690,7 +703,7 @@ public static class Playlists
         Owner
     }
 
-    private static PlaylistAccess GetAccess(Playlist playlist, string userId)
+    internal static PlaylistAccess GetAccess(Playlist playlist, string userId)
     {
         if (playlist.OwnerId == userId)
         {

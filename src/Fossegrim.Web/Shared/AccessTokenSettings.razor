@@ -1,0 +1,158 @@
+@inject FossegrimApiClient ApiClient
+@inject IJSRuntime JSRuntime
+
+@* Profile: personal access tokens for AI assistants (the MCP endpoint).
+   Shown once an admin turns MCP on, or while the person still has tokens. *@
+
+@if (_list is { } list && (list.McpEnabled || list.Tokens.Count > 0))
+{
+    <FormFrame Glyph="✦" Title="AI Assistants" Description="Connect Claude or another MCP app to your library.">
+        <div class="form-section">
+            @if (list.McpEnabled)
+            {
+                <p>
+                    An assistant with one of your tokens can search the library, see what you've played and your favourites,
+                    and make and change your playlists. It can't play music or reach anyone else's account.
+                </p>
+            }
+            else
+            {
+                <p>An admin has turned AI assistants off, so these tokens don't work for now. You can still revoke them.</p>
+            }
+
+            @if (_message is not null)
+            {
+                <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+            }
+
+            @if (_created is not null)
+            {
+                <div class="info-text api-key-secret">
+                    <strong>Copy the token for “@_created.Token.Name” now. It won't be shown again.</strong>
+                    <code>@_created.Secret</code>
+                    <p>Claude Code:</p>
+                    <pre>claude mcp add --transport http fossegrim @(McpUrl) --header "Authorization: Bearer @_created.Secret"</pre>
+                    <p>Other MCP apps: add a Streamable HTTP server at <code>@McpUrl</code> with the header <code>Authorization: Bearer @_created.Secret</code>.</p>
+                </div>
+            }
+        </div>
+
+        @if (list.Tokens.Count > 0)
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Token</th>
+                        <th>Created</th>
+                        <th>Last used</th>
+                        <th class="actions-cell">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var token in list.Tokens)
+                    {
+                        <tr>
+                            <td class="title-cell">@token.Name</td>
+                            <td><code>@token.Prefix…</code></td>
+                            <td>@Local(token.CreatedAt)</td>
+                            <td>@(token.LastUsedAt is { } used ? Local(used) : "never")</td>
+                            <td class="actions-cell">
+                                <button class="button-danger" disabled="@_busy" @onclick="() => RevokeAsync(token)">Revoke</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (list.McpEnabled)
+        {
+            <div class="form-section">
+                <div class="form-grid">
+                    <div class="form-group span-4">
+                        <label for="accessTokenName">New token name</label>
+                        <input id="accessTokenName" type="text" @bind="_name" @bind:event="oninput" placeholder="Claude on my laptop" maxlength="100" />
+                    </div>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="button" disabled="@(_busy || string.IsNullOrWhiteSpace(_name))" @onclick="CreateAsync">+ Create Token</button>
+            </div>
+        }
+    </FormFrame>
+}
+
+@code {
+    private AccessTokenListDto? _list;
+    private CreatedAccessTokenDto? _created;
+    private string _name = "";
+    private string? _message;
+    private bool _success;
+    private bool _busy;
+
+    private string McpUrl => (ApiClient.BaseAddress?.ToString() is { } url ? url.TrimEnd('/') + "/" : "/") + "mcp";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _list = await ApiClient.GetAccessTokensAsync();
+        }
+        catch
+        {
+            // Leave the section hidden if the tokens can't be loaded.
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            _created = await ApiClient.CreateAccessTokenAsync(_name);
+            _name = "";
+            _list = await ApiClient.GetAccessTokensAsync();
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RevokeAsync(AccessTokenDto token)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Revoke the token “{token.Name}”? Any assistant using it loses access."))
+        {
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+        try
+        {
+            await ApiClient.RevokeAccessTokenAsync(token.Id);
+            if (_created?.Token.Id == token.Id)
+            {
+                _created = null;
+            }
+            _list = await ApiClient.GetAccessTokensAsync();
+            (_message, _success) = ($"Revoked “{token.Name}”.", true);
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Local(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime().ToString("g");
+}

@@ -33,58 +33,32 @@ public static class Favorites
         .WithName("GetFavorites");
 
         group.MapPut("/{kind}/{id:guid}", async (string kind, Guid id, ClaimsPrincipal principal, FossegrimDbContext db, TimeProvider time) =>
-        {
-            if (Browse.UserId(principal) is not { } userId)
+            Browse.UserId(principal) is not { } userId ? Results.Unauthorized()
+            : await SetAsync(db, userId, kind, id, favorite: true, time.GetUtcNow().UtcDateTime) switch
             {
-                return Results.Unauthorized();
-            }
-
-            var now = time.GetUtcNow().UtcDateTime;
-            switch (kind)
-            {
-                case FavoriteKinds.Tracks when await db.MediaItems.AnyAsync(m => m.Id == id):
-                    if (!await db.FavoriteTracks.AnyAsync(f => f.UserId == userId && f.MediaItemId == id))
-                    {
-                        db.FavoriteTracks.Add(new FavoriteTrack { UserId = userId, MediaItemId = id, CreatedAt = now });
-                    }
-                    break;
-                case FavoriteKinds.Albums when await db.Albums.AnyAsync(a => a.Id == id):
-                    if (!await db.FavoriteAlbums.AnyAsync(f => f.UserId == userId && f.AlbumId == id))
-                    {
-                        db.FavoriteAlbums.Add(new FavoriteAlbum { UserId = userId, AlbumId = id, CreatedAt = now });
-                    }
-                    break;
-                case FavoriteKinds.Artists when await db.Artists.AnyAsync(a => a.Id == id):
-                    if (!await db.FavoriteArtists.AnyAsync(f => f.UserId == userId && f.ArtistId == id))
-                    {
-                        db.FavoriteArtists.Add(new FavoriteArtist { UserId = userId, ArtistId = id, CreatedAt = now });
-                    }
-                    break;
-                case FavoriteKinds.Tracks or FavoriteKinds.Albums or FavoriteKinds.Artists:
-                    return Results.NotFound();
-                default:
-                    return UnknownKind();
-            }
-
-            try
-            {
-                await db.SaveChangesAsync();
-            }
-            catch (DbUpdateException)
-            {
-                // Added by a request that ran at the same moment: already a favourite.
-            }
-            return Results.NoContent();
-        })
+                FavoriteChange.Done => Results.NoContent(),
+                FavoriteChange.NotFound => Results.NotFound(),
+                _ => UnknownKind(),
+            })
         .WithName("AddFavorite");
 
-        group.MapDelete("/{kind}/{id:guid}", async (string kind, Guid id, ClaimsPrincipal principal, FossegrimDbContext db) =>
-        {
-            if (Browse.UserId(principal) is not { } userId)
-            {
-                return Results.Unauthorized();
-            }
+        group.MapDelete("/{kind}/{id:guid}", async (string kind, Guid id, ClaimsPrincipal principal, FossegrimDbContext db, TimeProvider time) =>
+            Browse.UserId(principal) is not { } userId ? Results.Unauthorized()
+            : await SetAsync(db, userId, kind, id, favorite: false, time.GetUtcNow().UtcDateTime) == FavoriteChange.UnknownKind ? UnknownKind()
+            : Results.NoContent())
+        .WithName("RemoveFavorite");
+    }
 
+    internal enum FavoriteChange { Done, NotFound, UnknownKind }
+
+    /// <summary>
+    /// Makes something a favourite of the user's, or not. Idempotent.
+    /// Removing never reports NotFound: what isn't there is already removed.
+    /// </summary>
+    internal static async Task<FavoriteChange> SetAsync(FossegrimDbContext db, string userId, string kind, Guid id, bool favorite, DateTime now)
+    {
+        if (!favorite)
+        {
             switch (kind)
             {
                 case FavoriteKinds.Tracks:
@@ -97,11 +71,46 @@ public static class Favorites
                     await db.FavoriteArtists.Where(f => f.UserId == userId && f.ArtistId == id).ExecuteDeleteAsync();
                     break;
                 default:
-                    return UnknownKind();
+                    return FavoriteChange.UnknownKind;
             }
-            return Results.NoContent();
-        })
-        .WithName("RemoveFavorite");
+            return FavoriteChange.Done;
+        }
+
+        switch (kind)
+        {
+            case FavoriteKinds.Tracks when await db.MediaItems.AnyAsync(m => m.Id == id):
+                if (!await db.FavoriteTracks.AnyAsync(f => f.UserId == userId && f.MediaItemId == id))
+                {
+                    db.FavoriteTracks.Add(new FavoriteTrack { UserId = userId, MediaItemId = id, CreatedAt = now });
+                }
+                break;
+            case FavoriteKinds.Albums when await db.Albums.AnyAsync(a => a.Id == id):
+                if (!await db.FavoriteAlbums.AnyAsync(f => f.UserId == userId && f.AlbumId == id))
+                {
+                    db.FavoriteAlbums.Add(new FavoriteAlbum { UserId = userId, AlbumId = id, CreatedAt = now });
+                }
+                break;
+            case FavoriteKinds.Artists when await db.Artists.AnyAsync(a => a.Id == id):
+                if (!await db.FavoriteArtists.AnyAsync(f => f.UserId == userId && f.ArtistId == id))
+                {
+                    db.FavoriteArtists.Add(new FavoriteArtist { UserId = userId, ArtistId = id, CreatedAt = now });
+                }
+                break;
+            case FavoriteKinds.Tracks or FavoriteKinds.Albums or FavoriteKinds.Artists:
+                return FavoriteChange.NotFound;
+            default:
+                return FavoriteChange.UnknownKind;
+        }
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Added by a request that ran at the same moment: already a favourite.
+        }
+        return FavoriteChange.Done;
     }
 
     private static IResult UnknownKind() =>

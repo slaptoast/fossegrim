@@ -149,6 +149,7 @@ The web app is a pure client of the REST API, so anything it does, another app c
 - **Playback:** `/stream/{id}` (with range requests) and `/cover/{id}?size=256` use short-lived media tokens, so they work in `<audio>` and `<img>` tags.
 - **Your data:** favourites, plays, playlists and the queue under `/api/favorites`, `/api/plays` and `/api/playlists`.
 - **Automation:** admins can create API keys that let scripts start library scans, for example after a download finishes.
+- **AI assistants (MCP):** once an admin turns it on under Settings → AI Assistants, `/mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server. Each person makes a personal access token under Profile → AI Assistants. With it, Claude or another MCP app can search the library, read that person's plays and favourites, and manage their playlists. For Claude Code: `claude mcp add --transport http fossegrim https://your-server/mcp --header "Authorization: Bearer fsgp_…"`.
 
 In development, the OpenAPI document is served at `/openapi/v1.json`.
 

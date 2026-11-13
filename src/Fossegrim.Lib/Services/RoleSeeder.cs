@@ -50,9 +50,8 @@ public static class RoleSeeder
         {
             adminUser = new ApplicationUser
             {
-                UserName = adminEmail,
+                UserName = "Administrator",
                 Email = adminEmail,
-                DisplayName = "Administrator",
                 DateJoined = DateTime.UtcNow,
                 EmailConfirmed = true
             };

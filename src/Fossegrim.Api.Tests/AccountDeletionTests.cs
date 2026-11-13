@@ -39,7 +39,7 @@ public class AccountDeletionTests : IClassFixture<FossegrimApiFactory>
         var admin = await _factory.CreateAdminAsync();
         var user = await _factory.CreateUserAsync();
         var other = await _factory.CreateUserAsync();
-        var displayName = (await admin.Client.GetFromJsonAsync<List<AdminUserDto>>("/api/admin/users"))!.Single(u => u.UserId == user.UserId).DisplayName;
+        var displayName = (await admin.Client.GetFromJsonAsync<List<AdminUserDto>>("/api/admin/users"))!.Single(u => u.UserId == user.UserId).UserName;
 
         await admin.Client.DeleteAsync($"/api/admin/users/{user.UserId}");
 

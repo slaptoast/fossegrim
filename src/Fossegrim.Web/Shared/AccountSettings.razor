@@ -53,7 +53,7 @@ else if (_message is not null)
                 <li>
                     <div class="account-row">
                         <div class="account-who">
-                            <strong>@user.DisplayName</strong>
+                            <strong>@user.UserName</strong>
                             @if (user.IsAdmin)
                             {
                                 <span class="account-badge">Admin</span>
@@ -75,10 +75,10 @@ else if (_message is not null)
                     @if (_resetLink is { } link && link.UserId == user.UserId)
                     {
                         <div class="reset-link">
-                            <input type="text" readonly value="@link.Url" aria-label="Reset link for @user.DisplayName" />
+                            <input type="text" readonly value="@link.Url" aria-label="Reset link for @user.UserName" />
                             <button type="button" class="button-secondary" @onclick="CopyLinkAsync">@(_copied ? "Copied" : "Copy")</button>
                         </div>
-                        <p class="backup-hint">Valid until @link.ExpiresAt.ToLocalTime().ToString("g"). Making another link for @user.DisplayName replaces this one.</p>
+                        <p class="backup-hint">Valid until @link.ExpiresAt.ToLocalTime().ToString("g"). Making another link for @user.UserName replaces this one.</p>
                     }
                 </li>
             }
@@ -101,7 +101,7 @@ else if (_message is not null)
                 <li>
                     <div class="account-row">
                         <div class="account-who">
-                            <strong>@user.DisplayName</strong>
+                            <strong>@user.UserName</strong>
                             @if (user.IsAdmin)
                             {
                                 <span class="account-badge">Admin</span>
@@ -118,7 +118,7 @@ else if (_message is not null)
 
 <ConfirmDialog IsOpen="_confirmDelete is not null"
                Title="Delete Account"
-               Message="@($"Delete {_confirmDelete?.DisplayName}? They're signed out everywhere and can't sign in again. Their playlists, plays and favourites are kept, and you can restore the account under Deleted accounts.")"
+               Message="@($"Delete {_confirmDelete?.UserName}? They're signed out everywhere and can't sign in again. Their playlists, plays and favourites are kept, and you can restore the account under Deleted accounts.")"
                ConfirmText="Delete"
                OnConfirm="DeleteAsync"
                OnCancel="() => _confirmDelete = null" />
@@ -151,8 +151,8 @@ else if (_message is not null)
             </div>
             <div class="form-group span-2">
                 <label for="newUserName">Username</label>
-                <InputText id="newUserName" @bind-Value="_input.DisplayName" autocomplete="off" />
-                <ValidationMessage For="() => _input.DisplayName" />
+                <InputText id="newUserName" @bind-Value="_input.UserName" autocomplete="off" />
+                <ValidationMessage For="() => _input.UserName" />
             </div>
             <div class="form-group span-2">
                 <label for="newUserPassword">Password</label>
@@ -234,10 +234,10 @@ else if (_message is not null)
         _errors = [];
         try
         {
-            _errors = (await ApiClient.CreateUserAsync(_input.Email, _input.DisplayName, _input.Password, _input.IsAdmin)).ToList();
+            _errors = (await ApiClient.CreateUserAsync(_input.Email, _input.UserName, _input.Password, _input.IsAdmin)).ToList();
             if (_errors.Count == 0)
             {
-                (_message, _success) = ($"Added {_input.DisplayName} ({_input.Email}){(_input.IsAdmin ? " as an admin" : "")}.", true);
+                (_message, _success) = ($"Added {_input.UserName} ({_input.Email}){(_input.IsAdmin ? " as an admin" : "")}.", true);
                 _input = new NewUserInput();
                 await LoadUsersAsync();
                 await OnChanged.InvokeAsync();
@@ -266,11 +266,11 @@ else if (_message is not null)
             return;
         }
         _confirmDelete = null;
-        await ChangeAccountAsync(() => ApiClient.DeleteUserAsync(user.UserId), $"Deleted {user.DisplayName}. You can restore the account below.");
+        await ChangeAccountAsync(() => ApiClient.DeleteUserAsync(user.UserId), $"Deleted {user.UserName}. You can restore the account below.");
     }
 
     private Task RestoreAsync(AdminUserDto user) =>
-        ChangeAccountAsync(() => ApiClient.RestoreUserAsync(user.UserId), $"Restored {user.DisplayName}. They can sign in again.");
+        ChangeAccountAsync(() => ApiClient.RestoreUserAsync(user.UserId), $"Restored {user.UserName}. They can sign in again.");
 
     private async Task ChangeAccountAsync(Func<Task> change, string done)
     {
@@ -352,7 +352,7 @@ else if (_message is not null)
         [Required]
         [Display(Name = "Username")]
         [StringLength(100, MinimumLength = 3)]
-        public string DisplayName { get; set; } = string.Empty;
+        public string UserName { get; set; } = string.Empty;
 
         [Required]
         [StringLength(100, MinimumLength = 6)]

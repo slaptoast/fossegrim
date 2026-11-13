@@ -5,7 +5,7 @@ public record PlaylistDto(
     string Name,
     string Type,
     string OwnerId,
-    string? OwnerDisplayName,
+    string? OwnerUserName,
     string AccessLevel,
     DateTime? DateAdded,
     DateTime? LastModified,
@@ -16,7 +16,7 @@ public record PlaylistDetailDto(
     string Name,
     string Type,
     string OwnerId,
-    string? OwnerDisplayName,
+    string? OwnerUserName,
     string AccessLevel,
     DateTime? DateAdded,
     DateTime? LastModified,
@@ -46,7 +46,7 @@ public record PlaylistTrackDto(
 
 public record PlaylistShareDto(
     string UserId,
-    string? DisplayName,
+    string? UserName,
     string ShareType);
 
 public record CreatePlaylistRequest(string Name);

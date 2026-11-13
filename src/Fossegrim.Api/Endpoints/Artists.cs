@@ -41,6 +41,13 @@ public static class Artists
         })
         .WithName("GetArtistTracks");
 
+        // The hover card. lookup=true fetches a missing or month-old Wikipedia summary first.
+        artistGroup.MapGet("/{id:guid}/info", async (Guid id, bool? lookup, ClaimsPrincipal principal, LibraryInfoService info, CancellationToken cancellationToken) =>
+            Browse.UserId(principal) is not { } userId ? Results.Unauthorized()
+            : await info.ArtistAsync(id, userId, lookup ?? false, cancellationToken) is { } artist ? Results.Ok(artist)
+            : Results.NotFound())
+        .WithName("GetArtistInfo");
+
         artistGroup.MapGet("/{id:guid}", async (Guid id, FossegrimDbContext db) =>
         {
             var artist = await db.Artists

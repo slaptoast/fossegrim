@@ -24,7 +24,8 @@
             <ul class="album-list">
                 @foreach (var album in _result.Items)
                 {
-                    <li class="album-item" @oncontextmenu="e => ShowContextMenu(e, album)" @oncontextmenu:preventDefault="true">
+                    <li class="album-item" @oncontextmenu="e => ShowContextMenu(e, album)"
+                        @onpointerenter="e => _hover?.EnterAlbum(e, album.Id)" @onpointerleave="() => _hover?.Leave()" @oncontextmenu:preventDefault="true">
                         <CoverArt AlbumId="album.Id" OnPlay="() => PlayAlbumAsync(album)" />
                         <div class="album-title">@album.Name</div>
                         <div class="album-artist">@ArtistNames(album)</div>
@@ -46,9 +47,13 @@
 
 <ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
 
+<HoverCard @ref="_hover" />
+
 <AddToPlaylistModal IsOpen="_showAddToPlaylist" MediaItemIds="_addToPlaylistIds" OnClose="() => _showAddToPlaylist = false" />
 
 @code {
+    private HoverCard? _hover;
+
     private const int PageSize = 10;
 
     private static readonly IReadOnlyList<(string, string)> SortOptions =

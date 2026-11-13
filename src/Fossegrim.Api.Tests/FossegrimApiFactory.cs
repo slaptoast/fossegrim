@@ -50,6 +50,7 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
             services.AddHttpClient<LastFmClient>().ConfigurePrimaryHttpMessageHandler(() => LastFm);
             services.AddHttpClient<CoverSearchService>().ConfigurePrimaryHttpMessageHandler(() => Covers);
             services.AddHttpClient<CoverDownloader>().ConfigurePrimaryHttpMessageHandler(() => Covers);
+            services.AddHttpClient<WikipediaInfoService>().ConfigurePrimaryHttpMessageHandler(() => Covers);
             services.AddHttpClient<GhcrClient>().ConfigurePrimaryHttpMessageHandler(() => Ghcr);
             services.AddSingleton<IMailTransport>(Mail);
         });
@@ -95,7 +96,7 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
         {
             var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             // Display names are unique, so each test user gets its own.
-            var user = new ApplicationUser { UserName = email, Email = email, DisplayName = $"{displayName} {email[..email.IndexOf('@')]}", DateJoined = DateTime.UtcNow };
+            var user = new ApplicationUser { UserName = $"{displayName} {email[..email.IndexOf('@')]}", Email = email, DateJoined = DateTime.UtcNow };
             var result = await users.CreateAsync(user, password);
             Assert.True(result.Succeeded, string.Join(", ", result.Errors.Select(e => e.Description)));
             if (isAdmin)

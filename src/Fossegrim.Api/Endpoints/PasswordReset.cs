@@ -57,8 +57,8 @@ public static class PasswordReset
                 .Where(u => deleted == true ? u.DeletedAt != null : u.DeletedAt == null)
                 .ToListAsync();
             return Results.Ok(users
-                .Select(u => new AdminUserDto(u.Id, u.Email ?? "", u.DisplayName ?? "", adminIds.Contains(u.Id), u.LockoutEnd > now, u.DeletedAt))
-                .OrderBy(u => u.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .Select(u => new AdminUserDto(u.Id, u.Email ?? "", u.UserName ?? "", adminIds.Contains(u.Id), u.LockoutEnd > now, u.DeletedAt))
+                .OrderBy(u => u.UserName, StringComparer.OrdinalIgnoreCase)
                 .ToList());
         })
         .WithName("GetUsers");

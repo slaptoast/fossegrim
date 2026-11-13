@@ -5,7 +5,6 @@ using Fossegrim.Api.Services;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Fossegrim.Api.Tests;
 
@@ -161,10 +160,10 @@ public class SecurityTests : IClassFixture<FossegrimApiFactory>
         Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
     }
 
-    // --- Display names ---
+    // --- Usernames ---
 
     [Fact]
-    public async Task DisplayNames_CantCopyAnotherAccounts()
+    public async Task UserNames_CantCopyAnotherAccounts()
     {
         var admin = await _factory.CreateAdminAsync();
         var adminName = $"Admin {Guid.NewGuid():N}";
@@ -195,7 +194,7 @@ public class SecurityTests : IClassFixture<FossegrimApiFactory>
     }
 
     [Fact]
-    public async Task AdminsCantCreateAccountsWithATakenDisplayName()
+    public async Task AdminsCantCreateAccountsWithATakenUserName()
     {
         var admin = await _factory.CreateAdminAsync();
         var name = $"Person {Guid.NewGuid():N}";
@@ -208,58 +207,22 @@ public class SecurityTests : IClassFixture<FossegrimApiFactory>
     }
 
     [Fact]
-    public async Task TheDatabaseRefusesDuplicateDisplayNames_HoweverTheyreSaved()
+    public async Task TheDatabaseRefusesDuplicateUserNames_HoweverTheyreSaved()
     {
         var first = await _factory.CreateUserAsync();
         var second = await _factory.CreateUserAsync();
         var name = $"Twin {Guid.NewGuid():N}";
         await _factory.WithDbAsync(async db =>
         {
-            (await db.Users.FindAsync(first.UserId))!.DisplayName = name;
+            (await db.Users.FindAsync(first.UserId))!.UserName = name;
             await db.SaveChangesAsync();
         });
 
         await Assert.ThrowsAsync<DbUpdateException>(() => _factory.WithDbAsync(async db =>
         {
-            (await db.Users.FindAsync(second.UserId))!.DisplayName = $" {name.ToLowerInvariant()} ";
+            (await db.Users.FindAsync(second.UserId))!.UserName = $" {name.ToLowerInvariant()} ";
             await db.SaveChangesAsync();
         }));
-    }
-
-    // Installs from before names were unique may have duplicates; startup
-    // renames all but the earliest account's.
-    [Fact]
-    public async Task StartupRenamesExistingDuplicates_KeepingTheEarliestAccountsName()
-    {
-        var earlier = await _factory.CreateUserAsync();
-        var later = await _factory.CreateUserAsync();
-        var third = await _factory.CreateUserAsync();
-        var name = $"Tom {Guid.NewGuid():N}";
-        await _factory.WithDbAsync(async db =>
-        {
-            // As the rows were before the unique index: no normalized name.
-            foreach (var (id, joined, displayName) in new[] { (earlier.UserId, 1, name), (later.UserId, 2, name.ToUpperInvariant()), (third.UserId, 3, $"{name} 2") })
-            {
-                await db.Users.Where(u => u.Id == id).ExecuteUpdateAsync(s => s
-                    .SetProperty(u => u.DisplayName, displayName)
-                    .SetProperty(u => u.NormalizedDisplayName, (string?)null)
-                    .SetProperty(u => u.DateJoined, new DateTime(2020, 1, joined, 0, 0, 0, DateTimeKind.Utc)));
-            }
-        });
-
-        await _factory.WithDbAsync(db => DisplayNames.EnsureUniqueAsync(db, NullLogger.Instance));
-
-        await _factory.WithDbAsync(async db =>
-        {
-            var names = await db.Users.AsNoTracking()
-                .Where(u => u.Id == earlier.UserId || u.Id == later.UserId || u.Id == third.UserId)
-                .ToDictionaryAsync(u => u.Id, u => (u.DisplayName, u.NormalizedDisplayName));
-            Assert.Equal((name, name.ToUpperInvariant()), names[earlier.UserId]);
-            // "Tom 2" was already someone's, so the second Tom is "Tom 3".
-            Assert.Equal(($"{name} 2", $"{name} 2".ToUpperInvariant()), names[third.UserId]);
-            Assert.Equal(($"{name.ToUpperInvariant()} 3", $"{name} 3".ToUpperInvariant()), names[later.UserId]);
-            Assert.DoesNotContain(await db.Users.Select(u => u.DisplayName).ToListAsync(), n => n is not null && n != n.Trim());
-        });
     }
 
     // --- Playlists ---
@@ -298,14 +261,14 @@ public class SecurityTests : IClassFixture<FossegrimApiFactory>
     }
 
     [Fact]
-    public async Task SignIn_TakesTheDisplayName_IgnoringCaseAndSpaces()
+    public async Task SignIn_TakesTheUserName_IgnoringCaseAndSpaces()
     {
         var user = await _factory.CreateUserAsync();
-        var displayName = "";
-        await _factory.WithDbAsync(async db => displayName = await db.Users.Where(u => u.Id == user.UserId).Select(u => u.DisplayName!).SingleAsync());
+        var userName = "";
+        await _factory.WithDbAsync(async db => userName = await db.Users.Where(u => u.Id == user.UserId).Select(u => u.UserName!).SingleAsync());
 
-        var byName = await LoginAsync(_factory.CreateClient(), $"  {displayName.ToUpperInvariant()} ", user.Password);
-        var wrongPassword = await LoginAsync(_factory.CreateClient(), displayName, "not-the-password");
+        var byName = await LoginAsync(_factory.CreateClient(), $"  {userName.ToUpperInvariant()} ", user.Password);
+        var wrongPassword = await LoginAsync(_factory.CreateClient(), userName, "not-the-password");
 
         Assert.Equal(HttpStatusCode.OK, byName.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, wrongPassword.StatusCode);

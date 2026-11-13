@@ -71,7 +71,7 @@ public class PasswordResets
         }
 
         var link = await CreateLinkAsync(user);
-        var name = string.IsNullOrWhiteSpace(user.DisplayName) ? "there" : user.DisplayName;
+        var name = string.IsNullOrWhiteSpace(user.UserName) ? "there" : user.UserName;
         _emails.Enqueue(new OutgoingEmail(user.Email, "Reset your Fossegrim password", $"""
             Hi {name},
 

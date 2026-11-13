@@ -64,7 +64,7 @@ public class SetupService
                 return (null, IdentityResult.Failed(new IdentityError { Description = "Setup has already been done." }));
             }
 
-            var (user, result) = await CreateUserAsync(request.Email, request.DisplayName, request.Password, isAdmin: true);
+            var (user, result) = await CreateUserAsync(request.Email, request.UserName, request.Password, isAdmin: true);
             if (result.Succeeded)
             {
                 await SetSettingAsync(InProgressSetting, "true");
@@ -77,13 +77,12 @@ public class SetupService
         }
     }
 
-    public async Task<(ApplicationUser? User, IdentityResult Result)> CreateUserAsync(string email, string displayName, string password, bool isAdmin)
+    public async Task<(ApplicationUser? User, IdentityResult Result)> CreateUserAsync(string email, string userName, string password, bool isAdmin)
     {
         var user = new ApplicationUser
         {
-            UserName = email,
+            UserName = AccountRules.Clean(userName),
             Email = email,
-            DisplayName = AccountRules.Clean(displayName),
             DateJoined = _time.GetUtcNow().UtcDateTime,
             EmailConfirmed = true
         };

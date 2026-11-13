@@ -13,6 +13,8 @@ namespace Fossegrim.Lib.Services;
 /// </summary>
 public sealed class ProviderRateLimit
 {
+    private static readonly TimeSpan MinimumDelay = TimeSpan.FromMilliseconds(10);
+
     private readonly object _lock = new();
     private readonly Queue<DateTimeOffset> _sent = new();
     private readonly TimeProvider _time;
@@ -36,14 +38,18 @@ public sealed class ProviderRateLimit
     /// </summary>
     public async Task<TimeSpan?> AcquireAsync(TimeSpan maxWait, CancellationToken cancellationToken)
     {
-        var wait = TryTake();
-        if (wait is null || wait > maxWait)
+        // A timer can fire a moment before the slot frees up, or another
+        // request can take it first, so keep trying until the wait runs out.
+        var deadline = _time.GetUtcNow() + maxWait;
+        while (true)
         {
-            return wait;
+            var wait = TryTake();
+            if (wait is null || wait > deadline - _time.GetUtcNow())
+            {
+                return wait;
+            }
+            await Task.Delay(wait.Value < MinimumDelay ? MinimumDelay : wait.Value, _time, cancellationToken);
         }
-
-        await Task.Delay(wait.Value, _time, cancellationToken);
-        return TryTake();
     }
 
     /// <summary>The provider refused a request: send nothing for <paramref name="duration"/>.</summary>
@@ -421,7 +427,8 @@ public class CoverSearchService
         return null;
     }
 
-    private static string EscapeLucene(string text) => text.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    // For a quoted term in a MusicBrainz (Lucene) search.
+    internal static string EscapeLucene(string text) => text.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     private static string Https(string url) =>
         url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? "https://" + url["http://".Length..] : url;

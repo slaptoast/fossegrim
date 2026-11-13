@@ -1,0 +1,226 @@
+@implements IDisposable
+@inject FossegrimApiClient ApiClient
+
+@* Info about an album or artist, shown after the mouse rests on its row for
+   a second: library facts, your plays, and a Wikipedia summary. Each list
+   renders one and calls Enter/Leave from its rows. Mouse and pen only:
+   touch has no hover, and a tap plays. Moving onto the card keeps it open,
+   so its Wikipedia link can be clicked. *@
+@if (_shown is { } shown)
+{
+    <div class="hover-card" role="tooltip" style="@Position(shown)"
+         @onpointerenter="KeepOpen" @onpointerleave="Leave">
+        @if (shown.Album is { } album)
+        {
+            <div class="hover-card-title">@album.Name</div>
+            <div class="hover-card-sub">@AlbumByline(album)</div>
+            <div class="hover-card-facts">@AlbumFacts(album)</div>
+            <div class="hover-card-plays">@Plays(album.Plays, album.LastPlayedAt)</div>
+            @SummaryBlock(album.Summary, album.InfoUrl, shown.LookingUp)
+        }
+        else if (shown.Artist is { } artist)
+        {
+            <div class="hover-card-title">@artist.Name</div>
+            @if (!string.IsNullOrEmpty(artist.Country))
+            {
+                <div class="hover-card-sub">@CountryName(artist.Country)</div>
+            }
+            <div class="hover-card-facts">@Count(artist.AlbumCount, "album") · @Count(artist.TrackCount, "track")</div>
+            <div class="hover-card-plays">@Plays(artist.Plays, artist.LastPlayedAt)</div>
+            @SummaryBlock(artist.Summary, artist.InfoUrl, shown.LookingUp)
+        }
+        else
+        {
+            <div class="hover-card-loading">Loading…</div>
+        }
+    </div>
+}
+
+@code {
+    // How long the pointer rests before the card shows, and lingers after it leaves.
+    private static readonly TimeSpan ShowDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan HideDelay = TimeSpan.FromMilliseconds(250);
+    // Plays change as you listen, so a fetched card is reused only briefly.
+    private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(5);
+    private static readonly Dictionary<Guid, (DateTime At, object Info)> Cache = [];
+
+    private sealed record Shown(Guid Id, double X, double Y, AlbumInfoDto? Album = null, ArtistInfoDto? Artist = null, bool LookingUp = false);
+
+    private Shown? _shown;
+    private CancellationTokenSource? _pending;
+
+    public void EnterAlbum(PointerEventArgs e, Guid albumId) => Enter(e, albumId, isAlbum: true);
+
+    public void EnterArtist(PointerEventArgs e, Guid artistId) => Enter(e, artistId, isAlbum: false);
+
+    private void Enter(PointerEventArgs e, Guid id, bool isAlbum)
+    {
+        if (e.PointerType is not ("mouse" or "pen"))
+        {
+            return;
+        }
+        var token = Restart();
+        _ = ShowAfterDelayAsync(id, isAlbum, e.ClientX, e.ClientY, token);
+    }
+
+    public void Leave()
+    {
+        var token = Restart();
+        _ = HideAfterDelayAsync(token);
+    }
+
+    private void KeepOpen() => _pending?.Cancel();
+
+    private CancellationToken Restart()
+    {
+        _pending?.Cancel();
+        _pending = new CancellationTokenSource();
+        return _pending.Token;
+    }
+
+    private async Task ShowAfterDelayAsync(Guid id, bool isAlbum, double x, double y, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(ShowDelay, token);
+            if (_shown?.Id != id)
+            {
+                _shown = new Shown(id, x, y);
+                StateHasChanged();
+            }
+
+            var info = await LoadAsync(id, isAlbum, lookup: false);
+            if (token.IsCancellationRequested && _shown?.Id != id)
+            {
+                return;
+            }
+            Show(id, info, lookingUp: NeedsLookup(info));
+            if (NeedsLookup(info))
+            {
+                info = await LoadAsync(id, isAlbum, lookup: true);
+                // Still the card on screen (the pointer may have moved onto it).
+                if (_shown?.Id == id)
+                {
+                    Show(id, info, lookingUp: false);
+                }
+            }
+        }
+        catch (TaskCanceledException)
+        {
+        }
+        catch (Exception)
+        {
+            // No info (signed out, offline): no card.
+            if (_shown?.Id == id && _shown.Album is null && _shown.Artist is null)
+            {
+                _shown = null;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task HideAfterDelayAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(HideDelay, token);
+            _shown = null;
+            StateHasChanged();
+        }
+        catch (TaskCanceledException)
+        {
+        }
+    }
+
+    private void Show(Guid id, object? info, bool lookingUp)
+    {
+        if (_shown is not { } shown || shown.Id != id || info is null)
+        {
+            return;
+        }
+        _shown = shown with { Album = info as AlbumInfoDto, Artist = info as ArtistInfoDto, LookingUp = lookingUp };
+        StateHasChanged();
+    }
+
+    private async Task<object?> LoadAsync(Guid id, bool isAlbum, bool lookup)
+    {
+        if (!lookup && Cache.TryGetValue(id, out var cached) && DateTime.UtcNow - cached.At < CacheFor)
+        {
+            return cached.Info;
+        }
+        object? info = isAlbum ? await ApiClient.GetAlbumInfoAsync(id, lookup) : await ApiClient.GetArtistInfoAsync(id, lookup);
+        if (info is not null)
+        {
+            Cache[id] = (DateTime.UtcNow, info);
+        }
+        return info;
+    }
+
+    private static RenderFragment SummaryBlock(string? text, string? url, bool lookingUp) => @<text>
+        @if (!string.IsNullOrWhiteSpace(text))
+        {
+            <p class="hover-card-summary">@text</p>
+            @if (url is not null)
+            {
+                <a class="hover-card-link" href="@url" target="_blank" rel="noopener noreferrer">Wikipedia ↗</a>
+            }
+        }
+        else if (lookingUp)
+        {
+            <p class="hover-card-looking">Looking it up on Wikipedia…</p>
+        }
+    </text>;
+
+    private static bool NeedsLookup(object? info) => info is AlbumInfoDto { NeedsLookup: true } or ArtistInfoDto { NeedsLookup: true };
+
+    // Just below and right of the pointer, kept inside the window.
+    private static string Position(Shown shown) => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+        $"left: min({shown.X + 12:0}px, calc(100vw - 336px)); top: min({shown.Y + 16:0}px, calc(100vh - 300px));");
+
+    private static string AlbumByline(AlbumInfoDto album)
+    {
+        var parts = new List<string>();
+        if (album.Artists.Count > 0)
+        {
+            parts.Add(string.Join(", ", album.Artists));
+        }
+        if (album.Year is { } year)
+        {
+            parts.Add(year.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        return string.Join(" · ", parts);
+    }
+
+    private static string AlbumFacts(AlbumInfoDto album)
+    {
+        var parts = new List<string> { Count(album.TrackCount, "track") };
+        if (album.Length is { } length && length > TimeSpan.Zero)
+        {
+            parts.Add(length.TotalHours >= 1 ? $"{(int)length.TotalHours} h {length.Minutes} min" : $"{Math.Max(1, (int)Math.Round(length.TotalMinutes))} min");
+        }
+        parts.AddRange(new[] { album.Genre, album.Label }.Where(p => !string.IsNullOrWhiteSpace(p))!);
+        return string.Join(" · ", parts);
+    }
+
+    private static string Plays(int plays, DateTime? lastPlayedAt) => plays == 0
+        ? "You haven't played it yet"
+        : $"You've played it {Count(plays, "time")}" + (lastPlayedAt is { } at ? $" · last played {RelativeTime.Format(at, DateTime.UtcNow)}" : "");
+
+    private static string Count(int count, string noun) => $"{count} {noun}{(count == 1 ? "" : "s")}";
+
+    // "GB" -> "United Kingdom"; anything unknown shows as given.
+    private static string CountryName(string code)
+    {
+        try
+        {
+            return new System.Globalization.RegionInfo(code).EnglishName;
+        }
+        catch (Exception)
+        {
+            // Unknown code, or no culture data in this browser.
+            return code;
+        }
+    }
+
+    public void Dispose() => _pending?.Cancel();
+}

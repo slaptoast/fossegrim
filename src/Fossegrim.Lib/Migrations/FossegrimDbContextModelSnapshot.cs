@@ -79,6 +79,12 @@ namespace fossegrim.lib.Migrations
                     b.Property<string>("Genre")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("InfoFetchedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InfoUrl")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Label")
                         .HasColumnType("TEXT");
 
@@ -89,6 +95,9 @@ namespace fossegrim.lib.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Summary")
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("Year")
@@ -254,6 +263,12 @@ namespace fossegrim.lib.Migrations
                         .HasDefaultValueSql("datetime('now')");
 
                     b.Property<string>("ImageUrl")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("InfoFetchedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InfoUrl")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("LastModified")

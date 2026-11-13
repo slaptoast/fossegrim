@@ -23,7 +23,8 @@
             <ul class="artist-list">
                 @foreach (var artist in _result.Items)
                 {
-                    <li class="artist-item playable" title="Play all by @artist.Name" @onclick="() => PlayArtistAsync(artist)"
+                    <li class="artist-item playable" @onclick="() => PlayArtistAsync(artist)"
+                        @onpointerenter="e => _hover?.EnterArtist(e, artist.Id)" @onpointerleave="() => _hover?.Leave()"
                         @oncontextmenu="e => ShowContextMenu(e, artist)" @oncontextmenu:preventDefault="true">
                         <div class="artist-info">
                             <div class="artist-avatar">
@@ -53,7 +54,11 @@
 
 <ContextMenu IsOpen="_contextMenuOpen" X="_contextMenuX" Y="_contextMenuY" Actions="_contextMenuActions" OnClose="CloseContextMenu" />
 
+<HoverCard @ref="_hover" />
+
 @code {
+    private HoverCard? _hover;
+
     private const int PageSize = 10;
 
     private static readonly IReadOnlyList<(string, string)> SortOptions =

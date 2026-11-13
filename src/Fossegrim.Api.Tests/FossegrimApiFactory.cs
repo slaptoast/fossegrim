@@ -50,6 +50,7 @@ public class FossegrimApiFactory : WebApplicationFactory<Program>
             services.AddHttpClient<LastFmClient>().ConfigurePrimaryHttpMessageHandler(() => LastFm);
             services.AddHttpClient<CoverSearchService>().ConfigurePrimaryHttpMessageHandler(() => Covers);
             services.AddHttpClient<CoverDownloader>().ConfigurePrimaryHttpMessageHandler(() => Covers);
+            services.AddHttpClient<WikipediaInfoService>().ConfigurePrimaryHttpMessageHandler(() => Covers);
             services.AddHttpClient<GhcrClient>().ConfigurePrimaryHttpMessageHandler(() => Ghcr);
             services.AddSingleton<IMailTransport>(Mail);
         });

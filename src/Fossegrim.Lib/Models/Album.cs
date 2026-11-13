@@ -15,6 +15,12 @@ public class Album
     public string? Label { get; set; }
     public string? CoverImageUrl { get; set; }
 
+    // Like Artist.Bio: a Wikipedia summary for the hover card, its page,
+    // and when it was last looked up (set with no Summary: nothing found).
+    public string? Summary { get; set; }
+    public string? InfoUrl { get; set; }
+    public DateTime? InfoFetchedAt { get; set; }
+
     public DateTime? DateAdded { get; set; }
     public DateTime? LastModified { get; set; }
 

@@ -68,6 +68,13 @@ public class FossegrimApiClient
         response.EnsureSuccessStatusCode();
     }
 
+    // The hover cards. lookup=true waits for a missing or old Wikipedia summary (a few seconds).
+    public async Task<AlbumInfoDto?> GetAlbumInfoAsync(Guid albumId, bool lookup) =>
+        await _httpClient.GetFromJsonAsync<AlbumInfoDto>($"/api/albums/{albumId}/info{(lookup ? "?lookup=true" : "")}");
+
+    public async Task<ArtistInfoDto?> GetArtistInfoAsync(Guid artistId, bool lookup) =>
+        await _httpClient.GetFromJsonAsync<ArtistInfoDto>($"/api/artists/{artistId}/info{(lookup ? "?lookup=true" : "")}");
+
     public async Task<IReadOnlyList<MediaItemDto>> GetArtistTracksAsync(Guid artistId)
     {
         var response = await _httpClient.GetAsync($"/api/artists/{artistId}/tracks");

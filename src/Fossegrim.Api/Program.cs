@@ -149,6 +149,8 @@ builder.Services.AddHostedService<ScanWorker>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CoverSearchLimits>();
 builder.Services.AddHttpClient<CoverSearchService>(client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddHttpClient<WikipediaInfoService>(client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddScoped<LibraryInfoService>();
 // Redirects are followed by CoverDownloader itself, checking each hop's host.
 builder.Services.AddHttpClient<CoverDownloader>(client => client.Timeout = TimeSpan.FromSeconds(20))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });

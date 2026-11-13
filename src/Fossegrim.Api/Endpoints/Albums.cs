@@ -57,5 +57,12 @@ public static class Albums
             return Results.Ok(tracks.InPlayOrder());
         })
         .WithName("GetAlbumTracks");
+
+        // The hover card. lookup=true fetches a missing or month-old Wikipedia summary first.
+        albumGroup.MapGet("/{id:guid}/info", async (Guid id, bool? lookup, ClaimsPrincipal principal, LibraryInfoService info, CancellationToken cancellationToken) =>
+            Browse.UserId(principal) is not { } userId ? Results.Unauthorized()
+            : await info.AlbumAsync(id, userId, lookup ?? false, cancellationToken) is { } album ? Results.Ok(album)
+            : Results.NotFound())
+        .WithName("GetAlbumInfo");
     }
 }

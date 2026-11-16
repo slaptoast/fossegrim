@@ -6,7 +6,7 @@
 # Encrypt or you put it there yourself. It checks the folder every 30
 # seconds and reloads nginx when the certificate changes. See DOCKER.md.
 
-FROM nginx:1.30-alpine
+FROM nginx:1.31-alpine
 
 COPY conf/ /etc/fossegrim-proxy/
 COPY fossegrim-proxy.sh /usr/local/bin/fossegrim-proxy

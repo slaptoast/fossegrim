@@ -1,0 +1,64 @@
+@inject FossegrimApiClient ApiClient
+
+@* Admins: whether AI assistants can use the MCP endpoint (/mcp). Each person
+   makes their own access token on their Profile page. *@
+
+<div class="form-section">
+    @if (_message is not null)
+    {
+        <div class="@(_success ? "success-message" : "error-message")">@_message</div>
+    }
+    @if (_settings is not null)
+    {
+        <div class="form-checks">
+            <label class="form-check">
+                <input type="checkbox" checked="@_settings.Enabled" disabled="@_busy" @onchange="SetEnabledAsync" />
+                Let people connect AI assistants
+            </label>
+        </div>
+    }
+    <p class="form-section-desc">
+        Turns on the MCP endpoint at <code>@(BaseUrl)mcp</code>, which AI assistants like Claude use to search the library and
+        manage playlists. Each person makes a personal access token on their Profile page, and the assistant acts as them:
+        it sees their plays, favourites and playlists, and nobody else's. Turning this off keeps their tokens but stops them working.
+    </p>
+</div>
+
+@code {
+    private McpSettingsDto? _settings;
+    private string? _message;
+    private bool _success;
+    private bool _busy;
+
+    private string BaseUrl => ApiClient.BaseAddress?.ToString() is { } url ? url.TrimEnd('/') + "/" : "/";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _settings = await ApiClient.GetMcpSettingsAsync();
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = ($"Failed to load the MCP setting: {ex.Message}", false);
+        }
+    }
+
+    private async Task SetEnabledAsync(ChangeEventArgs e)
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            _settings = await ApiClient.SaveMcpSettingsAsync(e.Value is true);
+        }
+        catch (Exception ex)
+        {
+            (_message, _success) = (ex.Message, false);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

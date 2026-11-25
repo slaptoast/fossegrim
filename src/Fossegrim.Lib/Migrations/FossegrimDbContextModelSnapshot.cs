@@ -62,6 +62,47 @@ namespace fossegrim.lib.Migrations
                     b.ToTable("MediaItemArtists", (string)null);
                 });
 
+            modelBuilder.Entity("Fossegrim.Lib.Models.AccessToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Hash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AccessTokens");
+                });
+
             modelBuilder.Entity("Fossegrim.Lib.Models.Album", b =>
                 {
                     b.Property<Guid>("Id")
@@ -833,6 +874,17 @@ namespace fossegrim.lib.Migrations
                         .HasForeignKey("MediaItemsId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Fossegrim.Lib.Models.AccessToken", b =>
+                {
+                    b.HasOne("Fossegrim.Lib.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Fossegrim.Lib.Models.FavoriteAlbum", b =>

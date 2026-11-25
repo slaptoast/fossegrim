@@ -3,7 +3,8 @@ namespace Fossegrim.Contracts.Dtos;
 // What the hover cards show. Summary and InfoUrl are a Wikipedia summary and
 // its page, cached on the server. NeedsLookup: the cache is empty or old,
 // so ask again with ?lookup=true to fetch it (slower: a few seconds).
-// Plays and LastPlayedAt are the caller's own.
+// Plays and LastPlayedAt are the caller's own. An album's Plays counts
+// times every track on it was heard; LastPlayedAt is its latest track play.
 
 public record AlbumInfoDto(
     Guid Id,

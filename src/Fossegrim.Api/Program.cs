@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Fossegrim.Api.Endpoints;
 using Fossegrim.Api.Services;
 using Fossegrim.Api.Services.Https;
+using Fossegrim.Api.Mcp;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -104,7 +105,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     })
     // Other applications (e.g. Lidarr) start scans with an API key; see Endpoints/Scans.cs.
-    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthentication>(ApiKeyAuthentication.Scheme, null);
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthentication>(ApiKeyAuthentication.Scheme, null)
+    // AI assistants reach /mcp with a user's personal access token (Mcp/AccessTokens.cs).
+    .AddScheme<AuthenticationSchemeOptions, AccessTokenAuthentication>(AccessTokenAuthentication.Scheme, null);
 
 builder.Services.AddAuthorization();
 
@@ -192,6 +195,22 @@ if (appVersion.Release is not null && builder.Configuration.GetValue("UpdateChec
 
 builder.Services.AddScoped<SetupService>();
 
+// MCP (Model Context Protocol) endpoint for AI assistants, off until an
+// admin turns it on. Stateless: each request carries its own token.
+builder.Services.AddSingleton<McpSwitch>();
+builder.Services.AddScoped<McpSettingsStore>();
+builder.Services.AddScoped<AccessTokenService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddMcpServer(options =>
+    {
+        options.ServerInfo = new() { Name = "Fossegrim", Version = appVersion.Value };
+        options.ServerInstructions =
+            "Fossegrim is the user's self-hosted music library. Search or list to find ids, then use them with the other tools. " +
+            "Plays, favourites and playlists are this user's own. Playback happens in their browser; these tools can't play or pause music.";
+    })
+    .WithHttpTransport(options => options.Stateless = true)
+    .WithTools<FossegrimTools>();
+
 // Email (optional, set up on the Settings page): "Forgot password?" links.
 builder.Services.AddScoped<EmailSettingsStore>();
 builder.Services.AddSingleton<IMailTransport, SmtpMailTransport>();
@@ -267,6 +286,7 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<SetupService>().MarkExistingInstallCompleteAsync();
     await scope.ServiceProvider.GetRequiredService<LastFmSettingsStore>().LoadAsync();
     await scope.ServiceProvider.GetRequiredService<CertificateService>().SyncRedirectAsync();
+    await scope.ServiceProvider.GetRequiredService<McpSettingsStore>().LoadAsync();
 }
 
 // Configure the HTTP request pipeline.
@@ -289,6 +309,17 @@ app.UseStaticFiles();
 
 // Enable CORS
 app.UseCors("AllowWeb");
+
+// Until an admin turns MCP on, /mcp doesn't exist.
+app.Use((context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/mcp") && !context.RequestServices.GetRequiredService<McpSwitch>().Enabled)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return Task.CompletedTask;
+    }
+    return next(context);
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -320,6 +351,10 @@ app.MapSearchEndpoints();
 app.MapFavoriteEndpoints();
 app.MapPasswordResetEndpoints();
 app.MapHttpsEndpoints();
+app.MapMcpSettingsEndpoints();
+app.MapMcp("/mcp").RequireAuthorization(policy => policy
+    .AddAuthenticationSchemes(AccessTokenAuthentication.Scheme)
+    .RequireAuthenticatedUser());
 
 app.MapFallbackToFile("index.html");
 

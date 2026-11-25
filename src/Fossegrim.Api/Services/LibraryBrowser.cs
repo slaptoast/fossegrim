@@ -81,7 +81,7 @@ public class LibraryBrowser
         {
             var (ids, total) = await _index.RankedAsync(SearchKind.Albums, request.Match!, request.Skip, request.PageSize, cancellationToken);
             var found = await _db.Albums.Where(al => ids.Contains(al.Id)).Select(AlbumItem).ToListAsync(cancellationToken);
-            return Page(await WithLastPlayedAsync(InOrder(found, ids, a => a.Id), userId, cancellationToken), total, request);
+            return Page(await WithPlaysAsync(InOrder(found, ids, a => a.Id), userId, cancellationToken), total, request);
         }
 
         var albums = _db.Albums.AsQueryable();
@@ -107,7 +107,7 @@ public class LibraryBrowser
             LibrarySorts.Artist => albums.SortText(al => EF.Functions.Collate(al.Artists.OrderBy(a => EF.Functions.Collate(a.Name, "NOCASE")).Select(a => a.Name).FirstOrDefault(), "NOCASE"), request.Descending),
             LibrarySorts.Year => albums.Sort(al => al.Year, request.Descending),
             LibrarySorts.Added => albums.Sort(al => al.DateAdded, request.Descending),
-            LibrarySorts.Played => albums.Sort(al => plays.Count(pe => pe.MediaItem!.Albums.Any(x => x.Id == al.Id)), request.Descending),
+            LibrarySorts.Played => albums.Sort(FullListens(plays), request.Descending),
             LibrarySorts.Recent => albums.Sort(al => plays.Where(pe => pe.MediaItem!.Albums.Any(x => x.Id == al.Id)).Max(pe => (DateTime?)pe.PlayedAt), request.Descending),
             LibrarySorts.Favorited => albums.Sort(al => favorites.Where(f => f.AlbumId == al.Id).Select(f => (DateTime?)f.CreatedAt).FirstOrDefault(), request.Descending),
             _ => albums.SortText(al => EF.Functions.Collate(al.Name, "NOCASE"), request.Descending),
@@ -119,7 +119,7 @@ public class LibraryBrowser
             .Skip(request.Skip).Take(request.PageSize)
             .Select(AlbumItem)
             .ToListAsync(cancellationToken);
-        return Page(await WithLastPlayedAsync(items, userId, cancellationToken), count, request);
+        return Page(await WithPlaysAsync(items, userId, cancellationToken), count, request);
     }
 
     public async Task<PagedResult<ArtistListItemDto>> ArtistsAsync(BrowseRequest request, string userId, CancellationToken cancellationToken = default)
@@ -224,7 +224,8 @@ public class LibraryBrowser
         al.DateAdded,
         al.MediaItems.Count,
         al.Artists.OrderBy(a => a.Name).Select(a => new ArtistSummaryDto(a.Id, a.Name)),
-        null);
+        null,
+        0);
 
     private static readonly Expression<Func<Artist, ArtistListItemDto>> ArtistItem = a => new ArtistListItemDto(
         a.Id,
@@ -234,18 +235,48 @@ public class LibraryBrowser
         a.MediaItems.Count,
         null);
 
-    // When the caller last played each item on a page (one query per page).
-    private async Task<List<AlbumListItemDto>> WithLastPlayedAsync(List<AlbumListItemDto> items, string userId, CancellationToken cancellationToken)
+    /// <summary>
+    /// How many times the user has played an album all the way through: the
+    /// fewest listens of any of its tracks, so every track has to be heard
+    /// (by <see cref="ListenRule"/>) for the album to gain a play. Tracks too
+    /// short to ever count as a listen (intros, skits) are left out.
+    /// <paramref name="plays"/> is the user's play events.
+    /// </summary>
+    private static readonly string ShortestListen = ListenRule.MinTrackLength.ToString("c");
+
+    public static Expression<Func<Album, int>> FullListens(IQueryable<PlayEvent> plays) => al =>
+        al.MediaItems
+            // SQLite keeps durations as text ("00:03:07.5"), which sorts like the times do; it can't compare them as times.
+            .Where(m => m.Duration == null || string.Compare(m.Duration.Value.ToString(), ShortestListen) > 0)
+            .Select(m => (int?)plays.Count(pe => pe.MediaItemId == m.Id))
+            .Min() ?? 0;
+
+    // Each album's full listens and when the caller last played any of its tracks (two queries per page).
+    private async Task<List<AlbumListItemDto>> WithPlaysAsync(List<AlbumListItemDto> items, string userId, CancellationToken cancellationToken)
     {
         var ids = items.Select(i => i.Id).ToList();
+        var fullListens = FullListens(_db.PlayEvents.Where(pe => pe.UserId == userId));
+        var album = fullListens.Parameters[0];
+        var withId = Expression.Lambda<Func<Album, AlbumPlays>>(
+            Expression.New(typeof(AlbumPlays).GetConstructors()[0], Expression.Property(album, nameof(Album.Id)), fullListens.Body),
+            album);
+        var full = await _db.Albums.Where(al => ids.Contains(al.Id))
+            .Select(withId)
+            .ToDictionaryAsync(x => x.Id, x => x.Plays, cancellationToken);
         var last = await _db.PlayEvents
             .Where(pe => pe.UserId == userId)
             .SelectMany(pe => pe.MediaItem!.Albums.Where(al => ids.Contains(al.Id)), (pe, al) => new { al.Id, pe.PlayedAt })
             .GroupBy(x => x.Id)
             .Select(g => new { g.Key, Last = g.Max(x => x.PlayedAt) })
             .ToDictionaryAsync(x => x.Key, x => x.Last, cancellationToken);
-        return items.Select(i => last.TryGetValue(i.Id, out var at) ? i with { LastPlayedAt = at } : i).ToList();
+        return items.Select(i => i with
+        {
+            Plays = full.GetValueOrDefault(i.Id),
+            LastPlayedAt = last.TryGetValue(i.Id, out var at) ? at : i.LastPlayedAt,
+        }).ToList();
     }
+
+    private record AlbumPlays(Guid Id, int Plays);
 
     private async Task<List<ArtistListItemDto>> WithLastPlayedAsync(List<ArtistListItemDto> items, string userId, CancellationToken cancellationToken)
     {

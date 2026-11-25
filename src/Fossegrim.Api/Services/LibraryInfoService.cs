@@ -56,7 +56,7 @@ public class LibraryInfoService
         return new AlbumInfoDto(
             album.Id, album.Name, artists, album.Year, album.Genre, album.Label,
             durations.Count, length,
-            await plays.CountAsync(cancellationToken),
+            await _db.Albums.Where(al => al.Id == id).Select(LibraryBrowser.FullListens(_db.PlayEvents.Where(pe => pe.UserId == userId))).FirstAsync(cancellationToken),
             await plays.MaxAsync(pe => (DateTime?)pe.PlayedAt, cancellationToken),
             album.Summary, album.InfoUrl, IsStale(album.InfoFetchedAt));
     }

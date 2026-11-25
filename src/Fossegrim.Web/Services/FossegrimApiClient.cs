@@ -396,6 +396,50 @@ public class FossegrimApiClient
         }
     }
 
+    public async Task<McpSettingsDto> GetMcpSettingsAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/admin/mcp");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<McpSettingsDto>() ?? new McpSettingsDto(false);
+    }
+
+    public async Task<McpSettingsDto> SaveMcpSettingsAsync(bool enabled)
+    {
+        var response = await _httpClient.PutAsJsonAsync("/api/admin/mcp", new McpSettingsDto(enabled));
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadErrorAsync(response) ?? $"Saving failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<McpSettingsDto>() ?? new McpSettingsDto(enabled);
+    }
+
+    public async Task<AccessTokenListDto> GetAccessTokensAsync()
+    {
+        var response = await _httpClient.GetAsync("/api/access-tokens");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<AccessTokenListDto>() ?? new AccessTokenListDto(false, []);
+    }
+
+    public async Task<CreatedAccessTokenDto> CreateAccessTokenAsync(string name)
+    {
+        var response = await _httpClient.PostAsJsonAsync("/api/access-tokens", new CreateAccessTokenRequest(name));
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ApiException(await ReadErrorAsync(response) ?? $"Creating the token failed ({(int)response.StatusCode}).");
+        }
+        return await response.Content.ReadFromJsonAsync<CreatedAccessTokenDto>()
+            ?? throw new ApiException("Creating the token returned no result.");
+    }
+
+    public async Task RevokeAccessTokenAsync(Guid id)
+    {
+        var response = await _httpClient.DeleteAsync($"/api/access-tokens/{id}");
+        if (response.StatusCode != HttpStatusCode.NotFound)
+        {
+            response.EnsureSuccessStatusCode();
+        }
+    }
+
     public async Task<RenameTemplateDto> GetRenameTemplateAsync()
     {
         var response = await _httpClient.GetAsync("/api/admin/rename/template");

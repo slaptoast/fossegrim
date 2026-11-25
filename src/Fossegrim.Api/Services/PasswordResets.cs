@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
+using Fossegrim.Api.Mcp;
 using Fossegrim.Contracts.Dtos;
 using Fossegrim.Lib.Models;
 using Microsoft.AspNetCore.Identity;
@@ -24,6 +25,7 @@ public class PasswordResets
     private readonly EmailQueue _emails;
     private readonly ResetEmailThrottle _throttle;
     private readonly SessionService _sessions;
+    private readonly AccessTokenService _accessTokens;
     private readonly TimeProvider _time;
     private readonly ILogger<PasswordResets> _logger;
 
@@ -33,6 +35,7 @@ public class PasswordResets
         EmailQueue emails,
         ResetEmailThrottle throttle,
         SessionService sessions,
+        AccessTokenService accessTokens,
         TimeProvider time,
         ILogger<PasswordResets> logger)
     {
@@ -41,6 +44,7 @@ public class PasswordResets
         _emails = emails;
         _throttle = throttle;
         _sessions = sessions;
+        _accessTokens = accessTokens;
         _time = time;
         _logger = logger;
     }
@@ -116,6 +120,8 @@ public class PasswordResets
         await _users.SetLockoutEndDateAsync(user, null);
         await _users.ResetAccessFailedCountAsync(user);
         await _sessions.RevokeOthersAsync(user.Id, keep: null);
+        // A reset is how someone takes back an account, so assistants' tokens go too.
+        await _accessTokens.DeleteAllAsync(user.Id);
         _logger.LogInformation("User {UserId} reset their password with a reset link", user.Id);
         return null;
     }

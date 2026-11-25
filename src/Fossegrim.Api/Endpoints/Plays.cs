@@ -168,7 +168,7 @@ public static class Plays
         return null;
     }
 
-    private static IEnumerable<string> SearchTerms(string? q) =>
+    internal static IEnumerable<string> SearchTerms(string? q) =>
         (q ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(MaxSearchTerms);
@@ -177,7 +177,7 @@ public static class Plays
     // artist, album, genre and year on the track, plus the names of its
     // linked artists and albums and those albums' label and genre. SQLite's
     // LIKE is case-insensitive for ASCII letters only.
-    private static Expression<Func<PlayEvent, bool>> MatchesTerm(string term)
+    internal static Expression<Func<PlayEvent, bool>> MatchesTerm(string term)
     {
         var pattern = $"%{EscapeLike(term)}%";
         return pe =>

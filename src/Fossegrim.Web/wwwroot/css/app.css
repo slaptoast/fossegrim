@@ -172,7 +172,10 @@ body {
     align-items: center;
     gap: var(--space-16);
 }
-.topbar-title { font-size: 0.875rem; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
+.topbar-title { display: flex; align-items: center; gap: var(--space-6); font-size: 0.875rem; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
+/* The Fossegrim icon beside the app name (top bar, sign-in, setup, idle player). */
+.app-icon { display: inline-block; flex: none; width: 1.25em; height: 1.25em; vertical-align: -0.25em; }
+.topbar-title .app-icon { width: 20px; height: 20px; }
 .topbar-nav { display: flex; gap: var(--space-2); flex: 1; }
 .topbar-nav a {
     color: var(--chrome-fg);
@@ -235,7 +238,7 @@ body {
 }
 
 /* Phones: the account button shrinks to an icon, and on the smallest
-   screens the title to its note. Both names stay readable to screen readers. */
+   screens the title to its icon. Both names stay readable to screen readers. */
 @media (max-width: 480px) {
     .user-menu-toggle .user-menu-icon { display: inline; }
     .user-menu-toggle .user-menu-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -368,7 +371,7 @@ body {
     .player-panel-main { flex: 0 0 auto; width: 100%; }
 }
 .player-panel-idle { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-8); padding: var(--space-12); color: var(--chrome-muted); font-size: 0.8125rem; text-align: center; }
-.player-panel-idle-icon { font-size: 2rem; }
+.player-panel-idle .player-panel-idle-icon { width: 40px; height: 40px; opacity: 0.85; }
 
 /* ---- Up next: the queue, opened from the player bar ---- */
 .up-next-panel {
@@ -1388,7 +1391,7 @@ th.cover-cell, td.cover-cell { width: 40px; padding-right: 0; }
 .actions-cell .button-secondary, .actions-cell .button-danger { height: var(--control-sm); padding: 0 var(--space-8); font-size: 0.8125rem; }
 
 /* ---- Boot and Blazor framework UI ---- */
-.initial-loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: var(--text-muted); }
+.initial-loading { display: flex; align-items: center; justify-content: center; gap: var(--space-8); min-height: 100vh; color: var(--text-muted); }
 #blazor-error-ui {
     background: var(--notice-bg);
     bottom: 0;

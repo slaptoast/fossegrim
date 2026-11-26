@@ -407,3 +407,6 @@ src/Fossegrim.Api/fossegrim.db
 src/Fossegrim.Lib/fossegrim.db
 src/Fossegrim.Api/backups/
 /backups/
+
+# macOS Finder files
+.DS_Store
